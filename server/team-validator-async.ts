@@ -8,12 +8,13 @@
  */
 
 import { TeamValidator } from '../sim/team-validator';
+import { attachCustomDex, releaseCustomDex, type CustomDexPayload } from '../sim/dex-custom';
 import * as ConfigLoader from './config-loader';
 
 export const PM = new QueryProcessManager<{
-	formatid: string, options?: { removeNicknames?: boolean }, team: string,
+	formatid: string, options?: { removeNicknames?: boolean }, team: string, customData?: CustomDexPayload,
 }>('team-validator', module, message => {
-	const { formatid, options, team } = message;
+	const { formatid, options, team, customData } = message;
 	const parsedTeam = Teams.unpack(team);
 
 	if (Config.debugvalidatorprocesses && process.send) {
@@ -21,8 +22,12 @@ export const PM = new QueryProcessManager<{
 	}
 
 	let problems;
+	// attachCustomDex points `custom.format` at a dex built from the request, so this
+	// process never has a cache to go stale.
+	const custom = customData ? attachCustomDex({ formatid, customData }) : null;
 	try {
-		problems = TeamValidator.get(formatid).validateTeam(parsedTeam, options);
+		const validator = custom ? new TeamValidator(custom.format) : TeamValidator.get(formatid);
+		problems = validator.validateTeam(parsedTeam, options);
 	} catch (err) {
 		Monitor.crashlog(err, 'A team validation', {
 			formatid,
@@ -32,6 +37,8 @@ export const PM = new QueryProcessManager<{
 			`Your team crashed the validator. We'll fix this crash within a few hours (we're automatically notified),` +
 			` but if you don't want to wait, just use a different team for now.`,
 		];
+	} finally {
+		if (custom) releaseCustomDex(custom.dex);
 	}
 
 	if (problems?.length) {
@@ -52,13 +59,14 @@ export class TeamValidatorAsync {
 		this.format = Dex.formats.get(format);
 	}
 
-	validateTeam(team: string, options?: { removeNicknames?: boolean, user?: ID }) {
+	validateTeam(team: string, options?: { removeNicknames?: boolean, user?: ID, customData?: CustomDexPayload | null }) {
 		let formatid = this.format.id;
 		if (this.format.customRules) formatid += '@@@' + this.format.customRules.join(',');
 		if (team.length > (25 * 1024 - 6)) { // don't even let it go to the child process
 			return Promise.resolve('0Your team is over 25KB. Please use a smaller team.');
 		}
-		return PM.query({ formatid, options, team });
+		const { customData, ...rest } = options || {};
+		return PM.query({ formatid, options: rest, team, customData: customData || undefined });
 	}
 
 	static get(this: void, format: string) {

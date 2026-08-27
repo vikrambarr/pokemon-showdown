@@ -1,4 +1,5 @@
 import type { ChallengeType } from './room-battle';
+import type { CustomBattleData } from './custom/dex';
 
 /**
  * A bundle of:
@@ -16,18 +17,22 @@ export class BattleReady {
 	readonly rating: number;
 	readonly challengeType: ChallengeType;
 	readonly time: number;
+	/** Set only for custom formats: this player's custom species, plus the format itself. */
+	readonly customData: CustomBattleData | null;
 	constructor(
 		userid: ID,
 		formatid: string,
 		settings: User['battleSettings'],
 		rating = 0,
-		challengeType: ChallengeType = 'challenge'
+		challengeType: ChallengeType = 'challenge',
+		customData: CustomBattleData | null = null
 	) {
 		this.userid = userid;
 		this.formatid = formatid;
 		this.settings = settings;
 		this.rating = rating;
 		this.challengeType = challengeType;
+		this.customData = customData;
 		this.time = Date.now();
 	}
 }

@@ -12,6 +12,7 @@
 import { Streams, Utils } from '../lib';
 import { Teams } from './teams';
 import { Battle, extractChannelMessages } from './battle';
+import { attachCustomDex, releaseCustomDex } from './dex-custom';
 import type { ChoiceRequest } from './side';
 
 export class BattleStream extends Streams.ObjectReadWriteStream<string> {
@@ -81,7 +82,14 @@ export class BattleStream extends Streams.ObjectReadWriteStream<string> {
 				if (t === 'end' && !this.keepAlive) this.pushEnd();
 			};
 			if (this.debug) options.debug = true;
-			this.battle = new Battle(options);
+			const custom = options.customData ? attachCustomDex(options) : null;
+			try {
+				this.battle = new Battle(options);
+			} catch (err) {
+				// Nothing else will ever release it: that's `Battle.destroy`'s job.
+				if (custom) releaseCustomDex(custom.dex);
+				throw err;
+			}
 			break;
 		case 'player':
 			const [slot, optionsText] = Utils.splitFirst(message, ' ');

@@ -1280,7 +1280,7 @@ export const commands: Chat.ChatCommands = {
 		let playerOpts = undefined;
 		if (!player.hasTeam) {
 			const ladder = Ladders(battle.format);
-			const ready = await ladder.prepBattle(connection, 'challenge');
+			const ready = await ladder.prepBattle(connection, 'challenge', null, false, battle.options.customData);
 			if (!ready) return;
 			playerOpts = ready.settings;
 		}

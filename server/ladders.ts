@@ -16,7 +16,11 @@ const SECONDS = 1000;
 const PERIODIC_MATCH_INTERVAL = 60 * SECONDS;
 
 import type { ChallengeType } from './room-battle';
+import type { CustomDexPayload } from '../sim/dex-custom';
 import { BattleReady, BattleChallenge, GameChallenge, BattleInvite, challenges } from './ladders-challenges';
+import {
+	type CustomBattleData, customFormat, mergeCollections, parseCustomFormat, resolveBattleData, toBattleData,
+} from './custom/dex';
 
 /**
  * Keys are formatids
@@ -33,7 +37,10 @@ const searches = new Map<string, {
  * attempting to make a match with looser restrictions until one can be made.
  */
 class Ladder extends LadderStore {
-	async prepBattle(connection: Connection, challengeType: ChallengeType, team: string | null = null, isRated = false) {
+	async prepBattle(
+		connection: Connection, challengeType: ChallengeType, team: string | null = null, isRated = false,
+		joining?: CustomDexPayload
+	) {
 		// all validation for a battle goes through here
 		const user = connection.user;
 		const userid = user.id;
@@ -59,8 +66,20 @@ class Ladder extends LadderStore {
 			return null;
 		}
 
+		// Custom formats aren't in the global format list, so they're resolved here, never rated.
+		const customRef = parseCustomFormat(this.formatid);
+		let customData: CustomBattleData | null = null;
+		if (customRef) isRated = false;
 		try {
-			this.formatid = Dex.formats.validate(this.formatid);
+			if (!customRef) {
+				this.formatid = Dex.formats.validate(this.formatid);
+			} else {
+				// Joining a running battle means playing under its payload, not your own:
+				// its dex was built when it started.
+				customData = joining ? toBattleData(joining) : await resolveBattleData(customRef, user.id);
+				if (!customData) throw new Chat.ErrorMessage(`That battle isn't running a custom format.`);
+				this.formatid = customRef.id;
+			}
 		} catch (e: any) {
 			connection.popup(`Your selected format is invalid:\n\n- ${e.message}`);
 			return null;
@@ -107,7 +126,7 @@ class Ladder extends LadderStore {
 		if (isRated && !Ladders.disabled) {
 			const uid = user.id;
 			[valResult, rating] = await Promise.all([
-				TeamValidatorAsync.get(this.formatid).validateTeam(team, { removeNicknames, user: uid }),
+				TeamValidatorAsync.get(this.formatid).validateTeam(team, { removeNicknames, user: uid, customData }),
 				this.getRating(uid),
 			]);
 			if (uid !== user.id) {
@@ -121,7 +140,7 @@ class Ladder extends LadderStore {
 				rating = 1;
 			}
 			const validator = TeamValidatorAsync.get(this.formatid);
-			valResult = await validator.validateTeam(team, { removeNicknames, user: user.id });
+			valResult = await validator.validateTeam(team, { removeNicknames, user: user.id, customData });
 		}
 
 		if (!valResult.startsWith('1')) {
@@ -135,7 +154,7 @@ class Ladder extends LadderStore {
 		const settings = { ...user.battleSettings, team: valResult.slice(1) };
 		user.battleSettings.inviteOnly = false;
 		user.battleSettings.hidden = false;
-		return new BattleReady(userid, this.formatid, settings, rating, challengeType);
+		return new BattleReady(userid, this.formatid, settings, rating, challengeType, customData);
 	}
 
 	static getChallenging(userid: ID) {
@@ -468,7 +487,18 @@ class Ladder extends LadderStore {
 			}
 			return undefined;
 		}
-		const format = Dex.formats.get(formatid);
+		let customData = readies[0].customData;
+		if (customData) {
+			const collections = readies.flatMap(ready => ready.customData || []);
+			try {
+				customData = { ...mergeCollections(collections), format: customData.format };
+			} catch (e: any) {
+				for (const ready of readies) Users.get(ready.userid)?.popup(e.message);
+				return undefined;
+			}
+		}
+		const options = { customData: customData || undefined };
+		const format = customFormat(options) || Dex.formats.get(formatid);
 		const delayedStart = format.playerCount > players.length ? 'multi' : false;
 		return Rooms.createBattle({
 			format: formatid,
@@ -476,6 +506,7 @@ class Ladder extends LadderStore {
 			rated: minRating,
 			challengeType: readies[0].challengeType,
 			delayedStart,
+			...options,
 		});
 	}
 }

@@ -30,6 +30,7 @@ const RETRY_AFTER_LOGIN = null;
 
 import { FS, Utils, Streams } from '../lib';
 import { type RoomSection, RoomSections } from './chat-commands/room-settings';
+import { customDataFromInputLog, customFormat, registerCustomFormat, releaseCustomFormat } from './custom/dex';
 import { type QueuedHunt } from './chat-plugins/scavengers';
 import { type ScavengerGameTemplate } from './chat-plugins/scavenger-games';
 import { type RepeatedPhrase } from './chat-plugins/repeats';
@@ -1129,6 +1130,7 @@ export abstract class BasicRoom {
 
 	destroy(): void {
 		// deallocate ourself
+		releaseCustomFormat(this.roomid);
 
 		if (this.game) {
 			this.game.destroy();
@@ -2190,7 +2192,11 @@ export const Rooms = {
 	 */
 	createBattle(options: RoomBattleOptions & Partial<RoomSettings>) {
 		const players = options.players.map(player => player.user);
-		const format = Dex.formats.get(options.format);
+		// An imported or restored battle arrives as an input log and nothing else.
+		if (!options.customData && options.inputLog) {
+			options.customData = customDataFromInputLog(options.inputLog);
+		}
+		const format = customFormat(options) || Dex.formats.get(options.format);
 		if (players.length > format.playerCount) {
 			throw new Error(`${players.length} players were provided, but the format is a ${format.playerCount}-player format.`);
 		}
@@ -2266,6 +2272,8 @@ export const Rooms = {
 			// can happen if restoring a Bo3 game
 			return Rooms.rooms.get(roomid) as GameRoom;
 		}
+		// Published here so everything downstream can just look the format up by name.
+		registerCustomFormat(roomid, options);
 		const room = Rooms.createGameRoom(roomid, roomTitle, options);
 		let game: RoomBattle | BestOfGame;
 		if (options.isBestOfSubBattle || !isBestOf) {

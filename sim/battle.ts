@@ -15,6 +15,7 @@
  */
 
 import { Dex, toID } from './dex';
+import { type CustomDexPayload, releaseCustomDex } from './dex-custom';
 import { Teams } from './teams';
 import { Field } from './field';
 import { Pokemon, type EffectState, RESTORATIVE_BERRIES } from './pokemon';
@@ -74,6 +75,7 @@ interface BattleOptions {
 	forceRandomChance?: boolean; // force Battle#randomChance to always return true or false (used in some tests)
 	deserialized?: boolean;
 	strictChoices?: boolean; // whether invalid choices should throw
+	customData?: CustomDexPayload;
 }
 
 interface EventListenerWithoutPriority {
@@ -276,10 +278,11 @@ export class Battle {
 
 		this.send = options.send || (() => {});
 
-		const inputOptions: { formatid: ID, seed: PRNGSeed, rated?: string | true } = {
+		const inputOptions: { formatid: ID, seed: PRNGSeed, rated?: string | true, customData?: CustomDexPayload } = {
 			formatid: options.formatid, seed: this.prngSeed,
 		};
 		if (this.rated) inputOptions.rated = this.rated;
+		if (options.customData) inputOptions.customData = options.customData;
 		if (typeof __version !== 'undefined') {
 			if (__version.head) {
 				this.inputLog.push(`>version ${__version.head}`);
@@ -3365,5 +3368,6 @@ export class Battle {
 		this.queue = null!;
 		// in case the garbage collector really sucks, at least deallocate the log
 		(this as any).log = [];
+		releaseCustomDex(this.dex);
 	}
 }
