@@ -205,12 +205,18 @@ export const commands: Chat.ChatCommands = {
 		},
 
 		async edit(target, room, user) {
-			validateAccess(user);
-			const [name, json] = store.parts(target);
-			if (!json) throw new Chat.ErrorMessage(`Usage: /custompokemon edit [name], {json}`);
-			const row = await editSpecies(user, name, store.parseInput(json, 'species'));
-			this.sendReply(`Updated "${row.name}".`);
-			return this.sendReplyBox(details(row));
+			try {
+				validateAccess(user);
+				const [name, json] = store.parts(target);
+				if (!json) throw new Chat.ErrorMessage(`Usage: /custompokemon edit [name], {json}`);
+				const row = await editSpecies(user, name, store.parseInput(json, 'species'));
+				if (!room) return;
+				this.sendReply(`Updated "${row.name}".`);
+				return this.sendReplyBox(details(row));
+			} catch (err: any) {
+				if (room || !(err instanceof Chat.ErrorMessage)) throw err;
+				return this.popupReply(err.message);
+			}
 		},
 		edithelp: [
 			`/custompokemon edit [name], {json} - Merges the given fields into a custom Pokemon.`,
@@ -323,22 +329,28 @@ export const commands: Chat.ChatCommands = {
 		},
 
 		async setsprite(target, room, user) {
-			validateAccess(user);
-			const [name, rawKind, data] = store.parts(target, 2);
-			if (!data) {
-				throw new Chat.ErrorMessage(
-					`Usage: /custompokemon setsprite [name], [kind], [base64 PNG]<br />` +
-					`Kinds: ${Object.keys(sprites.SPRITE_KINDS).join(', ')}`
+			try {
+				validateAccess(user);
+				const [name, rawKind, data] = store.parts(target, 2);
+				if (!data) {
+					throw new Chat.ErrorMessage(
+						`Usage: /custompokemon setsprite [name], [kind], [base64 PNG]<br />` +
+						`Kinds: ${Object.keys(sprites.SPRITE_KINDS).join(', ')}`
+					);
+				}
+				const row = await getOwn(user, name);
+				const kind = sprites.normalizeKind(rawKind);
+				const image = await sprites.save(row.entryid, kind, data);
+				if (!room) return;
+				this.sendReply(`Set the ${kind} sprite for "${row.name}" (${kb(image.data.length)}KB).`);
+				return this.sendReplyBox(
+					`<img src="${sprites.spriteURL(image.sha)}" alt="${kind}" width="${image.width}" ` +
+					`height="${image.height}" style="image-rendering:pixelated" />`
 				);
+			} catch (err: any) {
+				if (room || !(err instanceof Chat.ErrorMessage)) throw err;
+				return this.popupReply(err.message);
 			}
-			const row = await getOwn(user, name);
-			const kind = sprites.normalizeKind(rawKind);
-			const image = await sprites.save(row.entryid, kind, data);
-			this.sendReply(`Set the ${kind} sprite for "${row.name}" (${kb(image.data.length)}KB).`);
-			return this.sendReplyBox(
-				`<img src="${sprites.spriteURL(image.sha)}" alt="${kind}" width="${image.width}" ` +
-				`height="${image.height}" style="image-rendering:pixelated" />`
-			);
 		},
 		setspritehelp: [
 			`/custompokemon setsprite [name], [kind], [base64 PNG] - Uploads pixel art.`,

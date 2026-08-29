@@ -38,9 +38,9 @@ const MOVE_SOURCE_REGEX = /^[1-9][MTLREDSVC][a-zA-Z0-9]*$/;
 const MAX_NAME_LENGTH = 40;
 export const MAX_NOTES_LENGTH = 500;
 const MAX_LEARNSET_MOVES = 500;
-const DEFAULT_MAX_BST = 800;
 
-const maxBST = () => Number(Config.custompokemonmaxbst) || DEFAULT_MAX_BST;
+/** Unlimited unless an admin sets one. */
+const maxBST = () => Number(Config.custompokemonmaxbst) || Infinity;
 
 function fromName(table: { get: (name: any) => AnyObject }, name: unknown, what: string) {
 	if (typeof name !== 'string') err(`Each ${what} must be a string.`);
@@ -244,7 +244,8 @@ export function normalizeSpeciesData(input: AnyObject, opts: {
 	const name = validateName(raw.name, opts.otherNames);
 	const species: AnyObject = { name };
 	for (const field in raw) {
-		if (field === 'name' || raw[field] === undefined) continue;
+		// `null` clears a field; an edit merges, so there's otherwise no way to unset one.
+		if (field === 'name' || raw[field] === undefined || raw[field] === null) continue;
 		species[field] = FIELDS.get(field)!(raw[field], opts.otherNames);
 	}
 
