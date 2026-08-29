@@ -14,7 +14,6 @@ const {
 const { customFormatId, customFormatName } = require('../../dist/server/custom/entries');
 const { normalizeFormatData, toFormatData } = require('../../dist/server/custom/formats/validator');
 
-/** The battle options a custom battle is created with. */
 function battleOptions(ownerid, name, base = '[Gen 9] OU') {
 	const normalized = normalizeFormatData({ name, base }, { otherNames: new Map(), ownerid });
 	const format = { ...toFormatData(normalized), name: customFormatName(ownerid, normalized.name) };
@@ -30,28 +29,23 @@ describe('Custom format registry', () => {
 	it('should name a format so its id survives every spelling of it', () => {
 		const id = customFormatId('alice', 'monotypechomp');
 		assert.equal(id, 'custom-alice-monotypechomp');
-		// The challenge string, the registered id and the in-play name all have to agree,
-		// because a restored battle recovers its format from its room id.
 		assert.equal(toID(customFormatName('alice', 'Monotype Chomp')), toID(id));
 		assert.equal(parseCustomFormat(id).id, id);
 	});
 
 	it('should make a running battle format resolvable by both of its spellings', () => {
-		const options = battleOptions('alice', 'Monotype Chomp');
-		const format = registerCustomFormat('battle-one', options);
+		const format = registerCustomFormat('battle-one', battleOptions('alice', 'Monotype Chomp'));
 		assert(format);
 		assert.equal(Dex.formats.get('custom-alice-monotypechomp'), format);
 		// The spelling `deserializeBattleRoom` recovers out of a room id.
 		assert.equal(Dex.formats.get('customalicemonotypechomp'), format);
-		assert.equal(format.gameType, 'singles');
 		// What the battle timer reads; a nonexistent format would leave it undefined.
-		assert.equal(Dex.formats.get('customalicemonotypechomp').gameType, 'singles');
+		assert.equal(format.gameType, 'singles');
 		assert(Dex.formats.getRuleTable(format).has('teampreview'));
 	});
 
 	it('should keep custom formats out of the format list', () => {
-		const options = battleOptions('alice', 'Monotype Chomp');
-		registerCustomFormat('battle-one', options);
+		registerCustomFormat('battle-one', battleOptions('alice', 'Monotype Chomp'));
 		assert(!Dex.formats.all().some(format => format.id === 'customalicemonotypechomp'));
 	});
 

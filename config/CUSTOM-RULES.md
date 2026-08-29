@@ -95,7 +95,7 @@ Bans are just a `-` followed by the thing you want to ban.
 
 `- Future` - ban things that only appears in a future generation (such as Arceus in Gen 1)
 
-`- Custom` - (DEPRECATED upstream) ban miscellaneous other things. On this server it means user-authored Pokémon; see "Custom Pokémon" below.
+`- Custom` - (DEPRECATED) ban miscellaneous other things
 
 `- Nonexistent` - catch-all to ban all nonexistent Pokémon, items, etc. Includes: `- CAP, - Past, - Future, - LGPE`
 
@@ -407,22 +407,3 @@ For example:
 People often use "tier" to mean "format", but in rulesets, the difference is important. A format is a list of rules for a game you can play, such as "Gen 8 OU". A tier is a list of Pokémon which can be banned or unbanned, such as "OU".
 
 `- OU, + Ubers` - ban all Pokémon currently in OU and unban all Pokémon currently in Ubers
-
-Custom Pokémon
---------------
-
-Pokémon written by users with `/custompokemon` are marked `isNonstandard: 'Custom'`,
-so `- Nonexistent` - which every format inheriting `Obtainable` has - keeps them out
-by default. `custom` is one of the existence tags, so unbanning them takes:
-
-`+ tag:custom` - allow user-authored Pokémon
-
-A format made with `/customformat` adds that rule for itself unless it mentions the
-tag, so custom Pokémon are playable there and nowhere else. To build a custom format
-that excludes them:
-
-`- tag:custom` - ban user-authored Pokémon
-
-Both forms work in an ordinary `@@@` challenge too, but only in a battle that carries
-the definitions - which today means a `/customformat` battle, since a Pokémon nobody
-in the battle owns doesn't exist as far as the simulator is concerned.

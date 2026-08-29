@@ -1,9 +1,9 @@
 /**
  * Shape validation for user-authored formats.
  *
- * This is the trust boundary. A format is composed data and never code: every
- * rule has to be a name that survives `Dex.formats.validateRule`, and the
- * assembled format has to build a rule table before it can be saved.
+ * This is the trust boundary. A format is composed data and never code: every rule
+ * has to be a name that survives `Dex.formats.validateRule`, and the assembled
+ * format has to build a rule table before it can be saved.
  */
 import { customFormatName, err } from '../entries';
 
@@ -13,11 +13,7 @@ import type { FormatData } from '../../../sim/dex-formats';
 /** Fields a user may set. Everything else about a format comes from its base. */
 const ALLOWED_FIELDS = new Set(['name', 'base', 'ruleset', 'banlist', 'unbanlist']);
 
-/**
- * Set by the server or inherited. Rejected by name rather than silently dropped,
- * and the executable ones (`onValidateSet` and friends) are rejected here because
- * this file is the only reason nothing user-authored can run.
- */
+/** Set by the server or inherited, including every executable one. Rejected by name, not dropped. */
 const SERVER_OWNED_FIELDS = new Set([
 	'mod', 'effectType', 'gameType', 'playerCount', 'rated', 'debug', 'searchShow',
 	'challengeShow', 'tournamentShow', 'baseRuleset', 'customRules', 'ruleTable', 'section',
@@ -57,8 +53,7 @@ export function normalizeFormatData(input: AnyObject, opts: {
 		banlist: validateRules(input.banlist, 'banlist', '-'),
 		unbanlist: validateRules(input.unbanlist, 'unbanlist', '+'),
 	};
-	// Every rule is legal on its own by this point; this is what catches rules that
-	// contradict each other, or that change nothing.
+	// Every rule is legal on its own by now; this catches rules that contradict each other.
 	try {
 		Dex.formats.getRuleTable(new Dex.Format(toFormatData(normalized)));
 	} catch (e: any) {
@@ -127,8 +122,7 @@ const isCustomTagRule = (rule: string) => ['custom', 'tagcustom'].includes(toID(
 export function toFormatData(row: FormatComposition): FormatData {
 	const base = Dex.formats.get(row.base);
 	const unbanlist = [...row.unbanlist];
-	// Custom species are only reachable through their tag, and playing with them is
-	// the point - but an explicit rule about them wins.
+	// Custom species are only reachable through their tag, but an explicit rule about them wins.
 	const rules = [...row.ruleset, ...row.banlist, ...row.unbanlist];
 	if (!rules.some(isCustomTagRule)) unbanlist.push('tag:custom');
 	return {

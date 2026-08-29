@@ -1,12 +1,10 @@
 /**
  * Custom Pokemon: a per-account library of user-authored species.
  *
- * The command layer only: storage, validation and payload building live under
- * ../custom/, where the battle path can reach them without going through a
- * hotpatchable plugin.
+ * Storage, validation and payload building live under ../custom/, where the
+ * battle path can reach them without going through a hotpatchable plugin.
  */
 import { Utils } from '../../lib';
-import * as actions from '../custom/species/actions';
 import * as database from '../custom/species/database';
 import * as sprites from '../custom/species/sprites';
 import * as store from '../custom/entries';
@@ -18,117 +16,149 @@ import {
 import { type CustomSpeciesRow, MAX_CUSTOM_SPECIES } from '../custom/species/database';
 
 const MAX_SEARCH = 50;
+const NOUN = 'custom Pokemon';
 
-export const CustomSpecies = new class {
-	validateAccess(user: User) {
-		actions.validateAccess(user);
-	}
+const getOwn = (user: User, name: string) => store.getOwn(user, name, NOUN, database.get);
+const getVisible = (user: User, ownerid: ID, name: string) =>
+	store.getVisible(user, ownerid, name, NOUN, database.get);
 
-	ownedNames(ownerid: ID, excludeEntryid?: number) {
-		return actions.ownedNames(ownerid, excludeEntryid);
-	}
+export function validateAccess(user: User) {
+	store.validateAccess(user, !!database.entries, Config.custompokemon, NOUN);
+}
 
-	getOwn(user: User, name: string) {
-		return store.getOwn(user, name, actions.NOUN, database.get);
-	}
+export async function ownedNames(ownerid: ID, excludeEntryid?: number) {
+	return store.nameMap(await database.ownedNames(ownerid), row => row.speciesid, excludeEntryid);
+}
 
-	getVisible(user: User, ownerid: ID, name: string) {
-		return store.getVisible(user, ownerid, name, actions.NOUN, database.get);
-	}
+/** Re-validates the whole entry, so no sequence of partial edits can leave an invalid row. */
+export async function revalidate(row: CustomSpeciesRow, changes: AnyObject) {
+	const editable: AnyObject = { ...row.species, name: row.name, learnset: row.learnset };
+	if (row.inheritsfrom) editable.inheritsFrom = Dex.species.get(row.inheritsfrom).name;
+	const otherNames = await ownedNames(row.ownerid, row.entryid);
+	return normalizeSpeciesData({ ...editable, ...changes }, { otherNames });
+}
 
-	revalidate(row: CustomSpeciesRow, changes: AnyObject) {
-		return actions.revalidate(row, changes);
+export async function createSpecies(user: User, input: AnyObject) {
+	validateAccess(user);
+	const normalized = normalizeSpeciesData(input, { otherNames: await ownedNames(user.id) });
+	if (await database.count(user.id) >= MAX_CUSTOM_SPECIES) {
+		throw new Chat.ErrorMessage(
+			`You already have ${MAX_CUSTOM_SPECIES} custom Pokemon, which is the limit. Delete one first.`
+		);
 	}
+	return database.create({
+		ownerid: user.id, speciesid: normalized.speciesid, name: normalized.name,
+		inheritsfrom: normalized.inheritsFrom, species: normalized.species,
+		learnset: normalized.learnset, notes: null,
+	});
+}
 
-	summary(row: CustomSpeciesRow) {
-		const species = resolveSpecies(row);
-		const parts = [`<strong>${Utils.escapeHTML(row.name)}</strong>`];
-		if (row.inheritsfrom) {
-			parts.push(`<small>(variant of ${Utils.escapeHTML(Dex.species.get(row.inheritsfrom).name)})</small>`);
-		}
-		if (species.types?.length) parts.push(Utils.escapeHTML(species.types.join('/')));
-		if (species.baseStats) parts.push(`${statLine(species)} <small>(BST ${bst(species)})</small>`);
-		if (row.private) parts.push(`<small>[private]</small>`);
-		return parts.join(' &middot; ');
-	}
+export async function editSpecies(user: User, name: string, changes: AnyObject) {
+	validateAccess(user);
+	const row = await getOwn(user, name);
+	const normalized = await revalidate(row, changes);
+	await database.update(row.entryid, {
+		speciesid: normalized.speciesid, name: normalized.name, inheritsfrom: normalized.inheritsFrom,
+		species: normalized.species, learnset: normalized.learnset,
+	});
+	return (await database.getById(row.entryid))!;
+}
 
-	details(row: CustomSpeciesRow) {
-		const species = resolveSpecies(row);
-		const learnset = resolveLearnset(row);
-		let buf = `<h3>${Utils.escapeHTML(row.name)}</h3>`;
-		buf += this.spriteHTML(row);
-		buf += `<p>`;
-		if (row.inheritsfrom) {
-			buf += `Variant of <strong>${Utils.escapeHTML(Dex.species.get(row.inheritsfrom).name)}</strong><br />`;
-		}
-		buf += `By <strong>${Utils.escapeHTML(row.ownerid)}</strong> &middot; #${row.num} &middot; ${row.views} views`;
-		buf += `</p>`;
-		const rows: [string, string][] = [];
-		if (species.types?.length) rows.push(['Types', species.types.join(' / ')]);
-		if (species.baseStats) rows.push(['Base stats', `${statLine(species)} (BST ${bst(species)})`]);
-		if (species.abilities) {
-			rows.push(['Abilities', Object.entries(species.abilities)
-				.map(([slot, ability]) => `${ability}${slot === 'H' ? ' (H)' : slot === 'S' ? ' (S)' : ''}`)
-				.join(', ')]);
-		}
-		if (species.eggGroups?.length) rows.push(['Egg groups', species.eggGroups.join(', ')]);
-		if (species.color) rows.push(['Color', species.color]);
-		if (species.heightm) rows.push(['Height', `${species.heightm} m`]);
-		if (species.weightkg) rows.push(['Weight', `${species.weightkg} kg`]);
-		if (species.gender !== undefined) rows.push(['Gender', species.gender || 'M/F']);
-		if (species.prevo) rows.push(['Prevo', species.prevo]);
-		if (species.evos?.length) rows.push(['Evos', species.evos.join(', ')]);
-		if (row.notes) rows.push(['Notes', row.notes]);
-		buf += `<table>`;
-		for (const [label, value] of rows) {
-			buf += `<tr><th style="text-align:right;padding-right:6px">${label}</th>` +
-				`<td>${Utils.escapeHTML(value)}</td></tr>`;
-		}
-		buf += `</table>`;
-		const moves = Object.keys(learnset);
-		buf += `<p><strong>Learnset</strong> (${Chat.count(moves, "moves")})`;
-		if (moves.length) {
-			buf += `<br /><small>${Utils.escapeHTML(
-				moves.map(id => Dex.moves.get(id).name).sort().join(', ')
-			)}</small>`;
-		}
-		buf += `</p>`;
-		return buf;
-	}
-
-	spriteHTML(row: CustomSpeciesRow) {
-		const stored = row.sprites || {};
-		const kinds = Object.keys(sprites.SPRITE_KINDS).filter(kind => stored[kind]);
-		if (!kinds.length) return ``;
-		return `<p>${kinds.map(kind => {
-			const { width, height } = sprites.SPRITE_KINDS[kind];
-			return `<img src="${sprites.spriteURL(stored[kind])}" alt="${kind}" ` +
-				`width="${width}" height="${height}" style="image-rendering:pixelated" />`;
-		}).join(' ')}</p>`;
-	}
-};
+export async function removeSpecies(user: User, target: string) {
+	validateAccess(user);
+	const row = await store.getDeletable(target, user, NOUN, database.get);
+	await database.remove(row.entryid);
+	return row;
+}
 
 const statLine = (species: AnyObject) =>
 	STATS.map(stat => `${stat.toUpperCase()} ${species.baseStats[stat]}`).join(' / ');
+
+function spriteHTML(row: CustomSpeciesRow) {
+	const stored = row.sprites || {};
+	const kinds = Object.keys(sprites.SPRITE_KINDS).filter(kind => stored[kind]);
+	if (!kinds.length) return ``;
+	return `<p>${kinds.map(kind => {
+		const { width, height } = sprites.SPRITE_KINDS[kind];
+		return `<img src="${sprites.spriteURL(stored[kind])}" alt="${kind}" ` +
+			`width="${width}" height="${height}" style="image-rendering:pixelated" />`;
+	}).join(' ')}</p>`;
+}
+
+function summary(row: CustomSpeciesRow) {
+	const species = resolveSpecies(row);
+	const parts = [`<strong>${Utils.escapeHTML(row.name)}</strong>`];
+	if (row.inheritsfrom) {
+		parts.push(`<small>(variant of ${Utils.escapeHTML(Dex.species.get(row.inheritsfrom).name)})</small>`);
+	}
+	if (species.types?.length) parts.push(Utils.escapeHTML(species.types.join('/')));
+	if (species.baseStats) parts.push(`${statLine(species)} <small>(BST ${bst(species)})</small>`);
+	if (row.private) parts.push(`<small>[private]</small>`);
+	return parts.join(' &middot; ');
+}
+
+function details(row: CustomSpeciesRow) {
+	const species = resolveSpecies(row);
+	const learnset = resolveLearnset(row);
+	let buf = `<h3>${Utils.escapeHTML(row.name)}</h3>${spriteHTML(row)}<p>`;
+	if (row.inheritsfrom) {
+		buf += `Variant of <strong>${Utils.escapeHTML(Dex.species.get(row.inheritsfrom).name)}</strong><br />`;
+	}
+	buf += `By <strong>${Utils.escapeHTML(row.ownerid)}</strong> &middot; #${row.num} &middot; ${row.views} views</p>`;
+	const rows: [string, string][] = [];
+	if (species.types?.length) rows.push(['Types', species.types.join(' / ')]);
+	if (species.baseStats) rows.push(['Base stats', `${statLine(species)} (BST ${bst(species)})`]);
+	if (species.abilities) {
+		rows.push(['Abilities', Object.entries(species.abilities)
+			.map(([slot, ability]) => `${ability}${slot === 'H' ? ' (H)' : slot === 'S' ? ' (S)' : ''}`)
+			.join(', ')]);
+	}
+	if (species.eggGroups?.length) rows.push(['Egg groups', species.eggGroups.join(', ')]);
+	if (species.color) rows.push(['Color', species.color]);
+	if (species.heightm) rows.push(['Height', `${species.heightm} m`]);
+	if (species.weightkg) rows.push(['Weight', `${species.weightkg} kg`]);
+	if (species.gender !== undefined) rows.push(['Gender', species.gender || 'M/F']);
+	if (species.prevo) rows.push(['Prevo', species.prevo]);
+	if (species.evos?.length) rows.push(['Evos', species.evos.join(', ')]);
+	if (row.notes) rows.push(['Notes', row.notes]);
+	buf += `<table>`;
+	for (const [label, value] of rows) {
+		buf += `<tr><th style="text-align:right;padding-right:6px">${label}</th>` +
+			`<td>${Utils.escapeHTML(value)}</td></tr>`;
+	}
+	buf += `</table>`;
+	const moves = Object.keys(learnset);
+	buf += `<p><strong>Learnset</strong> (${Chat.count(moves, "moves")})`;
+	if (moves.length) {
+		buf += `<br /><small>${Utils.escapeHTML(moves.map(id => Dex.moves.get(id).name).sort().join(', '))}</small>`;
+	}
+	return `${buf}</p>`;
+}
+
+function fromDex(table: { get: (name: string) => AnyObject }, name: string, what: string) {
+	const entry = table.get(name);
+	if (!entry.exists) throw new Chat.ErrorMessage(`"${name}" isn't ${what}.`);
+	return entry;
+}
+
+const kb = (bytes: number) => Math.round(bytes / 102.4) / 10;
 
 export const commands: Chat.ChatCommands = {
 	custommon: 'custompokemon',
 	custompokemon: {
 		async create(target, room, user, connection, cmd) {
-			CustomSpecies.validateAccess(user);
-			const dryRun = cmd === 'check';
+			validateAccess(user);
 			const input = store.parseInput(target, 'species');
-			const otherNames = await CustomSpecies.ownedNames(user.id);
-			const normalized = normalizeSpeciesData(input, { otherNames });
-			if (dryRun) {
+			if (cmd === 'check') {
+				const { name } = normalizeSpeciesData(input, { otherNames: await ownedNames(user.id) });
 				return this.sendReplyBox(
-					`<strong>${Utils.escapeHTML(normalized.name)}</strong> is valid. ` +
+					`<strong>${Utils.escapeHTML(name)}</strong> is valid. ` +
 					`Nothing was saved - use <code>/custompokemon create</code> to save it.`
 				);
 			}
-			const row = await actions.create(user, input);
+			const row = await createSpecies(user, input);
 			this.sendReply(`Created custom Pokemon "${row.name}" (#${row.num}).`);
-			return this.sendReplyBox(CustomSpecies.details(row));
+			return this.sendReplyBox(details(row));
 		},
 		check: 'create',
 		createhelp: [
@@ -137,7 +167,7 @@ export const commands: Chat.ChatCommands = {
 		],
 
 		async list(target, room, user) {
-			CustomSpecies.validateAccess(user);
+			validateAccess(user);
 			const ownerid = toID(target) || user.id;
 			const rows = await database.list(ownerid, MAX_CUSTOM_SPECIES, ownerid !== user.id && !user.can('rangeban'));
 			if (!rows.length) {
@@ -148,28 +178,25 @@ export const commands: Chat.ChatCommands = {
 				);
 			}
 			let buf = `<strong>${Utils.escapeHTML(ownerid)}'s custom Pokemon (${rows.length}):</strong><ul>`;
-			for (const row of rows) buf += `<li>${CustomSpecies.summary(row)}</li>`;
-			buf += `</ul>`;
-			return this.sendReplyBox(buf);
+			for (const row of rows) buf += `<li>${summary(row)}</li>`;
+			return this.sendReplyBox(`${buf}</ul>`);
 		},
 
 		'': 'view',
 		show: 'view',
 		async view(target, room, user) {
-			CustomSpecies.validateAccess(user);
+			validateAccess(user);
 			if (!toID(target)) return this.parse(`/custompokemon list`);
-			const [ownerid, name] = store.parseOwnerAndName(target, user);
-			const row = await CustomSpecies.getVisible(user, ownerid, name);
+			const row = await getVisible(user, ...store.parseOwnerAndName(target, user));
 			// Cheap: a stat() per sprite, and a write only if the cache lost them.
 			await sprites.ensureCached(row.entryid);
 			if (row.ownerid !== user.id) await database.bumpViews(row.entryid);
-			return this.sendReplyBox(CustomSpecies.details(row));
+			return this.sendReplyBox(details(row));
 		},
 
 		async export(target, room, user) {
-			CustomSpecies.validateAccess(user);
-			const [ownerid, name] = store.parseOwnerAndName(target, user);
-			const row = await CustomSpecies.getVisible(user, ownerid, name);
+			validateAccess(user);
+			const row = await getVisible(user, ...store.parseOwnerAndName(target, user));
 			return this.sendReplyBox(
 				`<details open><summary><strong>${Utils.escapeHTML(row.name)}</strong></summary>` +
 				`<textarea rows="14" style="width:100%" readonly>${Utils.escapeHTML(toExportJSON(row))}</textarea>` +
@@ -178,12 +205,12 @@ export const commands: Chat.ChatCommands = {
 		},
 
 		async edit(target, room, user) {
-			CustomSpecies.validateAccess(user);
-			const [name, json] = Utils.splitFirst(target, ',', 1).map(part => part.trim());
+			validateAccess(user);
+			const [name, json] = store.parts(target);
 			if (!json) throw new Chat.ErrorMessage(`Usage: /custompokemon edit [name], {json}`);
-			const row = await actions.edit(user, name, store.parseInput(json, 'species'));
+			const row = await editSpecies(user, name, store.parseInput(json, 'species'));
 			this.sendReply(`Updated "${row.name}".`);
-			return this.sendReplyBox(CustomSpecies.details(row));
+			return this.sendReplyBox(details(row));
 		},
 		edithelp: [
 			`/custompokemon edit [name], {json} - Merges the given fields into a custom Pokemon.`,
@@ -191,25 +218,24 @@ export const commands: Chat.ChatCommands = {
 		],
 
 		async rename(target, room, user) {
-			CustomSpecies.validateAccess(user);
-			const [name, newName] = Utils.splitFirst(target, ',', 1).map(part => part.trim());
+			validateAccess(user);
+			const [name, newName] = store.parts(target);
 			if (!newName) throw new Chat.ErrorMessage(`Usage: /custompokemon rename [name], [new name]`);
-			const row = await CustomSpecies.getOwn(user, name);
-			const normalized = await CustomSpecies.revalidate(row, { name: newName });
+			const row = await getOwn(user, name);
+			const normalized = await revalidate(row, { name: newName });
 			await database.update(row.entryid, { speciesid: normalized.speciesid, name: normalized.name });
 			return this.sendReply(`Renamed "${row.name}" to "${normalized.name}".`);
 		},
 
 		learnset: {
-			async add(target, room, user, connection, cmd) {
-				CustomSpecies.validateAccess(user);
-				const [name, moveName, rawSource] = Utils.splitFirst(target, ',', 2).map(part => part.trim());
+			async add(target, room, user) {
+				validateAccess(user);
+				const [name, moveName, rawSource] = store.parts(target, 2);
 				if (!moveName) {
 					throw new Chat.ErrorMessage(`Usage: /custompokemon learnset add [name], [move], [source]`);
 				}
-				const row = await CustomSpecies.getOwn(user, name);
-				const move = Dex.moves.get(moveName);
-				if (!move.exists) throw new Chat.ErrorMessage(`"${moveName}" isn't a move.`);
+				const row = await getOwn(user, name);
+				const move = fromDex(Dex.moves, moveName, 'a move');
 				// Default source: level 1 in the current generation.
 				const sources = normalizeMoveSources(rawSource || `${Dex.gen}L1`, move.name);
 				const learnset = { ...row.learnset, [move.id]: sources };
@@ -218,17 +244,14 @@ export const commands: Chat.ChatCommands = {
 			},
 			remove: 'delete',
 			async delete(target, room, user) {
-				CustomSpecies.validateAccess(user);
-				const [name, moveName] = Utils.splitFirst(target, ',', 1).map(part => part.trim());
+				validateAccess(user);
+				const [name, moveName] = store.parts(target);
 				if (!moveName) {
 					throw new Chat.ErrorMessage(`Usage: /custompokemon learnset remove [name], [move]`);
 				}
-				const row = await CustomSpecies.getOwn(user, name);
-				const move = Dex.moves.get(moveName);
-				if (!move.exists) throw new Chat.ErrorMessage(`"${moveName}" isn't a move.`);
-				if (!row.learnset[move.id]) {
-					throw new Chat.ErrorMessage(`${row.name} doesn't learn ${move.name}.`);
-				}
+				const row = await getOwn(user, name);
+				const move = fromDex(Dex.moves, moveName, 'a move');
+				if (!row.learnset[move.id]) throw new Chat.ErrorMessage(`${row.name} doesn't learn ${move.name}.`);
 				const learnset = { ...row.learnset };
 				delete learnset[move.id];
 				await database.update(row.entryid, { learnset });
@@ -240,9 +263,9 @@ export const commands: Chat.ChatCommands = {
 		},
 
 		async setnotes(target, room, user) {
-			CustomSpecies.validateAccess(user);
-			const [name, notes] = Utils.splitFirst(target, ',', 1).map(part => part.trim());
-			const row = await CustomSpecies.getOwn(user, name);
+			validateAccess(user);
+			const [name, notes] = store.parts(target);
+			const row = await getOwn(user, name);
 			if (notes.length > MAX_NOTES_LENGTH) {
 				throw new Chat.ErrorMessage(`Notes can be at most ${MAX_NOTES_LENGTH} characters.`);
 			}
@@ -251,47 +274,31 @@ export const commands: Chat.ChatCommands = {
 		},
 
 		async setprivacy(target, room, user) {
-			CustomSpecies.validateAccess(user);
-			const [name, rawPrivacy] = Utils.splitFirst(target, ',', 1).map(part => part.trim());
+			validateAccess(user);
+			const [name, rawPrivacy] = store.parts(target);
 			if (!rawPrivacy) throw new Chat.ErrorMessage(`Usage: /custompokemon setprivacy [name], [on/off]`);
-			const row = await CustomSpecies.getOwn(user, name);
+			const row = await getOwn(user, name);
 			const privacy = store.parsePrivacy(this, rawPrivacy);
 			await database.update(row.entryid, { private: privacy });
 			return this.sendReply(`"${row.name}" is now ${privacy ? 'private' : 'public'}.`);
 		},
 
 		async delete(target, room, user) {
-			const row = await actions.remove(user, target);
+			const row = await removeSpecies(user, target);
 			return this.sendReply(`Deleted "${row.name}".`);
 		},
 
 		async search(target, room, user) {
-			CustomSpecies.validateAccess(user);
+			validateAccess(user);
 			const filters: database.SearchFilters = {};
 			for (const part of target.split(',')) {
 				const [rawKey, rawValue] = Utils.splitFirst(part, '=', 1).map(piece => piece.trim());
 				if (!rawValue) continue;
-				const key = toID(rawKey);
-				switch (key) {
+				switch (toID(rawKey)) {
 				case 'owner': filters.owner = toID(rawValue); break;
-				case 'type': {
-					const type = Dex.types.get(rawValue);
-					if (!type.exists) throw new Chat.ErrorMessage(`"${rawValue}" isn't a type.`);
-					filters.type = type.name;
-					break;
-				}
-				case 'ability': {
-					const ability = Dex.abilities.get(rawValue);
-					if (!ability.exists) throw new Chat.ErrorMessage(`"${rawValue}" isn't an ability.`);
-					filters.ability = ability.name;
-					break;
-				}
-				case 'move': {
-					const move = Dex.moves.get(rawValue);
-					if (!move.exists) throw new Chat.ErrorMessage(`"${rawValue}" isn't a move.`);
-					filters.move = move.id;
-					break;
-				}
+				case 'type': filters.type = fromDex(Dex.types, rawValue, 'a type').name; break;
+				case 'ability': filters.ability = fromDex(Dex.abilities, rawValue, 'an ability').name; break;
+				case 'move': filters.move = fromDex(Dex.moves, rawValue, 'a move').id; break;
 				case 'minbst': filters.minbst = Number(rawValue); break;
 				case 'maxbst': filters.maxbst = Number(rawValue); break;
 				default:
@@ -310,25 +317,24 @@ export const commands: Chat.ChatCommands = {
 			if (!rows.length) return this.sendReply(`No public custom Pokemon matched.`);
 			let buf = `<strong>${Chat.count(rows, "results")}:</strong><ul>`;
 			for (const row of rows) {
-				buf += `<li>${CustomSpecies.summary(row)} <small>by ${Utils.escapeHTML(row.ownerid)}</small></li>`;
+				buf += `<li>${summary(row)} <small>by ${Utils.escapeHTML(row.ownerid)}</small></li>`;
 			}
-			buf += `</ul>`;
-			return this.sendReplyBox(buf);
+			return this.sendReplyBox(`${buf}</ul>`);
 		},
 
 		async setsprite(target, room, user) {
-			CustomSpecies.validateAccess(user);
-			const [name, rawKind, data] = Utils.splitFirst(target, ',', 2).map(part => part.trim());
+			validateAccess(user);
+			const [name, rawKind, data] = store.parts(target, 2);
 			if (!data) {
 				throw new Chat.ErrorMessage(
 					`Usage: /custompokemon setsprite [name], [kind], [base64 PNG]<br />` +
 					`Kinds: ${Object.keys(sprites.SPRITE_KINDS).join(', ')}`
 				);
 			}
-			const row = await CustomSpecies.getOwn(user, name);
+			const row = await getOwn(user, name);
 			const kind = sprites.normalizeKind(rawKind);
 			const image = await sprites.save(row.entryid, kind, data);
-			this.sendReply(`Set the ${kind} sprite for "${row.name}" (${Math.round(image.data.length / 102.4) / 10}KB).`);
+			this.sendReply(`Set the ${kind} sprite for "${row.name}" (${kb(image.data.length)}KB).`);
 			return this.sendReplyBox(
 				`<img src="${sprites.spriteURL(image.sha)}" alt="${kind}" width="${image.width}" ` +
 				`height="${image.height}" style="image-rendering:pixelated" />`
@@ -340,36 +346,32 @@ export const commands: Chat.ChatCommands = {
 		],
 
 		async clearsprite(target, room, user) {
-			CustomSpecies.validateAccess(user);
-			const [name, rawKind] = Utils.splitFirst(target, ',', 1).map(part => part.trim());
+			validateAccess(user);
+			const [name, rawKind] = store.parts(target);
 			if (!rawKind) throw new Chat.ErrorMessage(`Usage: /custompokemon clearsprite [name], [kind]`);
-			const row = await CustomSpecies.getOwn(user, name);
+			const row = await getOwn(user, name);
 			const kind = sprites.normalizeKind(rawKind);
-			if (!row.sprites?.[kind]) {
-				throw new Chat.ErrorMessage(`"${row.name}" has no ${kind} sprite.`);
-			}
+			if (!row.sprites?.[kind]) throw new Chat.ErrorMessage(`"${row.name}" has no ${kind} sprite.`);
 			await database.removeSprite(row.entryid, kind);
 			return this.sendReply(`Removed the ${kind} sprite from "${row.name}".`);
 		},
 
 		async sprites(target, room, user) {
-			CustomSpecies.validateAccess(user);
-			const [ownerid, name] = store.parseOwnerAndName(target, user);
-			const row = await CustomSpecies.getVisible(user, ownerid, name);
+			validateAccess(user);
+			const row = await getVisible(user, ...store.parseOwnerAndName(target, user));
 			const rows = await sprites.ensureCached(row.entryid);
 			if (!rows.length) return this.sendReply(`"${row.name}" has no sprites yet.`);
-			let buf = `<strong>${Utils.escapeHTML(row.name)}</strong>${CustomSpecies.spriteHTML(row)}<ul>`;
+			let buf = `<strong>${Utils.escapeHTML(row.name)}</strong>${spriteHTML(row)}<ul>`;
 			for (const sprite of rows) {
 				buf += `<li>${sprite.kind}: <code>${sprites.spriteURL(sprite.sha)}</code> ` +
-					`<small>(${sprite.width}x${sprite.height}, ${Math.round(sprite.bytes / 102.4) / 10}KB)</small></li>`;
+					`<small>(${sprite.width}x${sprite.height}, ${kb(sprite.bytes)}KB)</small></li>`;
 			}
-			buf += `</ul>`;
-			return this.sendReplyBox(buf);
+			return this.sendReplyBox(`${buf}</ul>`);
 		},
 
 		async rebuildsprites(target, room, user) {
 			this.checkCan('rangeban');
-			CustomSpecies.validateAccess(user);
+			validateAccess(user);
 			const { total, written } = await sprites.rebuildCache();
 			return this.sendReply(`Rebuilt the sprite cache: ${written} of ${total} written, the rest already present.`);
 		},

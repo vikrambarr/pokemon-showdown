@@ -23,9 +23,6 @@ describe('Custom battles', () => {
 			assert.deepEqual(parseCustomFormat('custom-vikram-monotypechomp'), {
 				ownerid: 'vikram', formatid: 'monotypechomp', id: 'custom-vikram-monotypechomp',
 			});
-		});
-
-		it('should accept a display name with spaces or hyphens', () => {
 			assert.equal(parseCustomFormat('custom-vikram-Monotype Chomp').formatid, 'monotypechomp');
 			assert.equal(parseCustomFormat('Custom-Vikram-Monotype-Chomp').formatid, 'monotypechomp');
 		});
@@ -43,9 +40,6 @@ describe('Custom battles', () => {
 			assert.equal(format.name, 'Custom OU');
 			assert.equal(format.gameType, 'singles');
 			assert.equal(format.playerCount, 2);
-		});
-
-		it('should be nothing at all for an ordinary battle', () => {
 			assert.equal(customFormat({}), null);
 		});
 	});

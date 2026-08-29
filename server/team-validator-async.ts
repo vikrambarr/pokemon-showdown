@@ -22,8 +22,6 @@ export const PM = new QueryProcessManager<{
 	}
 
 	let problems;
-	// attachCustomDex points `custom.format` at a dex built from the request, so this
-	// process never has a cache to go stale.
 	const custom = customData ? attachCustomDex({ formatid, customData }) : null;
 	try {
 		const validator = custom ? new TeamValidator(custom.format) : TeamValidator.get(formatid);

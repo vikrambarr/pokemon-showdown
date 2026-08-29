@@ -56,18 +56,13 @@ describe('Custom dex payloads', () => {
 		assert.deepEqual(Object.keys(merged.Pokedex), ['shared']);
 	});
 
-	it('should refuse two same-named Pokemon that differ only in their learnset', () => {
-		const theirs = { ...standalone('Shared'), learnset: { recover: ['9M'] } };
-		assert.throws(
-			() => mergeCollections([toCollection([standalone('Shared')]), toCollection([theirs])]),
-			Chat.ErrorMessage
-		);
-	});
-
-	it('should refuse to merge two different Pokemon with the same name', () => {
+	it('should refuse two same-named Pokemon that are not the same Pokemon', () => {
+		const differentLearnset = { ...standalone('Shared'), learnset: { recover: ['9M'] } };
 		assert.throws(() => mergeCollections([
-			toCollection([standalone('Clash')]),
-			toCollection([standalone('Clash', { types: ['Fire'] })]),
+			toCollection([standalone('Shared')]), toCollection([differentLearnset]),
+		]), Chat.ErrorMessage);
+		assert.throws(() => mergeCollections([
+			toCollection([standalone('Clash')]), toCollection([standalone('Clash', { types: ['Fire'] })]),
 		]), Chat.ErrorMessage);
 	});
 
@@ -78,8 +73,7 @@ describe('Custom dex payloads', () => {
 	});
 
 	it('should produce a payload a battle dex can use', () => {
-		const merged = mergeCollections([toCollection([standalone('Test Mon')])]);
-		const dex = buildCustomDex(merged, 'gen9');
+		const dex = buildCustomDex(mergeCollections([toCollection([standalone('Test Mon')])]), 'gen9');
 		const species = dex.species.get('Test Mon');
 		assert(species.exists);
 		assert.equal(species.isNonstandard, 'Custom');
@@ -90,9 +84,8 @@ describe('Custom dex payloads', () => {
 
 describe('Custom dex reuse', () => {
 	it('should hand the same dex to everyone building from the same data', () => {
-		const payload = mergeCollections([toCollection([standalone('Shared Mon')])]);
-		const first = buildCustomDex(payload, 'gen9');
-		// A separate but identical payload, as the two validations of one challenge produce.
+		// Separate but identical payloads, as the two validations of one challenge produce.
+		const first = buildCustomDex(mergeCollections([toCollection([standalone('Shared Mon')])]), 'gen9');
 		const second = buildCustomDex(mergeCollections([toCollection([standalone('Shared Mon')])]), 'gen9');
 		assert.equal(first, second);
 		releaseCustomDex(first);

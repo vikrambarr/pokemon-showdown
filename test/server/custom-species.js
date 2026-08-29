@@ -1,10 +1,5 @@
 'use strict';
 
-/**
- * The species validator is the trust boundary: everything here is something a
- * user could hand `/custompokemon create` that must not reach the database.
- */
-
 const assert = require('assert').strict;
 
 const { bst, normalizeSpeciesData, resolveSpecies } = require('../../dist/server/custom/species/validator');
@@ -24,7 +19,6 @@ describe('Custom species validation', () => {
 	});
 
 	it('should hold an inherited entry to the same limit', () => {
-		// Nothing is overridden, so the only stats to check are the ones Eternamax brings.
 		assert.throws(
 			() => normalizeSpeciesData({ name: 'Doomchomp', inheritsFrom: 'Eternatus-Eternamax' }, noNames),
 			Chat.ErrorMessage
@@ -40,10 +34,8 @@ describe('Custom species validation', () => {
 	});
 
 	it('should refuse a baseSpecies that is not a real species', () => {
-		// `Dex.species.get` reads tags and tiers off the base entry without checking it exists.
 		assert.throws(() => normalizeSpeciesData({ ...SPECIES, baseSpecies: 'Nope' }, noNames), Chat.ErrorMessage);
-		const normalized = normalizeSpeciesData({ ...SPECIES, baseSpecies: 'Charizard' }, noNames);
-		assert.equal(normalized.species.baseSpecies, 'Charizard');
+		assert.equal(normalizeSpeciesData({ ...SPECIES, baseSpecies: 'Charizard' }, noNames).species.baseSpecies, 'Charizard');
 	});
 });
 
@@ -58,10 +50,9 @@ describe('Custom species inheritance', () => {
 		assert.deepEqual(resolved.types, ['Dragon', 'Steel']);
 		assert.deepEqual(resolved.baseStats, base.baseStats);
 		assert.deepEqual(resolved.abilities, base.abilities);
+		assert.deepEqual(resolved.genderRatio, base.genderRatio);
 		assert.equal(resolved.color, base.color);
 		assert.equal(resolved.heightm, base.heightm);
-		// Fields the old hand-written inherit list dropped on the floor.
-		assert.deepEqual(resolved.genderRatio, base.genderRatio);
 		assert.equal(resolved.evoLevel, base.evoLevel);
 		assert.equal(resolved.prevo, base.prevo);
 	});
@@ -82,7 +73,6 @@ describe('Custom species inheritance', () => {
 		assert.equal(resolved.forme, undefined);
 		assert.equal(resolved.requiredItem, undefined);
 		assert.equal(resolved.changesFrom, undefined);
-		// Its stats still come from the forme it was built on.
 		assert.deepEqual(resolved.baseStats, base.baseStats);
 	});
 

@@ -1,14 +1,9 @@
 /**
- * Custom data storage
- * Pokemon Showdown - http://pokemonshowdown.com/
+ * Custom data storage: one Postgres pool for both custom tables.
  *
- * One Postgres pool for both custom tables, in the same database as `teams` and
- * `replays`. Lives here rather than under chat-plugins/ because the battle path
- * reads it: `/hotpatch chat` re-requires the plugin tree, and a pool owned by a
- * plugin would be closed out from under `ladders.ts`, which is not re-required.
- * For the same reason nothing closes this pool - it belongs to the process.
- *
- * @license MIT
+ * Outside chat-plugins/ because the battle path reads it, and `/hotpatch chat`
+ * would close a plugin-owned pool out from under ladders.ts. Nothing closes this
+ * pool for the same reason - it belongs to the process.
  */
 import { SQL, PGDatabase, type DatabaseTable } from '../../lib/database';
 import { FS } from '../../lib';
@@ -26,10 +21,7 @@ export function getTable<Row>(enabled: unknown, name: string, primaryKey: (keyof
 	return pool()?.getTable<Row>(name, primaryKey);
 }
 
-/**
- * docker/postgres/init only runs on an empty data directory, so an existing
- * cluster has to be caught up here. Same probe the teams plugin uses.
- */
+/** docker/postgres/init only runs on an empty data directory, so catch an existing cluster up here. */
 export function ensureSchema(table: DatabaseTable<any, PGDatabase> | undefined, schemaFile: string) {
 	const connection = table && pool();
 	if (!connection) return null;
@@ -40,4 +32,11 @@ export function ensureSchema(table: DatabaseTable<any, PGDatabase> | undefined, 
 			await connection.query(SQL(FS(`databases/schemas/${schemaFile}`).readSync()));
 		}
 	})();
+}
+
+/** Postgres count() is int8, which the driver hands back as a string. */
+export async function countOwned(table: DatabaseTable<any, PGDatabase>, name: string, ownerid: ID) {
+	const result = await table.queryOne<{ count: number }>(
+	)`SELECT count(*) AS count FROM "${name}" WHERE ownerid = ${ownerid}`;
+	return Number(result?.count) || 0;
 }

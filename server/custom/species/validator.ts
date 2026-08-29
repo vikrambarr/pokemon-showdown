@@ -8,14 +8,6 @@ import { err, isPlainObject } from '../entries';
 
 import type { CustomSpeciesRow } from './database';
 
-/** Fields a user may set, drawn from the Species class in sim/dex-species.ts. */
-const ALLOWED_FIELDS = new Set([
-	'name', 'types', 'baseStats', 'abilities', 'eggGroups', 'weightkg', 'heightm', 'color',
-	'gender', 'genderRatio', 'prevo', 'evos', 'evoType', 'evoLevel', 'evoItem', 'evoMove',
-	'evoCondition', 'baseSpecies', 'forme', 'requiredItem', 'requiredItems', 'maxHP',
-	'canGigantamax', 'cannotDynamax', 'battleOnly', 'changesFrom', 'tags',
-]);
-
 /**
  * Set by the server or derived from other fields. Rejected by name rather than
  * silently dropped, so nobody thinks they set a tier and quietly didn't.
@@ -38,7 +30,6 @@ const EGG_GROUPS = [
 	'Amorphous', 'Bug', 'Ditto', 'Dragon', 'Fairy', 'Field', 'Flying', 'Grass', 'Human-Like',
 	'Mineral', 'Monster', 'Undiscovered', 'Water 1', 'Water 2', 'Water 3',
 ];
-
 const EVO_TYPES = ['trade', 'useItem', 'levelMove', 'levelExtra', 'levelFriendship', 'levelHold', 'other'];
 
 /** See the MoveSource docs in sim/dex-species.ts: gen digit, source letter, then a free tail. */
@@ -58,6 +49,154 @@ function fromName(table: { get: (name: any) => AnyObject }, name: unknown, what:
 	return entry.name;
 }
 
+function matchFromList(value: unknown, list: string[], what: string) {
+	if (typeof value !== 'string') err(`Each ${what} must be a string.`);
+	const match = list.find(entry => toID(entry) === toID(value));
+	if (!match) err(`"${value}" isn't a valid ${what}. Valid ${what}s: ${list.join(', ')}.`);
+	return match;
+}
+
+function validateNumber(value: unknown, field: string, min: number, max: number) {
+	if (typeof value !== 'number' || !Number.isFinite(value)) err(`"${field}" must be a number.`);
+	if (value < min || value > max) err(`"${field}" must be between ${min} and ${max}.`);
+	// Two decimals, matching how pokedex.ts stores them.
+	return Math.round(value * 100) / 100;
+}
+
+function validateInt(value: unknown, field: string, min: number, max: number) {
+	if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) {
+		err(`"${field}" must be a whole number from ${min} to ${max}.`);
+	}
+	return value as number;
+}
+
+function validateText(value: unknown, field: string, maxLength: number) {
+	if (typeof value !== 'string') err(`"${field}" must be a string.`);
+	const text = value.trim();
+	if (!text) err(`"${field}" can't be blank.`);
+	if (text.length > maxLength) err(`"${field}" can be at most ${maxLength} characters.`);
+	return text;
+}
+
+function oneOrTwo<T>(value: unknown, field: string, what: string, each: (entry: unknown) => T) {
+	if (!Array.isArray(value) || !value.length || value.length > 2) {
+		err(`"${field}" must be an array of one or two ${what}.`);
+	}
+	return (value as unknown[]).map(each);
+}
+
+function arrayOf<T>(value: unknown, field: string, what: string, each: (entry: unknown) => T) {
+	if (!Array.isArray(value)) err(`"${field}" must be an array of ${what}.`);
+	return (value as unknown[]).map(each);
+}
+
+/** prevo/evos may point at an official species or at another of the owner's creations. */
+function validateRelative(value: unknown, otherNames: Map<ID, string>, field: string) {
+	if (typeof value !== 'string') err(`"${field}" must be a species name.`);
+	const official = Dex.species.get(value);
+	if (official.exists) return official.name;
+	const own = otherNames.get(toID(value));
+	if (own) return own;
+	err(`"${value}" (${field}) is neither an official Pokemon nor one of your custom ones.`);
+}
+
+function validateBaseStats(value: unknown) {
+	if (!isPlainObject(value)) err(`"baseStats" must be an object.`);
+	for (const stat in value) {
+		if (!STATS.includes(stat as any)) err(`"${stat}" isn't a stat. Use: ${STATS.join(', ')}.`);
+	}
+	const baseStats: AnyObject = {};
+	for (const stat of STATS) {
+		const amount = value[stat];
+		if (!Number.isInteger(amount) || amount < 1 || amount > 255) {
+			err(`baseStats.${stat} must be a whole number from 1 to 255.`);
+		}
+		baseStats[stat] = amount;
+	}
+	return baseStats;
+}
+
+function validateAbilities(value: unknown) {
+	if (!isPlainObject(value)) {
+		err(`"abilities" must be an object like {"0": "Levitate", "H": "Sturdy"}.`);
+	}
+	const abilities: AnyObject = {};
+	for (const slot in value) {
+		if (!['0', '1', 'H', 'S'].includes(slot)) {
+			err(`"${slot}" isn't an ability slot. Use "0", "1", "H" (hidden) or "S" (special).`);
+		}
+		abilities[slot] = fromName(Dex.abilities, value[slot], 'ability');
+	}
+	if (!abilities['0']) err(`An ability in slot "0" is required.`);
+	return abilities;
+}
+
+function validateGenderRatio(value: unknown) {
+	if (!isPlainObject(value)) err(`"genderRatio" must be an object like {"M": 0.5, "F": 0.5}.`);
+	const M = value.M, F = value.F;
+	if (typeof M !== 'number' || typeof F !== 'number' || M < 0 || F < 0) {
+		err(`"genderRatio" needs numeric "M" and "F" values of at least 0.`);
+	}
+	if (Math.abs(M + F - 1) > 0.001) err(`genderRatio M and F must add up to 1.`);
+	return { M, F };
+}
+
+/**
+ * Fields a user may set, from the Species class in sim/dex-species.ts, each with the
+ * check it has to pass. A Map, so nothing on Object.prototype counts as a field.
+ */
+type FieldValidator = (value: unknown, names: Map<ID, string>) => any;
+const FIELDS = new Map<string, FieldValidator>([
+	['name', value => value],
+	['types', value => {
+		const types = oneOrTwo(value, 'types', 'types', type => fromName(Dex.types, type, 'type'));
+		if (types.length === 2 && types[0] === types[1]) err(`A species can't have the same type twice.`);
+		return types;
+	}],
+	['baseStats', validateBaseStats],
+	['abilities', validateAbilities],
+	['eggGroups', value => oneOrTwo(value, 'eggGroups', 'egg groups', g => matchFromList(g, EGG_GROUPS, 'egg group'))],
+	['weightkg', value => validateNumber(value, 'weightkg', 0.1, 10000)],
+	['heightm', value => validateNumber(value, 'heightm', 0.1, 200)],
+	['color', value => matchFromList(value, COLORS, 'color')],
+	['gender', value => {
+		if (!['M', 'F', 'N', ''].includes(value as string)) {
+			err(`"gender" must be "M", "F", "N" (genderless) or "" (both).`);
+		}
+		return value;
+	}],
+	['genderRatio', validateGenderRatio],
+	['prevo', (value, names) => validateRelative(value, names, 'prevo')],
+	['evos', (value, names) => arrayOf(value, 'evos', 'species names', e => validateRelative(e, names, 'evos entry'))],
+	['evoType', value => {
+		if (!EVO_TYPES.includes(value as string)) err(`"evoType" must be one of: ${EVO_TYPES.join(', ')}.`);
+		return value;
+	}],
+	['evoLevel', value => validateInt(value, 'evoLevel', 1, 100)],
+	['evoItem', value => fromName(Dex.items, value, 'item')],
+	['evoMove', value => fromName(Dex.moves, value, 'move')],
+	['evoCondition', value => validateText(value, 'evoCondition', 100)],
+	// An official species, not free text: `Dex.species.get` reads tags and tiers
+	// straight off the base entry without checking that there is one.
+	['baseSpecies', value => fromName(Dex.species, value, 'species')],
+	['forme', value => validateText(value, 'forme', MAX_NAME_LENGTH)],
+	['requiredItem', value => fromName(Dex.items, value, 'item')],
+	['requiredItems', value => arrayOf(value, 'requiredItems', 'item names', i => fromName(Dex.items, i, 'item'))],
+	['maxHP', value => {
+		if (!Number.isInteger(value) || (value as number) < 1) err(`"maxHP" must be a positive whole number.`);
+		return value;
+	}],
+	['canGigantamax', value => fromName(Dex.moves, value, 'move')],
+	['cannotDynamax', value => {
+		if (typeof value !== 'boolean') err(`"cannotDynamax" must be true or false.`);
+		return value;
+	}],
+	['battleOnly', value => (Array.isArray(value) ?
+		value.map(s => fromName(Dex.species, s, 'species')) : fromName(Dex.species, value, 'species'))],
+	['changesFrom', value => fromName(Dex.species, value, 'species')],
+	['tags', value => arrayOf(value, 'tags', 'strings', tag => validateText(tag, 'tag', 40))],
+]);
+
 export interface NormalizedSpecies {
 	species: AnyObject;
 	learnset: AnyObject;
@@ -76,28 +215,24 @@ export function normalizeSpeciesData(input: AnyObject, opts: {
 	otherNames: Map<ID, string>,
 }): NormalizedSpecies {
 	const raw = { ...input };
-
-	// Learnset and inheritsFrom are stored in their own columns, so pull them out
-	// before the field whitelist runs.
+	// Stored in their own columns, so pull them out before the field whitelist runs.
 	const learnsetInput = raw.learnset;
 	const inheritsInput = raw.inheritsFrom;
 	delete raw.learnset;
 	delete raw.inheritsFrom;
 
 	for (const field in raw) {
-		if (ALLOWED_FIELDS.has(field)) continue;
-		if (SERVER_OWNED_FIELDS.has(field)) {
-			err(`"${field}" is set by the server and can't be edited.`);
-		}
-		err(`"${field}" isn't a species field. Valid fields: ${[...ALLOWED_FIELDS].join(', ')}.`);
+		if (FIELDS.has(field)) continue;
+		if (SERVER_OWNED_FIELDS.has(field)) err(`"${field}" is set by the server and can't be edited.`);
+		err(`"${field}" isn't a species field. Valid fields: ${[...FIELDS.keys()].join(', ')}.`);
 	}
 
 	let inheritsFrom: ID | null = null;
 	if (inheritsInput !== undefined && inheritsInput !== null && inheritsInput !== '') {
 		if (typeof inheritsInput !== 'string') err(`"inheritsFrom" must be a species name.`);
 		const base = Dex.species.get(inheritsInput);
+		// Deliberately depth-1: a chain of custom bases would need cycle detection.
 		if (!base.exists) {
-			// Deliberately depth-1: a chain of custom bases would need cycle detection.
 			err(
 				`"${inheritsInput}" isn't a real Pokemon. A variant has to inherit from an ` +
 				`official species, not from another custom one.`
@@ -106,134 +241,11 @@ export function normalizeSpeciesData(input: AnyObject, opts: {
 		inheritsFrom = base.id;
 	}
 
-	const species: AnyObject = {};
-
 	const name = validateName(raw.name, opts.otherNames);
-	species.name = name;
-
-	if (raw.types !== undefined) {
-		if (!Array.isArray(raw.types) || !raw.types.length || raw.types.length > 2) {
-			err(`"types" must be an array of one or two types.`);
-		}
-		species.types = raw.types.map(type => fromName(Dex.types, type, 'type'));
-		if (species.types.length === 2 && species.types[0] === species.types[1]) {
-			err(`A species can't have the same type twice.`);
-		}
-	}
-
-	if (raw.baseStats !== undefined) {
-		if (!isPlainObject(raw.baseStats)) err(`"baseStats" must be an object.`);
-		const baseStats: AnyObject = {};
-		for (const stat in raw.baseStats) {
-			if (!STATS.includes(stat as any)) {
-				err(`"${stat}" isn't a stat. Use: ${STATS.join(', ')}.`);
-			}
-		}
-		for (const stat of STATS) {
-			const value = raw.baseStats[stat];
-			if (!Number.isInteger(value) || value < 1 || value > 255) {
-				err(`baseStats.${stat} must be a whole number from 1 to 255.`);
-			}
-			baseStats[stat] = value;
-		}
-		species.baseStats = baseStats;
-	}
-
-	if (raw.abilities !== undefined) {
-		if (!isPlainObject(raw.abilities)) {
-			err(`"abilities" must be an object like {"0": "Levitate", "H": "Sturdy"}.`);
-		}
-		const abilities: AnyObject = {};
-		for (const slot in raw.abilities) {
-			if (!['0', '1', 'H', 'S'].includes(slot)) {
-				err(`"${slot}" isn't an ability slot. Use "0", "1", "H" (hidden) or "S" (special).`);
-			}
-			abilities[slot] = fromName(Dex.abilities, raw.abilities[slot], 'ability');
-		}
-		if (!abilities['0']) err(`An ability in slot "0" is required.`);
-		species.abilities = abilities;
-	}
-
-	if (raw.eggGroups !== undefined) {
-		if (!Array.isArray(raw.eggGroups) || !raw.eggGroups.length || raw.eggGroups.length > 2) {
-			err(`"eggGroups" must be an array of one or two egg groups.`);
-		}
-		species.eggGroups = raw.eggGroups.map((group: unknown) => matchFromList(group, EGG_GROUPS, 'egg group'));
-	}
-
-	if (raw.color !== undefined) species.color = matchFromList(raw.color, COLORS, 'color');
-
-	// physical
-	if (raw.weightkg !== undefined) species.weightkg = validateNumber(raw.weightkg, 'weightkg', 0.1, 10000);
-	if (raw.heightm !== undefined) species.heightm = validateNumber(raw.heightm, 'heightm', 0.1, 200);
-	if (raw.maxHP !== undefined) {
-		if (!Number.isInteger(raw.maxHP) || raw.maxHP < 1) err(`"maxHP" must be a positive whole number.`);
-		species.maxHP = raw.maxHP;
-	}
-
-	if (raw.gender !== undefined) {
-		if (!['M', 'F', 'N', ''].includes(raw.gender)) {
-			err(`"gender" must be "M", "F", "N" (genderless) or "" (both).`);
-		}
-		species.gender = raw.gender;
-	}
-	if (raw.genderRatio !== undefined) {
-		if (!isPlainObject(raw.genderRatio)) err(`"genderRatio" must be an object like {"M": 0.5, "F": 0.5}.`);
-		const M = raw.genderRatio.M, F = raw.genderRatio.F;
-		if (typeof M !== 'number' || typeof F !== 'number' || M < 0 || F < 0) {
-			err(`"genderRatio" needs numeric "M" and "F" values of at least 0.`);
-		}
-		if (Math.abs(M + F - 1) > 0.001) err(`genderRatio M and F must add up to 1.`);
-		species.genderRatio = { M, F };
-	}
-
-	// evolution
-	if (raw.prevo !== undefined) species.prevo = validateRelative(raw.prevo, opts.otherNames, 'prevo');
-	if (raw.evos !== undefined) {
-		if (!Array.isArray(raw.evos)) err(`"evos" must be an array of species names.`);
-		species.evos = raw.evos.map((evo: unknown) => validateRelative(evo, opts.otherNames, 'evos entry'));
-	}
-	if (raw.evoType !== undefined) {
-		if (!EVO_TYPES.includes(raw.evoType)) err(`"evoType" must be one of: ${EVO_TYPES.join(', ')}.`);
-		species.evoType = raw.evoType;
-	}
-	if (raw.evoLevel !== undefined) {
-		if (!Number.isInteger(raw.evoLevel) || raw.evoLevel < 1 || raw.evoLevel > 100) {
-			err(`"evoLevel" must be a whole number from 1 to 100.`);
-		}
-		species.evoLevel = raw.evoLevel;
-	}
-	if (raw.evoItem !== undefined) species.evoItem = fromName(Dex.items, raw.evoItem, 'item');
-	if (raw.evoMove !== undefined) species.evoMove = fromName(Dex.moves, raw.evoMove, 'move');
-	if (raw.evoCondition !== undefined) species.evoCondition = validateText(raw.evoCondition, 'evoCondition', 100);
-
-	// formes
-	// An official species, not free text: `Dex.species.get` reads tags and tiers
-	// straight off the base entry without checking that there is one.
-	if (raw.baseSpecies !== undefined) species.baseSpecies = fromName(Dex.species, raw.baseSpecies, 'species');
-	if (raw.forme !== undefined) species.forme = validateText(raw.forme, 'forme', MAX_NAME_LENGTH);
-	if (raw.changesFrom !== undefined) species.changesFrom = fromName(Dex.species, raw.changesFrom, 'species');
-	if (raw.battleOnly !== undefined) {
-		species.battleOnly = Array.isArray(raw.battleOnly) ?
-			raw.battleOnly.map((s: unknown) => fromName(Dex.species, s, 'species')) :
-			fromName(Dex.species, raw.battleOnly, 'species');
-	}
-
-	if (raw.requiredItem !== undefined) species.requiredItem = fromName(Dex.items, raw.requiredItem, 'item');
-	if (raw.requiredItems !== undefined) {
-		if (!Array.isArray(raw.requiredItems)) err(`"requiredItems" must be an array of item names.`);
-		species.requiredItems = raw.requiredItems.map((item: unknown) => fromName(Dex.items, item, 'item'));
-	}
-
-	// misc flags
-	if (raw.canGigantamax !== undefined) species.canGigantamax = fromName(Dex.moves, raw.canGigantamax, 'move');
-	if (raw.cannotDynamax !== undefined) {
-		if (typeof raw.cannotDynamax !== 'boolean') err(`"cannotDynamax" must be true or false.`);
-		species.cannotDynamax = raw.cannotDynamax;
-	}
-	if (raw.tags !== undefined) {
-		if (!Array.isArray(raw.tags)) err(`"tags" must be an array of strings.`);
-		species.tags = raw.tags.map((tag: unknown) => validateText(tag, 'tag', 40));
+	const species: AnyObject = { name };
+	for (const field in raw) {
+		if (field === 'name' || raw[field] === undefined) continue;
+		species[field] = FIELDS.get(field)!(raw[field], opts.otherNames);
 	}
 
 	if (!inheritsFrom) {
@@ -252,13 +264,7 @@ export function normalizeSpeciesData(input: AnyObject, opts: {
 	const total = bst(resolveSpecies({ species, learnset: {}, inheritsfrom: inheritsFrom, num: 0 }));
 	if (total > maxBST()) err(`That's a base stat total of ${total}; the limit is ${maxBST()}.`);
 
-	return {
-		species,
-		learnset: normalizeLearnset(learnsetInput),
-		inheritsFrom,
-		name,
-		speciesid: toID(name),
-	};
+	return { species, learnset: normalizeLearnset(learnsetInput), inheritsFrom, name, speciesid: toID(name) };
 }
 
 function validateName(input: unknown, otherNames: Map<ID, string>) {
@@ -271,45 +277,11 @@ function validateName(input: unknown, otherNames: Map<ID, string>) {
 	}
 	const id = toID(name);
 	if (!id) err(`"name" needs at least one letter or number.`);
-	if (Dex.species.get(id).exists) {
-		// Two things named garchomp in one battle is not something we can resolve later.
-		err(`"${name}" is already an official Pokemon. Pick a different name.`);
-	}
+	// Two things named garchomp in one battle is not something we can resolve later.
+	if (Dex.species.get(id).exists) err(`"${name}" is already an official Pokemon. Pick a different name.`);
 	const clash = otherNames.get(id);
 	if (clash) err(`You already have a custom Pokemon named "${clash}".`);
 	return name;
-}
-
-function validateNumber(value: unknown, field: string, min: number, max: number) {
-	if (typeof value !== 'number' || !Number.isFinite(value)) err(`"${field}" must be a number.`);
-	if (value < min || value > max) err(`"${field}" must be between ${min} and ${max}.`);
-	// Two decimals, matching how pokedex.ts stores them.
-	return Math.round(value * 100) / 100;
-}
-
-function validateText(value: unknown, field: string, maxLength: number) {
-	if (typeof value !== 'string') err(`"${field}" must be a string.`);
-	const text = value.trim();
-	if (!text) err(`"${field}" can't be blank.`);
-	if (text.length > maxLength) err(`"${field}" can be at most ${maxLength} characters.`);
-	return text;
-}
-
-function matchFromList(value: unknown, list: string[], what: string) {
-	if (typeof value !== 'string') err(`Each ${what} must be a string.`);
-	const match = list.find(entry => toID(entry) === toID(value));
-	if (!match) err(`"${value}" isn't a valid ${what}. Valid ${what}s: ${list.join(', ')}.`);
-	return match;
-}
-
-/** prevo/evos may point at an official species or at another of the owner's creations. */
-function validateRelative(value: unknown, otherNames: Map<ID, string>, field: string) {
-	if (typeof value !== 'string') err(`"${field}" must be a species name.`);
-	const official = Dex.species.get(value);
-	if (official.exists) return official.name;
-	const own = otherNames.get(toID(value));
-	if (own) return own;
-	err(`"${value}" (${field}) is neither an official Pokemon nor one of your custom ones.`);
 }
 
 export function normalizeLearnset(input: unknown): AnyObject {
@@ -343,10 +315,9 @@ export function normalizeMoveSources(input: unknown, moveName: string) {
 }
 
 /**
- * Fields naming a Pokemon's place in the official forme graph. A custom species has an
- * identity of its own - a variant of Garchomp-Mega is not itself a forme of Garchomp -
- * so these are the only things a variant doesn't inherit. A user can still set any of
- * them explicitly; they're in ALLOWED_FIELDS.
+ * A custom species has an identity of its own - a variant of Garchomp-Mega is not itself
+ * a forme of Garchomp - so its place in the official forme graph is the only thing it
+ * doesn't inherit. A user can still set any of these explicitly; they're in FIELDS.
  */
 const NOT_INHERITED = [
 	'name', 'num', 'isNonstandard', 'baseSpecies', 'forme', 'formeOrder', 'otherFormes',
@@ -356,10 +327,8 @@ const NOT_INHERITED = [
 
 /**
  * The entry as a complete SpeciesData: the inherited base with the stored overrides on
- * top. What display uses, and what a battle's payload is built from.
- *
- * Inheriting is a spread of the base's own table entry, the way `inherit: true` works for
- * a mod, so a field upstream adds later is carried over rather than silently dropped.
+ * top. A spread of the base's own table entry, the way `inherit: true` works for a mod,
+ * so a field upstream adds later is carried over rather than dropped.
  */
 export function resolveSpecies(
 	row: Pick<CustomSpeciesRow, 'species' | 'learnset' | 'inheritsfrom' | 'num'>
@@ -388,11 +357,10 @@ export function bst(species: AnyObject) {
 export function toExportJSON(row: CustomSpeciesRow) {
 	const out: AnyObject = { name: row.name };
 	if (row.inheritsfrom) out.inheritsFrom = Dex.species.get(row.inheritsfrom).name;
-	for (const field of ALLOWED_FIELDS) {
+	for (const field of FIELDS.keys()) {
 		if (field === 'name') continue;
 		if (row.species[field] !== undefined) out[field] = row.species[field];
 	}
 	if (Object.keys(row.learnset || {}).length) out.learnset = row.learnset;
-	// Real JSON, so the output feeds straight back into `/custompokemon create`.
 	return JSON.stringify(out, null, 2);
 }

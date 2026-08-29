@@ -775,25 +775,12 @@ exports.grouplist = [
 ];
 
 /**
- * Custom Pokemon and formats
- *
- * Both databases are Postgres-only and need `usepostgres` set above. Each value
- * is the minimum global rank allowed to use the feature, on top of the
- * autoconfirmed requirement the plugins enforce themselves; ' ' is any user, and
- * leaving one unset turns that feature off.
+ * Custom Pokemon and formats - user-authored species and formats
+ *   Both need `usepostgres` above. custompokemon/customformats are the minimum
+ *   global rank allowed to use each feature; ' ' is any user, false is off.
+ *   The sprite path is a rebuildable cache; Postgres holds the bytes.
  */
-
-// /custompokemon - user-authored species, stored in custom_species.
 exports.custompokemon = false;
-
-// /customformat - user-authored formats, stored in custom_formats. Custom species
-// are only playable in a format that unbans them (`+tag:custom`, which a custom
-// format adds for you), so without this the species database is storage only.
 exports.customformats = false;
-
-// Base stat total ceiling for a custom Pokemon. Mega Rayquaza is 780.
 exports.custompokemonmaxbst = 800;
-
-// Where /custompokemon writes its sprite cache. Postgres holds the bytes; this
-// directory is a cache, rebuildable with /custompokemon rebuildsprites.
 exports.custompokemonspritepath = 'custom-sprites';

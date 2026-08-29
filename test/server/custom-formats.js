@@ -5,9 +5,7 @@ const assert = require('assert').strict;
 const { buildCustomDex, releaseCustomDex } = require('../../dist/sim/dex-custom');
 const { TeamValidator } = require('../../dist/sim/team-validator');
 const { mergeCollections, toCollection } = require('../../dist/server/custom/dex');
-const {
-	normalizeFormatData, toFormatData,
-} = require('../../dist/server/custom/formats/validator');
+const { normalizeFormatData, toFormatData } = require('../../dist/server/custom/formats/validator');
 const { SPECIES_ROW, TEAM } = require('../custom-fixtures');
 
 const normalize = input => normalizeFormatData(input, { otherNames: new Map(), ownerid: 'tester' });
@@ -31,9 +29,6 @@ describe('Custom formats', () => {
 
 		it('should reject a field that is not a format field', () => {
 			assert.throws(() => normalize({ name: 'X', base: '[Gen 9] OU', desc: 'hi' }), Chat.ErrorMessage);
-		});
-
-		it('should reject code, not just unknown fields', () => {
 			assert.throws(
 				() => normalize({ name: 'X', base: '[Gen 9] OU', onValidateSet: '() => {}' }),
 				/comes from the base format/
@@ -44,19 +39,13 @@ describe('Custom formats', () => {
 			assert.throws(() => normalize({ name: 'OU', base: '[Gen 9] OU' }), /already the name of a real format/);
 		});
 
-		it('should reject a rule the base format already has', () => {
-			assert.throws(() => normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['Uber'] }), /already exists in/);
-		});
-
 		it('should reject a base that is not a format', () => {
 			assert.throws(() => normalize({ name: 'X', base: 'Garchomp' }), /isn't a format/);
 		});
 
-		it('should reject a rule that does not exist', () => {
+		it('should reject rules that do not exist, repeat the base, or carry their own sign', () => {
 			assert.throws(() => normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['Notapokemon'] }), Chat.ErrorMessage);
-		});
-
-		it('should reject a sign on a banlist entry', () => {
+			assert.throws(() => normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['Uber'] }), /already exists in/);
 			assert.throws(() => normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['-Uber'] }), /already means that/);
 		});
 	});
@@ -68,14 +57,10 @@ describe('Custom formats', () => {
 			assert.equal(format.mod, Dex.formats.get('gen9ou').mod);
 		});
 
-		it('should unban custom species by default', () => {
-			const format = toFormatData(normalize({ name: 'X', base: '[Gen 9] OU' }));
-			assert(format.unbanlist.includes('tag:custom'));
-		});
-
-		it('should not unban custom species when the format bans them itself', () => {
-			const format = toFormatData(normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['tag:custom'] }));
-			assert(!format.unbanlist.includes('tag:custom'));
+		it('should unban custom species unless the format bans them itself', () => {
+			assert(toFormatData(normalize({ name: 'X', base: '[Gen 9] OU' })).unbanlist.includes('tag:custom'));
+			const banned = toFormatData(normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['tag:custom'] }));
+			assert(!banned.unbanlist.includes('tag:custom'));
 		});
 	});
 
@@ -89,8 +74,7 @@ describe('Custom formats', () => {
 		it('should keep a custom species out when the format bans them', () => {
 			const format = toFormatData(normalize({ name: 'Clean OU', base: '[Gen 9] OU', banlist: ['tag:custom'] }));
 			const [validator, dex] = validatorFor(format);
-			const problems = validator.validateTeam(TEAM);
-			assert(problems.some(problem => problem.includes('Testmon')));
+			assert(validator.validateTeam(TEAM).some(problem => problem.includes('Testmon')));
 			releaseCustomDex(dex);
 		});
 	});

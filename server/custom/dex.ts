@@ -1,11 +1,6 @@
 /**
- * Custom dex payloads
- * Pokemon Showdown - http://pokemonshowdown.com/
- *
- * Turns stored custom species into the payload a battle carries with it, so
- * that the simulator and validator processes never have to read the database.
- *
- * @license MIT
+ * Custom dex payloads: stored custom species as the payload a battle carries,
+ * so the simulator and validator processes never have to read the database.
  */
 import { customFormatId, customFormatName, isPlainObject } from './entries';
 import * as formatDatabase from './formats/database';
@@ -23,11 +18,11 @@ import type { CustomSpeciesRow } from './species/database';
 /** One battle's worth of custom data. A single socket message tops out at 100KB. */
 export const MAX_PAYLOAD_BYTES = 64 * 1024;
 
+const CUSTOM_FORMAT_REGEX = /^custom-([a-z0-9]+)-(.+)$/i;
+
 export type CustomCollection = Required<Omit<CustomDexPayload, 'format'>>;
 /** A collection plus the format it's being played under: everything a battle needs. */
 export type CustomBattleData = CustomCollection & { format: FormatData };
-/** The `custom-owner-format` id `customFormatId` builds, read back apart. */
-const CUSTOM_FORMAT_REGEX = /^custom-([a-z0-9]+)-(.+)$/i;
 type CollectionRow = Pick<CustomSpeciesRow, 'name' | 'num' | 'inheritsfrom' | 'species' | 'learnset' | 'sprites'>;
 
 /** One entry as its owner wrote it: overrides only, so the client's editor round-trips an edit. */
@@ -52,7 +47,6 @@ export function emptyCollection(): CustomCollection {
 	return { Pokedex: {}, Learnsets: {}, FormatsData: {} };
 }
 
-/** One battle's payload has to fit in one socket message, wherever it gets assembled. */
 function checkSize(collection: CustomCollection) {
 	const bytes = JSON.stringify(collection).length;
 	if (bytes > MAX_PAYLOAD_BYTES) {
@@ -115,13 +109,11 @@ export async function resolveOverlay(userid: ID): Promise<CustomDexOverlay> {
 }
 
 /**
- * The payload a battle was started with, recovered from its own input log: what makes an
- * imported or restored battle self-describing, since `/importinputlog` and a restart both
- * hand us a log and nothing else. Re-checked on the way out, since a log is only ever as
- * trustworthy as whoever handed it over.
+ * The payload a battle was started with, recovered from its own input log, since
+ * `/importinputlog` and a restart both hand us a log and nothing else. Re-checked on the
+ * way out: a log is only ever as trustworthy as whoever handed it over.
  */
 export function customDataFromInputLog(inputLog: string): CustomDexPayload | undefined {
-	// `>start` comes near the top, after `>version`, so this needn't split the whole log.
 	let start = inputLog.startsWith('>start ') ? 0 : inputLog.indexOf('\n>start ');
 	if (start < 0) return undefined;
 	if (start) start++;
@@ -138,11 +130,7 @@ export function customDataFromInputLog(inputLog: string): CustomDexPayload | und
 	return validatePayload(options.customData);
 }
 
-/**
- * The shape checks a recovered payload has to pass before a battle can be built from it.
- * Not the full `normalizeSpeciesData` pass a fresh entry gets: this is a structural check
- * plus a rule table that has to build, on a path only `/importinputlog` and a restart reach.
- */
+/** A structural check plus a rule table that has to build, on a path only a restore reaches. */
 function validatePayload(payload: unknown): CustomDexPayload | undefined {
 	if (!isPlainObject(payload)) return undefined;
 	if (JSON.stringify(payload).length > MAX_PAYLOAD_BYTES) return undefined;
@@ -156,7 +144,6 @@ function validatePayload(payload: unknown): CustomDexPayload | undefined {
 	if (payload.format !== undefined) {
 		if (!isPlainObject(payload.format)) return undefined;
 		try {
-			// An unknown mod, an over-long name and rules that contradict each other all throw here.
 			Dex.formats.getRuleTable(new Dex.Format({ ...payload.format, effectType: 'Format' }));
 		} catch {
 			return undefined;
@@ -165,7 +152,7 @@ function validatePayload(payload: unknown): CustomDexPayload | undefined {
 	return payload as CustomDexPayload;
 }
 
-/** The payload a player joining a running battle plays under: its dex was built at start, and can't be added to. */
+/** The payload a player joining a running battle plays under: its dex was built at start. */
 export function toBattleData(payload: CustomDexPayload | undefined): CustomBattleData | null {
 	if (!payload?.format) return null;
 	return {
@@ -176,11 +163,7 @@ export function toBattleData(payload: CustomDexPayload | undefined): CustomBattl
 	};
 }
 
-/**
- * The inline format a battle is running under, for the one caller that needs it before
- * the battle room exists. Cached per payload the way `Dex.formats.get` caches a real
- * one, so nothing resolves the same rule table twice.
- */
+/** The inline format a battle is running under, cached per payload the way real formats are. */
 const formatCache = new WeakMap<CustomDexPayload, Format>();
 export function customFormat(options: { customData?: CustomDexPayload }) {
 	const payload = options.customData;
@@ -191,18 +174,10 @@ export function customFormat(options: { customData?: CustomDexPayload }) {
 }
 
 /**
- * A live battle's format, published where `Dex.formats.get` will find it.
- *
- * Custom formats are deliberately kept out of `formatsListCache` - the list every
- * connection pays for - but they still have to be *resolvable*, or the four upstream
- * call sites that do `Dex.formats.get(room.battle.format)` silently get a nonexistent
- * format: the battle timer reads `gameType` off it, and so do the replay uploader and
- * `/importinputlog`. Registering in `rulesetCache` is the same trick `buildCustomDex`
- * uses for its mod, and it keeps those call sites unpatched.
- *
- * The payload's format name is built so `toID(name)` is this id (see `resolveBattleData`),
- * which is what makes a restored battle work: `deserializeBattleRoom` recovers the format
- * from its room id, which upstream built out of the same name.
+ * A live battle's format, published where `Dex.formats.get` will find it. Kept out of
+ * `formatsListCache` - the list every connection pays for - but still resolvable, or the
+ * upstream `Dex.formats.get(room.battle.format)` call sites silently get a nonexistent
+ * format: the battle timer, the replay uploader and `/importinputlog` all read one.
  */
 const registered = new Map<RoomID, ID>();
 
@@ -236,19 +211,16 @@ export function parseCustomFormat(formatName: string) {
 	return { ownerid, formatid, id: customFormatId(ownerid, formatid) };
 }
 
-/** A stored format as the dex wants it, or null. `private` hides it from browsing, not from play. */
+/** A stored format as the dex wants it, named so that `toID(name)` is the id it plays under. */
 export async function resolveFormat(ownerid: ID, formatid: ID): Promise<FormatData | null> {
 	if (!formatDatabase.entries) return null;
 	const row = await formatDatabase.get(ownerid, formatid);
 	if (!row) return null;
-	// Named so that `toID(name)` is the id it gets registered and challenged under.
 	return { ...toFormatData(row), name: customFormatName(row.ownerid, row.name) };
 }
 
 /** The format and the challenger's own collection, resolved at challenge time. */
-export async function resolveBattleData(
-	ref: { ownerid: ID, formatid: ID }, userid: ID
-): Promise<CustomBattleData> {
+export async function resolveBattleData(ref: { ownerid: ID, formatid: ID }, userid: ID): Promise<CustomBattleData> {
 	const [format, collection] = await Promise.all([
 		resolveFormat(ref.ownerid, ref.formatid),
 		resolveCollection(userid),
@@ -259,10 +231,7 @@ export async function resolveBattleData(
 	return { ...checkSize(collection), format };
 }
 
-/**
- * Two entries are the same species if everything a battle reads is the same. `num`
- * is the owner's own row id, so two copies of one species always differ by it.
- */
+/** `num` is the owner's own row id, so two copies of one species always differ by it. */
 function sameEntry(a: CustomCollection, b: CustomCollection, id: string) {
 	return JSON.stringify([{ ...a.Pokedex[id], num: 0 }, a.Learnsets[id]]) ===
 		JSON.stringify([{ ...b.Pokedex[id], num: 0 }, b.Learnsets[id]]);

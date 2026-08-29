@@ -1,13 +1,6 @@
 /**
- * Custom entry helpers
- * Pokemon Showdown - http://pokemonshowdown.com/
- *
  * What the custom Pokemon and custom format plugins do identically: the access
- * gate, owner-scoped lookups, and parsing the `[owner], [name]` target they both
- * take, plus the id a custom format is challenged by. Lives above chat-plugins/
- * so both can import it without importing each other.
- *
- * @license MIT
+ * gate, owner-scoped lookups, and parsing the targets they both take.
  */
 import * as crypto from 'crypto';
 import { Utils } from '../../lib';
@@ -18,10 +11,10 @@ const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'.split('');
 export const customFormatId = (ownerid: ID, formatid: ID) => `custom-${ownerid}-${formatid}`;
 
 /**
- * The display name a custom format carries once it's in play. Chosen so that
+ * The display name a custom format carries in play, chosen so that
  * `toID(customFormatName(owner, name)) === toID(customFormatId(owner, toID(name)))`:
- * the id the dex registers it under, the id in its battle room's name, and the id it is
- * challenged by all have to agree, or a restarted battle can't find its format again.
+ * the registered id, the id in its room name and the id it's challenged by must agree,
+ * or a restarted battle can't find its format again.
  */
 export const customFormatName = (ownerid: ID, name: string) => `Custom (${ownerid}) ${name}`;
 
@@ -41,7 +34,11 @@ export function err(message: string): never {
 	throw new Chat.ErrorMessage(message);
 }
 
-/** Parses the JSON a command was handed, with a message a user can act on. */
+/** `[a], [b], ...`, trimmed. */
+export function parts(target: string, limit = 1) {
+	return Utils.splitFirst(target, ',', limit).map(part => part.trim());
+}
+
 export function parseInput(target: string, what: string) {
 	const text = target.trim();
 	if (!text) err(`Provide the ${what} data as JSON.`);
@@ -57,7 +54,7 @@ export function parseInput(target: string, what: string) {
 
 /** `[owner], [name]`, or just `[name]` for your own. */
 export function parseOwnerAndName(target: string, user: User): [ID, string] {
-	const [first, second] = Utils.splitFirst(target, ',', 1).map(part => part.trim());
+	const [first, second] = parts(target);
 	if (second) return [toID(first), second];
 	return [user.id, first];
 }
@@ -97,10 +94,10 @@ export function nameMap<T extends OwnedRow>(rows: T[], id: (row: T) => ID, exclu
 	return names;
 }
 
-/** An entry the user is allowed to edit, or an error explaining which part failed. */
-export async function getOwn<T extends OwnedRow>(
-	user: User, name: string, what: string, get: (ownerid: ID, id: ID) => Promise<T | undefined>
-) {
+type Getter<T> = (ownerid: ID, id: ID) => Promise<T | undefined>;
+
+/** An entry the user is allowed to edit. */
+export async function getOwn<T extends OwnedRow>(user: User, name: string, what: string, get: Getter<T>) {
 	const id = toID(name);
 	if (!id) throw new Chat.ErrorMessage(`Specify which ${what}.`);
 	const row = await get(user.id, id);
@@ -110,7 +107,7 @@ export async function getOwn<T extends OwnedRow>(
 
 /** Readable by the viewer: their own, or someone else's that isn't private. */
 export async function getVisible<T extends OwnedRow>(
-	user: User, ownerid: ID, name: string, what: string, get: (ownerid: ID, id: ID) => Promise<T | undefined>
+	user: User, ownerid: ID, name: string, what: string, get: Getter<T>
 ) {
 	const id = toID(name);
 	if (!id) throw new Chat.ErrorMessage(`Specify which ${what}.`);
@@ -123,13 +120,12 @@ export async function getVisible<T extends OwnedRow>(
 
 /** Staff may delete anyone's; everyone else only their own. */
 export async function getDeletable<T extends OwnedRow>(
-	target: string, user: User, what: string, get: (ownerid: ID, id: ID) => Promise<T | undefined>
+	target: string, user: User, what: string, get: Getter<T>
 ) {
 	const id = toID(target);
 	if (!id) throw new Chat.ErrorMessage(`Specify which ${what}.`);
 	let row = await get(user.id, id);
 	if (!row && user.can('rangeban')) {
-		// Staff clean-up: [owner], [name].
 		const [ownerid, name] = parseOwnerAndName(target, user);
 		row = await get(ownerid, toID(name));
 	}

@@ -1,10 +1,9 @@
 /**
  * Pixel art for user-authored Pokemon.
  *
- * Postgres holds the bytes; the served directory is a write-through cache that
- * can be rebuilt from it at any time. Files are named by the sha256 of their
- * contents, so a URL is immutable: re-uploading an image changes the URL rather
- * than invalidating one, which is what lets nginx cache them for 30 days.
+ * Postgres holds the bytes; the served directory is a write-through cache that can be
+ * rebuilt from it at any time. Files are named by the sha256 of their contents, so a
+ * URL is immutable and nginx can cache them indefinitely.
  */
 import * as crypto from 'crypto';
 import { FS } from '../../../lib';
@@ -19,7 +18,7 @@ export const SPRITE_KINDS: { [kind: string]: { width: number, height: number } }
 	'icon': { width: 40, height: 30 },
 };
 
-/** Generous for 96x96 pixel art, well inside the 100KB socket message cap (server/sockets.ts). */
+/** Generous for 96x96 pixel art, well inside the 100KB socket message cap. */
 const MAX_SPRITE_BYTES = 64 * 1024;
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
@@ -50,7 +49,6 @@ export function readPNGDimensions(data: Buffer) {
 	return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
 }
 
-/** Decodes and fully validates an upload. Throws with the reason; never half-accepts. */
 export function decodeUpload(kind: string, input: string) {
 	// A client file picker hands back a data URI, so accept one as-is.
 	const base64 = input.trim().replace(/^data:image\/png;base64,/, '').replace(/\s+/g, '');
@@ -83,11 +81,7 @@ export function decodeUpload(kind: string, input: string) {
 	};
 }
 
-/**
- * Writes the file if it isn't already there; identical bytes are a no-op. Never throws -
- * Postgres already holds the bytes, so a failure here is a cache miss that `ensureCached`
- * or `rebuildCache` will fix.
- */
+/** Writes the file if it isn't already there. Never throws: Postgres still has the bytes. */
 export async function writeThrough(sha: string, data: Buffer) {
 	const path = FS(cachePath(sha));
 	try {
@@ -113,11 +107,7 @@ export async function save(entryid: number, kind: string, input: string) {
 	return image;
 }
 
-/**
- * Restores any of an entry's sprites that are missing from the cache, and returns the
- * listing it checked. Cheap enough to call on a view: the common case is a stat() per
- * sprite and no reads at all.
- */
+/** Restores any of an entry's sprites missing from the cache, and returns the listing it checked. */
 export async function ensureCached(entryid: number) {
 	const rows = await database.listSprites(entryid);
 	for (const row of rows) {

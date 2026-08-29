@@ -2272,7 +2272,7 @@ export const Rooms = {
 			// can happen if restoring a Bo3 game
 			return Rooms.rooms.get(roomid) as GameRoom;
 		}
-		// Published here so everything downstream can just look the format up by name.
+		// Published so everything downstream can look the format up by name.
 		registerCustomFormat(roomid, options);
 		const room = Rooms.createGameRoom(roomid, roomTitle, options);
 		let game: RoomBattle | BestOfGame;

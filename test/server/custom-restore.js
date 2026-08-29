@@ -27,14 +27,9 @@ function playCustomBattle() {
 
 describe('Custom battle restore', () => {
 	it('should recover the payload a battle was started with', () => {
-		const recovered = customDataFromInputLog(playCustomBattle());
-		assert(recovered.Pokedex.testmon);
-		assert.equal(recovered.format.name, 'Custom OU');
-	});
-
-	it('should give a restored battle its real format back', () => {
 		const options = { inputLog: playCustomBattle() };
 		options.customData = customDataFromInputLog(options.inputLog);
+		assert(options.customData.Pokedex.testmon);
 		assert.equal(customFormat(options).name, 'Custom OU');
 	});
 

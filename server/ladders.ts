@@ -74,8 +74,7 @@ class Ladder extends LadderStore {
 			if (!customRef) {
 				this.formatid = Dex.formats.validate(this.formatid);
 			} else {
-				// Joining a running battle means playing under its payload, not your own:
-				// its dex was built when it started.
+				// Joining a running battle means playing under its payload: its dex was built at start.
 				customData = joining ? toBattleData(joining) : await resolveBattleData(customRef, user.id);
 				if (!customData) throw new Chat.ErrorMessage(`That battle isn't running a custom format.`);
 				this.formatid = customRef.id;

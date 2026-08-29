@@ -5,7 +5,7 @@
  * chat-plugins/custom-formats.ts; this file returns data, never messages.
  */
 import { SQL, type PGDatabase, type DatabaseTable } from '../../../lib/database';
-import { ensureSchema, getTable } from '../database';
+import { countOwned, ensureSchema, getTable } from '../database';
 
 /** How many custom formats one account may own. */
 export const MAX_CUSTOM_FORMATS = 25;
@@ -43,9 +43,8 @@ export async function create(entry: {
 }) {
 	const now = new Date().toISOString();
 	const row = await entries!.queryOne<{ entryid: number }>()`INSERT INTO custom_formats (${{
-		ownerid: entry.ownerid, formatid: entry.formatid, name: entry.name, base: entry.base,
-		ruleset: json(entry.ruleset), banlist: json(entry.banlist), unbanlist: json(entry.unbanlist),
-		notes: entry.notes, views: 0, date: now, updated: now,
+		...entry, ruleset: json(entry.ruleset), banlist: json(entry.banlist), unbanlist: json(entry.unbanlist),
+		views: 0, date: now, updated: now,
 	}}) RETURNING entryid`;
 	return (await getById(row!.entryid))!;
 }
@@ -70,11 +69,8 @@ export function list(ownerid: ID, limit: number, publicOnly = false) {
 	return entries!.selectAll()`WHERE ownerid = ${ownerid} ${publicOnlyQuery}ORDER BY updated DESC LIMIT ${limit}`;
 }
 
-export async function count(ownerid: ID) {
-	const result = await entries!.queryOne<{ count: number }>(
-	)`SELECT count(*) AS count FROM custom_formats WHERE ownerid = ${ownerid}`;
-	// Postgres count() is int8, which the driver hands back as a string.
-	return Number(result?.count) || 0;
+export function count(ownerid: ID) {
+	return countOwned(entries!, 'custom_formats', ownerid);
 }
 
 export function update(entryid: number, data: {

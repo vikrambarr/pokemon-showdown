@@ -26,11 +26,7 @@ describe('Custom dex overlay', () => {
 		const overlay = toOverlay([SPECIES_ROW], []);
 		assert.deepEqual(Object.keys(overlay.sprites.testmon), ['front', 'icon']);
 		assert(overlay.sprites.testmon.front.endsWith('/abc123.png'));
-	});
-
-	it('should leave out sprites for species that have none', () => {
-		const overlay = toOverlay([{ ...SPECIES_ROW, sprites: {} }], []);
-		assert.deepEqual(overlay.sprites, {});
+		assert.deepEqual(toOverlay([{ ...SPECIES_ROW, sprites: {} }], []).sprites, {});
 	});
 
 	it('should give each format the reference it can be challenged by', () => {

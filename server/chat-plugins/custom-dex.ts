@@ -1,30 +1,25 @@
 /**
- * Custom dex overlay
- * Pokemon Showdown - http://pokemonshowdown.com/
- *
- * Serves a user's custom species and formats to the teambuilder via
- * `/crq customdex`, in the same shapes the data files use, and takes its edits
- * back through `/crq custompokemon`.
- *
- * @license MIT
+ * Serves a user's custom species and formats to the teambuilder via `/crq customdex`,
+ * in the same shapes the data files use, and takes its edits back through
+ * `/crq custompokemon`.
  */
 import { Utils } from '../../lib';
 import { resolveOverlay } from '../custom/dex';
 import * as store from '../custom/entries';
-import * as actions from '../custom/species/actions';
+import { createSpecies, editSpecies, removeSpecies } from './custom-species';
 
 /** The write half of the overlay, so the teambuilder room needn't send chat commands. */
-async function runAction(user: User, action: string, target: string) {
+function runAction(user: User, action: string, target: string) {
 	switch (toID(action)) {
 	case 'create':
-		return actions.create(user, store.parseInput(target, 'species'));
+		return createSpecies(user, store.parseInput(target, 'species'));
 	case 'edit': {
-		const [name, json] = Utils.splitFirst(target, ',', 1).map(part => part.trim());
+		const [name, json] = store.parts(target);
 		if (!json) throw new Chat.ErrorMessage(`Editing needs a name and the fields to change.`);
-		return actions.edit(user, name, store.parseInput(json, 'species'));
+		return editSpecies(user, name, store.parseInput(json, 'species'));
 	}
 	case 'delete':
-		return actions.remove(user, target);
+		return removeSpecies(user, target);
 	}
 	throw new Chat.ErrorMessage(`"${action}" isn't something you can do to a custom Pokemon.`);
 }
@@ -53,9 +48,9 @@ export const commands: Chat.ChatCommands = {
 		if (!user.named) throw new Chat.ErrorMessage(`Choose a username before loading your custom dex.`);
 		const overlay = await resolveOverlay(user.id);
 		connection.send(`|queryresponse|customdex|${JSON.stringify(overlay)}`);
-		const species = Object.keys(overlay.Pokedex).length;
 		return this.sendReply(
-			`Sent ${species} custom Pokemon and ${overlay.formats.length} custom formats to your client.`
+			`Sent ${Object.keys(overlay.Pokedex).length} custom Pokemon and ` +
+			`${overlay.formats.length} custom formats to your client.`
 		);
 	},
 	customdexhelp: [

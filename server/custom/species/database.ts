@@ -5,12 +5,11 @@
  * chat-plugins/custom-species.ts; this file returns data, never messages.
  */
 import { SQL, type PGDatabase, type DatabaseTable } from '../../../lib/database';
-import { ensureSchema, getTable } from '../database';
+import { countOwned, ensureSchema, getTable } from '../database';
 
 /**
- * Dex number band for custom species. Negative `num` is upstream's convention
- * for non-canonical Pokemon; CAP already occupies -1 to -5014, so start well
- * clear of it. Derived from entryid, so it survives a rename.
+ * Dex number band for custom species. Negative `num` is upstream's convention for
+ * non-canonical Pokemon; CAP occupies -1 to -5014, so start well clear of it.
  */
 const NUM_BASE = -100000;
 
@@ -69,11 +68,9 @@ export async function create(entry: {
 }) {
 	const now = new Date().toISOString();
 	const row = await entries!.queryOne<{ entryid: number }>()`INSERT INTO custom_species (${{
-		ownerid: entry.ownerid, speciesid: entry.speciesid, name: entry.name, num: 0,
-		inheritsfrom: entry.inheritsfrom, species: json(entry.species), learnset: json(entry.learnset),
-		sprites: json({}), notes: entry.notes, views: 0, date: now, updated: now,
+		...entry, num: 0, species: json(entry.species), learnset: json(entry.learnset),
+		sprites: json({}), views: 0, date: now, updated: now,
 	}}) RETURNING entryid`;
-	// num is derived from the id the insert just handed us.
 	await entries!.update(row!.entryid, { num: NUM_BASE - row!.entryid });
 	return (await getById(row!.entryid))!;
 }
@@ -108,11 +105,8 @@ export function collection(ownerid: ID, limit = MAX_CUSTOM_SPECIES) {
 	)`WHERE ownerid = ${ownerid} ORDER BY updated DESC LIMIT ${limit}`;
 }
 
-export async function count(ownerid: ID) {
-	const result = await entries!.queryOne<{ count: number }>(
-	)`SELECT count(*) AS count FROM custom_species WHERE ownerid = ${ownerid}`;
-	// Postgres count() is int8, which the driver hands back as a string.
-	return Number(result?.count) || 0;
+export function count(ownerid: ID) {
+	return countOwned(entries!, 'custom_species', ownerid);
 }
 
 export function update(entryid: number, data: {
@@ -170,8 +164,6 @@ export function search(filters: SearchFilters, limit: number) {
 	return entries!.selectAll()`${where} ORDER BY updated DESC LIMIT ${limit}`;
 }
 
-// sprites
-
 export function getSprite(entryid: number, kind: string) {
 	return sprites!.selectOne()`WHERE entryid = ${entryid} AND kind = ${kind}`;
 }
@@ -193,8 +185,7 @@ export async function putSprite(
 	width: number, height: number, base64: string, bytes: number
 ) {
 	const now = new Date().toISOString();
-	// bytea can't be sent through the SQL tag (it only passes string/number/null),
-	// so hand Postgres the base64 and let it do the decoding.
+	// bytea can't be sent through the SQL tag, so hand Postgres the base64 and let it decode.
 	await sprites!.queryExec()`INSERT INTO custom_species_sprites (${{
 		entryid, kind, sha, width, height, bytes,
 		data: SQL`decode(${base64}, 'base64')`, updated: now,

@@ -2,9 +2,8 @@
  * Custom Dex
  * Pokemon Showdown - http://pokemonshowdown.com/
  *
- * A battle using user-authored data gets its own dex, built from a payload
- * carried by the battle itself rather than from files, so the simulator never
- * has to look anything up outside the battle it's running.
+ * A dex built from a payload the battle carries, not from files, so a battle
+ * using user-authored data needs nothing outside itself.
  *
  * @license MIT
  */
@@ -12,8 +11,6 @@
 import { Dex, type DexTable, ModdedDex } from './dex';
 import type { Format, FormatData } from './dex-formats';
 import type { LearnsetData, SpeciesData, SpeciesFormatsData } from './dex-species';
-
-const MOD_PREFIX = 'custom-';
 
 export interface CustomDexPayload {
 	Pokedex?: DexTable<SpeciesData>;
@@ -23,19 +20,11 @@ export interface CustomDexPayload {
 }
 
 let customDexCount = 0;
-
-/**
- * Built dexes, by the data they were built from. Copying the parent's tables costs
- * a few hundred KB and runs on every `>start` *and* every team validation, so the
- * two validations and the battle that make up one challenge share a single dex, as
- * do the games of a best-of series and any rematch on the same data.
- */
+/** Built dexes, keyed by the data they were built from, so one challenge's two validations and its battle share one. */
 const dexCache = new Map<string, { dex: ModdedDex, refs: number }>();
-/** `Battle#destroy` hands back a dex, not the payload it came from. */
 const cacheKeys = new Map<string, string>();
 
 export function buildCustomDex(payload: CustomDexPayload, baseMod?: string) {
-	// The format rides along in the payload but contributes nothing to the dex.
 	const key = `${baseMod || ''}|${JSON.stringify([payload.Pokedex, payload.Learnsets, payload.FormatsData])}`;
 	const cached = dexCache.get(key);
 	if (cached) {
@@ -43,10 +32,9 @@ export function buildCustomDex(payload: CustomDexPayload, baseMod?: string) {
 		return cached.dex;
 	}
 	const parent = Dex.mod(baseMod);
-	const dex = new ModdedDex(`${MOD_PREFIX}${++customDexCount}`);
+	const dex = new ModdedDex(`custom-${++customDexCount}`);
 	dex.parentMod = parent.currentMod;
 	dex.gen = parent.gen;
-	// Only the tables the payload touches are copied; the rest are shared with the parent.
 	dex.dataCache = {
 		...parent.data,
 		Pokedex: { ...parent.data.Pokedex, ...payload.Pokedex },
