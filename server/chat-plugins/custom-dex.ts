@@ -6,10 +6,10 @@
 import { Utils } from '../../lib';
 import { resolveOverlay } from '../custom/dex';
 import * as store from '../custom/entries';
-import { createSpecies, editSpecies, removeSpecies } from './custom-species';
+import { createSpecies, editSpecies, removeSpecies, setSprite } from './custom-species';
 
 /** The write half of the overlay, so the teambuilder room needn't send chat commands. */
-function runAction(user: User, action: string, target: string) {
+async function runAction(user: User, action: string, target: string) {
 	switch (toID(action)) {
 	case 'create':
 		return createSpecies(user, store.parseInput(target, 'species'));
@@ -20,6 +20,8 @@ function runAction(user: User, action: string, target: string) {
 	}
 	case 'delete':
 		return removeSpecies(user, target);
+	case 'setsprite':
+		return (await setSprite(user, target)).row;
 	}
 	throw new Chat.ErrorMessage(`"${action}" isn't something you can do to a custom Pokemon.`);
 }
