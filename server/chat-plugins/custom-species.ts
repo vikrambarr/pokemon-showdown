@@ -78,6 +78,17 @@ export async function setSprite(user: User, target: string) {
 	return { row, kind, image: await sprites.save(row.entryid, kind, data) };
 }
 
+export async function clearSprite(user: User, target: string) {
+	validateAccess(user);
+	const [name, rawKind] = store.parts(target);
+	if (!rawKind) throw new Chat.ErrorMessage(`Clearing a sprite needs a name and a kind.`);
+	const row = await getOwn(user, name);
+	const kind = sprites.normalizeKind(rawKind);
+	if (!row.sprites?.[kind]) throw new Chat.ErrorMessage(`"${row.name}" has no ${kind} sprite.`);
+	await database.removeSprite(row.entryid, kind);
+	return { row, kind };
+}
+
 export async function removeSpecies(user: User, target: string) {
 	validateAccess(user);
 	const row = await store.getDeletable(target, user, NOUN, database.get);
@@ -219,18 +230,12 @@ export const commands: Chat.ChatCommands = {
 		},
 
 		async edit(target, room, user) {
-			try {
-				validateAccess(user);
-				const [name, json] = store.parts(target);
-				if (!json) throw new Chat.ErrorMessage(`Usage: /custompokemon edit [name], {json}`);
-				const row = await editSpecies(user, name, store.parseInput(json, 'species'));
-				if (!room) return;
-				this.sendReply(`Updated "${row.name}".`);
-				return this.sendReplyBox(details(row));
-			} catch (err: any) {
-				if (room || !(err instanceof Chat.ErrorMessage)) throw err;
-				return this.popupReply(err.message);
-			}
+			validateAccess(user);
+			const [name, json] = store.parts(target);
+			if (!json) throw new Chat.ErrorMessage(`Usage: /custompokemon edit [name], {json}`);
+			const row = await editSpecies(user, name, store.parseInput(json, 'species'));
+			this.sendReply(`Updated "${row.name}".`);
+			return this.sendReplyBox(details(row));
 		},
 		edithelp: [
 			`/custompokemon edit [name], {json} - Merges the given fields into a custom Pokemon.`,
@@ -343,18 +348,12 @@ export const commands: Chat.ChatCommands = {
 		},
 
 		async setsprite(target, room, user) {
-			try {
-				const { row, kind, image } = await setSprite(user, target);
-				if (!room) return;
-				this.sendReply(`Set the ${kind} sprite for "${row.name}" (${kb(image.data.length)}KB).`);
-				return this.sendReplyBox(
-					`<img src="${sprites.spriteURL(image.sha)}" alt="${kind}" width="${image.width}" ` +
-					`height="${image.height}" style="image-rendering:pixelated" />`
-				);
-			} catch (err: any) {
-				if (room || !(err instanceof Chat.ErrorMessage)) throw err;
-				return this.popupReply(err.message);
-			}
+			const { row, kind, image } = await setSprite(user, target);
+			this.sendReply(`Set the ${kind} sprite for "${row.name}" (${kb(image.data.length)}KB).`);
+			return this.sendReplyBox(
+				`<img src="${sprites.spriteURL(image.sha)}" alt="${kind}" width="${image.width}" ` +
+				`height="${image.height}" style="image-rendering:pixelated" />`
+			);
 		},
 		setspritehelp: [
 			`/custompokemon setsprite [name], [kind], [base64 PNG] - Uploads pixel art.`,
@@ -362,13 +361,7 @@ export const commands: Chat.ChatCommands = {
 		],
 
 		async clearsprite(target, room, user) {
-			validateAccess(user);
-			const [name, rawKind] = store.parts(target);
-			if (!rawKind) throw new Chat.ErrorMessage(`Usage: /custompokemon clearsprite [name], [kind]`);
-			const row = await getOwn(user, name);
-			const kind = sprites.normalizeKind(rawKind);
-			if (!row.sprites?.[kind]) throw new Chat.ErrorMessage(`"${row.name}" has no ${kind} sprite.`);
-			await database.removeSprite(row.entryid, kind);
+			const { row, kind } = await clearSprite(user, target);
 			return this.sendReply(`Removed the ${kind} sprite from "${row.name}".`);
 		},
 

@@ -7,7 +7,7 @@ import * as formatDatabase from './formats/database';
 import { toFormatData } from './formats/validator';
 import * as database from './species/database';
 import { spriteURL } from './species/sprites';
-import { resolveLearnset, resolveSpecies } from './species/validator';
+import { type FieldLimit, fieldLimits, resolveLearnset, resolveSpecies } from './species/validator';
 
 import type { Format, FormatData } from '../../sim/dex-formats';
 import type { CustomDexPayload } from '../../sim/dex-custom';
@@ -35,6 +35,7 @@ export interface CustomDexEntry {
 
 /** What the teambuilder needs to offer a user their own creations, before any battle exists. */
 export interface CustomDexOverlay extends CustomCollection {
+	limits: { [field: string]: FieldLimit };
 	sprites: { [speciesid: string]: { [kind: string]: string } };
 	entries: CustomDexEntry[];
 	formats: {
@@ -75,7 +76,9 @@ export async function resolveCollection(ownerid: ID): Promise<CustomCollection> 
 
 /** Everything one user can build with, as a dex overlay rather than entries in the global format list. */
 export function toOverlay(rows: CollectionRow[], formatRows: CustomFormatRow[]): CustomDexOverlay {
-	const overlay: CustomDexOverlay = { ...toCollection(rows), sprites: {}, entries: [], formats: [] };
+	const overlay: CustomDexOverlay = {
+		...toCollection(rows), limits: fieldLimits(), sprites: {}, entries: [], formats: [],
+	};
 	for (const row of rows) {
 		const urls: { [kind: string]: string } = {};
 		for (const kind in row.sprites || {}) urls[kind] = spriteURL(row.sprites[kind]);

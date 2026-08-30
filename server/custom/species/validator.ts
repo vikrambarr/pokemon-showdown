@@ -35,12 +35,40 @@ const EVO_TYPES = ['trade', 'useItem', 'levelMove', 'levelExtra', 'levelFriendsh
 /** See the MoveSource docs in sim/dex-species.ts: gen digit, source letter, then a free tail. */
 const MOVE_SOURCE_REGEX = /^[1-9][MTLREDSVC][a-zA-Z0-9]*$/;
 
-const MAX_NAME_LENGTH = 40;
 export const MAX_NOTES_LENGTH = 500;
-const MAX_LEARNSET_MOVES = 500;
+
+export interface FieldLimit { min?: number; max?: number; maxLength?: number }
+
+/**
+ * Every bound the checks below apply, in one table so the client can be handed the same
+ * numbers with the overlay and stop bad values before they cost a round trip.
+ */
+export const FIELD_LIMITS: { [field: string]: FieldLimit } = {
+	name: { maxLength: 40 },
+	forme: { maxLength: 40 },
+	category: { maxLength: 40 },
+	dexEntry: { maxLength: 500 },
+	evoCondition: { maxLength: 100 },
+	tag: { maxLength: 40 },
+	notes: { maxLength: MAX_NOTES_LENGTH },
+	weightkg: { min: 0.1, max: 10000 },
+	heightm: { min: 0.1, max: 200 },
+	evoLevel: { min: 1, max: 100 },
+	maxHP: { min: 1 },
+	baseStat: { min: 1, max: 255 },
+	learnset: { max: 500 },
+};
+
+const limit = (field: string) => FIELD_LIMITS[field];
 
 /** Unlimited unless an admin sets one. */
 const maxBST = () => Number(Config.custompokemonmaxbst) || Infinity;
+
+/** The table as sent to the client, with the configured BST cap folded in. */
+export function fieldLimits() {
+	const bstMax = maxBST();
+	return Number.isFinite(bstMax) ? { ...FIELD_LIMITS, bst: { max: bstMax } } : FIELD_LIMITS;
+}
 
 function fromName(table: { get: (name: any) => AnyObject }, name: unknown, what: string) {
 	if (typeof name !== 'string') err(`Each ${what} must be a string.`);
@@ -108,8 +136,9 @@ function validateBaseStats(value: unknown) {
 	const baseStats: AnyObject = {};
 	for (const stat of STATS) {
 		const amount = value[stat];
-		if (!Number.isInteger(amount) || amount < 1 || amount > 255) {
-			err(`baseStats.${stat} must be a whole number from 1 to 255.`);
+		const { min, max } = limit('baseStat');
+		if (!Number.isInteger(amount) || amount < min! || amount > max!) {
+			err(`baseStats.${stat} must be a whole number from ${min} to ${max}.`);
 		}
 		baseStats[stat] = amount;
 	}
@@ -156,8 +185,8 @@ const FIELDS = new Map<string, FieldValidator>([
 	['baseStats', validateBaseStats],
 	['abilities', validateAbilities],
 	['eggGroups', value => oneOrTwo(value, 'eggGroups', 'egg groups', g => matchFromList(g, EGG_GROUPS, 'egg group'))],
-	['weightkg', value => validateNumber(value, 'weightkg', 0.1, 10000)],
-	['heightm', value => validateNumber(value, 'heightm', 0.1, 200)],
+	['weightkg', value => validateNumber(value, 'weightkg', limit('weightkg').min!, limit('weightkg').max!)],
+	['heightm', value => validateNumber(value, 'heightm', limit('heightm').min!, limit('heightm').max!)],
 	['color', value => matchFromList(value, COLORS, 'color')],
 	['gender', value => {
 		if (!['M', 'F', 'N', ''].includes(value as string)) {
@@ -172,14 +201,14 @@ const FIELDS = new Map<string, FieldValidator>([
 		if (!EVO_TYPES.includes(value as string)) err(`"evoType" must be one of: ${EVO_TYPES.join(', ')}.`);
 		return value;
 	}],
-	['evoLevel', value => validateInt(value, 'evoLevel', 1, 100)],
+	['evoLevel', value => validateInt(value, 'evoLevel', limit('evoLevel').min!, limit('evoLevel').max!)],
 	['evoItem', value => fromName(Dex.items, value, 'item')],
 	['evoMove', value => fromName(Dex.moves, value, 'move')],
-	['evoCondition', value => validateText(value, 'evoCondition', 100)],
+	['evoCondition', value => validateText(value, 'evoCondition', limit('evoCondition').maxLength!)],
 	// An official species, not free text: `Dex.species.get` reads tags and tiers
 	// straight off the base entry without checking that there is one.
 	['baseSpecies', value => fromName(Dex.species, value, 'species')],
-	['forme', value => validateText(value, 'forme', MAX_NAME_LENGTH)],
+	['forme', value => validateText(value, 'forme', limit('forme').maxLength!)],
 	['requiredItem', value => fromName(Dex.items, value, 'item')],
 	['requiredItems', value => arrayOf(value, 'requiredItems', 'item names', i => fromName(Dex.items, i, 'item'))],
 	['maxHP', value => {
@@ -194,7 +223,10 @@ const FIELDS = new Map<string, FieldValidator>([
 	['battleOnly', value => (Array.isArray(value) ?
 		value.map(s => fromName(Dex.species, s, 'species')) : fromName(Dex.species, value, 'species'))],
 	['changesFrom', value => fromName(Dex.species, value, 'species')],
-	['tags', value => arrayOf(value, 'tags', 'strings', tag => validateText(tag, 'tag', 40))],
+	['tags', value => arrayOf(value, 'tags', 'strings', tag => validateText(tag, 'tag', limit('tag').maxLength!))],
+	// Flavour only; the sim never reads these.
+	['category', value => validateText(value, 'category', limit('category').maxLength!)],
+	['dexEntry', value => validateText(value, 'dexEntry', limit('dexEntry').maxLength!)],
 ]);
 
 export interface NormalizedSpecies {
@@ -272,7 +304,8 @@ function validateName(input: unknown, otherNames: Map<ID, string>) {
 	if (typeof input !== 'string') err(`"name" is required and must be a string.`);
 	const name = input.trim();
 	if (!name) err(`"name" can't be blank.`);
-	if (name.length > MAX_NAME_LENGTH) err(`Names can be at most ${MAX_NAME_LENGTH} characters.`);
+	const maxName = limit('name').maxLength!;
+	if (name.length > maxName) err(`Names can be at most ${maxName} characters.`);
 	if (name !== Chat.stripFormatting(name) || /[|,[\]{}]/.test(name)) {
 		err(`Names can't contain formatting characters or any of: | , [ ] { }`);
 	}
@@ -293,7 +326,8 @@ export function normalizeLearnset(input: unknown): AnyObject {
 	const learnset: AnyObject = {};
 	let moves = 0;
 	for (const key in input) {
-		if (++moves > MAX_LEARNSET_MOVES) err(`A learnset can hold at most ${MAX_LEARNSET_MOVES} moves.`);
+		const maxMoves = limit('learnset').max!;
+		if (++moves > maxMoves) err(`A learnset can hold at most ${maxMoves} moves.`);
 		const move = Dex.moves.get(key);
 		if (!move.exists) err(`"${key}" isn't a move.`);
 		learnset[move.id] = normalizeMoveSources(input[key], move.name);
