@@ -12,7 +12,7 @@ import {
 } from '../custom/formats/validator';
 import { TeamValidator } from '../../sim/team-validator';
 import { buildCustomDex, releaseCustomDex } from '../../sim/dex-custom';
-import { resolveCollection } from '../custom/dex';
+import { formatSummary, parseCustomFormat, resolveCollection } from '../custom/dex';
 
 import { type CustomFormatRow, MAX_CUSTOM_FORMATS } from '../custom/formats/database';
 
@@ -23,6 +23,10 @@ const NOUN = 'custom format';
 
 function validateAccess(user: User) {
 	store.validateAccess(user, !!database.entries, Config.customformats, NOUN);
+}
+/** Anyone challenged to a format has to be able to read it, whether or not they can author one. */
+function validateRead() {
+	store.validateRead(!!database.entries, Config.customformats, NOUN);
 }
 
 async function ownedNames(ownerid: ID, excludeEntryid?: number) {
@@ -293,11 +297,26 @@ function defaultRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) 
 	}, dex);
 }
 
+/**
+ * Enough of someone else's format for a client to offer it in a format selector, so that a player
+ * challenged to one can build a team for it without having to be told what it's based on.
+ */
+export async function formatInfo(user: User, target: string) {
+	validateRead();
+	const ref = parseCustomFormat(target);
+	if (!ref) throw new Chat.ErrorMessage(`"${target}" isn't a custom format.`);
+	return formatSummary(await getVisible(user, ref.ownerid, ref.formatid));
+}
+
 export async function formatRoster(user: User, target: string) {
-	validateAccess(user);
+	validateRead();
 	// Names can't contain a comma, so what follows one is the request's own options.
 	const [name, options] = Utils.splitFirst(target, ',');
-	const row = await getOwn(user, name.trim());
+	// A format that isn't the asker's own is named in full, and has to not be private.
+	const ref = parseCustomFormat(name.trim());
+	const row = ref ?
+		await getVisible(user, ref.ownerid, ref.formatid) :
+		await getOwn(user, name.trim());
 	// The default roster costs as much to work out as the real one, and only changes when the base
 	// format does, so it's sent when the builder says it hasn't got one.
 	const wantDefault = toID(options) === 'default';
@@ -306,6 +325,8 @@ export async function formatRoster(user: User, target: string) {
 			.filter(rule => !/^[-+*!]/.test(rule) && !rule.includes(':'));
 		const repealed = repealedRules(row);
 		return {
+			// The id the format plays under, so a roster is cached under the same key everywhere.
+			id: store.customFormatId(row.ownerid, row.formatid),
 			name: row.name,
 			// Which named rulesets are on: bans and value rules carry a prefix or a colon, and the
 			// builder has nothing to toggle for those.

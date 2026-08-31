@@ -4,9 +4,9 @@
  * `/crq custompokemon`.
  */
 import { Utils } from '../../lib';
-import { resolveOverlay } from '../custom/dex';
+import { customBattleSprites, parseCustomFormat, resolveOverlay } from '../custom/dex';
 import * as store from '../custom/entries';
-import { createFormat, editFormat, formatRoster, removeFormat, resetFormat } from './custom-formats';
+import { createFormat, editFormat, formatInfo, formatRoster, removeFormat, resetFormat } from './custom-formats';
 import { clearSprite, createSpecies, editSpecies, removeSpecies, setSprite } from './custom-species';
 
 /** The write half of the overlay, so the teambuilder room needn't send chat commands. */
@@ -69,6 +69,28 @@ const writeHandler = (
 	});
 };
 
+/**
+ * The custom Pokemon a battle is being played with. A client only ever has its own user's, so
+ * without this an opponent's creations render as species that don't exist.
+ */
+async function battleDex(user: User, target: string) {
+	const room = Rooms.get(target.trim());
+	const payload = room?.battle?.options.customData;
+	if (!room?.battle || !payload?.Pokedex) {
+		throw new Chat.ErrorMessage(`"${target}" isn't a battle using custom Pokemon.`);
+	}
+	if (!user.inRooms.has(room.roomid)) {
+		throw new Chat.ErrorMessage(`You have to be in a battle to see what it's using.`);
+	}
+	const ref = parseCustomFormat(room.battle.format);
+	const owners = room.battle.players.map(player => player.id).concat(ref ? [ref.ownerid] : []);
+	return {
+		roomid: room.roomid,
+		Pokedex: payload.Pokedex,
+		sprites: await customBattleSprites(room.roomid, owners, Object.keys(payload.Pokedex)),
+	};
+}
+
 export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 	customdex(target, user, trustable) {
 		if (!trustable || !user.named) return null;
@@ -78,6 +100,15 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 	customformatlegal(target, user, trustable) {
 		if (!trustable || !user.named) return null;
 		return attempt(() => formatRoster(user, target.trim()));
+	},
+	/** What another user's format is called and built on, so a client can offer it. */
+	customformatinfo(target, user, trustable) {
+		if (!trustable || !user.named) return null;
+		return attempt(() => formatInfo(user, target.trim()));
+	},
+	battledex(target, user, trustable) {
+		if (!trustable || !user.named) return null;
+		return attempt(() => battleDex(user, target));
 	},
 	customformat: writeHandler(runFormatAction),
 	custompokemon: writeHandler(runAction),

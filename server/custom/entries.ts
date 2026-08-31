@@ -66,10 +66,15 @@ export function generatePassword(len = 20) {
 }
 
 /** The same gate the teams database uses, for the same reasons. */
-export function validateAccess(user: User, ready: boolean, setting: unknown, what: string) {
+/** Looking something up needs the database to be up, but not the right to author anything. */
+export function validateRead(ready: boolean, setting: unknown, what: string) {
 	if (!Config.usepostgres || !setting || !ready) {
 		throw new Chat.ErrorMessage(`The ${what} database is currently disabled.`);
 	}
+}
+
+export function validateAccess(user: User, ready: boolean, setting: unknown, what: string) {
+	validateRead(ready, setting, what);
 	if (user.locked || user.semilocked) {
 		throw new Chat.ErrorMessage(`You cannot use the ${what} database while locked.`);
 	}
