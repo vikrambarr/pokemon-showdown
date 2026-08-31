@@ -6,6 +6,7 @@
 import { Utils } from '../../lib';
 import { resolveOverlay } from '../custom/dex';
 import * as store from '../custom/entries';
+import { createFormat, editFormat, formatRoster, removeFormat, resetFormat } from './custom-formats';
 import { clearSprite, createSpecies, editSpecies, removeSpecies, setSprite } from './custom-species';
 
 /** The write half of the overlay, so the teambuilder room needn't send chat commands. */
@@ -28,23 +29,58 @@ async function runAction(user: User, action: string, target: string) {
 	throw new Chat.ErrorMessage(`"${action}" isn't something you can do to a custom Pokemon.`);
 }
 
+/** The write half for formats, so the formatbuilder needn't send chat commands either. */
+async function runFormatAction(user: User, action: string, target: string) {
+	switch (toID(action)) {
+	case 'create':
+		return createFormat(user, store.parseInput(target, 'format'));
+	case 'edit': {
+		const [name, json] = store.parts(target);
+		if (!json) throw new Chat.ErrorMessage(`Editing needs a name and the fields to change.`);
+		return editFormat(user, name, store.parseInput(json, 'format'));
+	}
+	case 'reset':
+		return resetFormat(user, target);
+	case 'delete':
+		return removeFormat(user, target);
+	}
+	throw new Chat.ErrorMessage(`"${action}" isn't something you can do to a custom format.`);
+}
+
+/** A CRQ answer carries the error instead of throwing it, so the room can show it. */
+async function attempt(fn: () => Promise<AnyObject>) {
+	try {
+		return await fn();
+	} catch (e: any) {
+		if (e.name?.endsWith('ErrorMessage')) return { actionerror: e.message };
+		throw e;
+	}
+}
+
+/** A write, answered with the whole overlay, so the client never has to merge a row in by hand. */
+const writeHandler = (
+	run: (user: User, action: string, target: string) => Promise<{ name: string }>
+): Chat.CRQHandler => (target, user, trustable) => {
+	if (!trustable || !user.named) return null;
+	const [action, rest] = Utils.splitFirst(target, ' ');
+	return attempt(async () => {
+		const row = await run(user, action, rest || '');
+		return { name: row.name, overlay: await resolveOverlay(user.id) };
+	});
+};
+
 export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 	customdex(target, user, trustable) {
 		if (!trustable || !user.named) return null;
 		return resolveOverlay(user.id);
 	},
-	async custompokemon(target, user, trustable) {
+	/** The species a format allows right now, for the roster list in the formatbuilder. */
+	customformatlegal(target, user, trustable) {
 		if (!trustable || !user.named) return null;
-		const [action, rest] = Utils.splitFirst(target, ' ');
-		try {
-			const row = await runAction(user, action, rest || '');
-			// The whole overlay, so the client never has to merge a row in by hand.
-			return { name: row.name, overlay: await resolveOverlay(user.id) };
-		} catch (e: any) {
-			if (e.name?.endsWith('ErrorMessage')) return { actionerror: e.message };
-			throw e;
-		}
+		return attempt(() => formatRoster(user, target.trim()));
 	},
+	customformat: writeHandler(runFormatAction),
+	custompokemon: writeHandler(runAction),
 };
 
 export const commands: Chat.ChatCommands = {

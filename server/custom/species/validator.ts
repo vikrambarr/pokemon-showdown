@@ -5,8 +5,7 @@
  * through here; `Dex.modData` explicitly does not validate.
  */
 import { err, isPlainObject } from '../entries';
-
-import type { CustomSpeciesRow } from './database';
+import { type CustomSpeciesRow, MAX_CUSTOM_SPECIES } from './database';
 
 /**
  * Set by the server or derived from other fields. Rejected by name rather than
@@ -57,6 +56,8 @@ export const FIELD_LIMITS: { [field: string]: FieldLimit } = {
 	maxHP: { min: 1 },
 	baseStat: { min: 1, max: 255 },
 	learnset: { max: 500 },
+	/** Not a field, but a cap the client should know before it offers to make another one. */
+	species: { max: MAX_CUSTOM_SPECIES },
 };
 
 const limit = (field: string) => FIELD_LIMITS[field];

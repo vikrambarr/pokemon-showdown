@@ -4,7 +4,7 @@
  */
 import { customFormatId, customFormatName, isPlainObject } from './entries';
 import * as formatDatabase from './formats/database';
-import { toFormatData } from './formats/validator';
+import { modList, rulesetCatalogue, tagCatalogue, toFormatData } from './formats/validator';
 import * as database from './species/database';
 import { spriteURL } from './species/sprites';
 import { type FieldLimit, fieldLimits, resolveLearnset, resolveSpecies } from './species/validator';
@@ -39,9 +39,13 @@ export interface CustomDexOverlay extends CustomCollection {
 	sprites: { [speciesid: string]: { [kind: string]: string } };
 	entries: CustomDexEntry[];
 	formats: {
-		id: string, name: string, base: string,
+		id: string, name: string, mod: string, baseMod: string, base: string,
 		ruleset: string[], banlist: string[], unbanlist: string[],
 	}[];
+	/** What the format builder can offer: every toggleable ruleset and tag, and every mod. */
+	rulesets: { id: string, name: string, desc?: string }[];
+	tags: { id: string, name: string, kind: string }[];
+	mods: string[];
 }
 
 export function emptyCollection(): CustomCollection {
@@ -78,6 +82,7 @@ export async function resolveCollection(ownerid: ID): Promise<CustomCollection> 
 export function toOverlay(rows: CollectionRow[], formatRows: CustomFormatRow[]): CustomDexOverlay {
 	const overlay: CustomDexOverlay = {
 		...toCollection(rows), limits: fieldLimits(), sprites: {}, entries: [], formats: [],
+		rulesets: rulesetCatalogue(), tags: tagCatalogue(), mods: modList(),
 	};
 	for (const row of rows) {
 		const urls: { [kind: string]: string } = {};
@@ -91,10 +96,15 @@ export function toOverlay(rows: CollectionRow[], formatRows: CustomFormatRow[]):
 		});
 	}
 	for (const row of formatRows) {
+		const base = row.base ? Dex.formats.get(row.base) : null;
 		overlay.formats.push({
 			id: customFormatId(row.ownerid, row.formatid),
 			name: row.name,
-			base: Dex.formats.get(row.base).name,
+			// The mod as the owner set it, plus what the base would supply on its own, so the
+			// builder can offer "same as base format" without guessing.
+			mod: row.mod || '',
+			baseMod: base?.mod || '',
+			base: base?.name || '',
 			ruleset: row.ruleset,
 			banlist: row.banlist,
 			unbanlist: row.unbanlist,

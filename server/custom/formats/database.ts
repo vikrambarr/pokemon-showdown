@@ -15,8 +15,10 @@ export interface CustomFormatRow {
 	ownerid: ID;
 	formatid: ID;
 	name: string;
-	/** a real format id, whose rules this one is layered on top of */
-	base: ID;
+	/** the mechanics to play under; null means inherit the base format's */
+	mod: ID | null;
+	/** a real format id, whose rules this one is layered on top of; null for a bare mod */
+	base: ID | null;
 	ruleset: string[];
 	banlist: string[];
 	unbanlist: string[];
@@ -38,7 +40,7 @@ export function connect() {
 const json = (value: unknown) => JSON.stringify(value ?? []);
 
 export async function create(entry: {
-	ownerid: ID, formatid: ID, name: string, base: ID,
+	ownerid: ID, formatid: ID, name: string, mod: ID | null, base: ID | null,
 	ruleset: string[], banlist: string[], unbanlist: string[], notes: string | null,
 }) {
 	const now = new Date().toISOString();
@@ -74,7 +76,7 @@ export function count(ownerid: ID) {
 }
 
 export function update(entryid: number, data: {
-	formatid?: ID, name?: string, base?: ID, ruleset?: string[], banlist?: string[],
+	formatid?: ID, name?: string, mod?: ID | null, base?: ID | null, ruleset?: string[], banlist?: string[],
 	unbanlist?: string[], notes?: string | null, private?: string | null,
 }) {
 	const patch: AnyObject = { ...data, updated: new Date().toISOString() };
