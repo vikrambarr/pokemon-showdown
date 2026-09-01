@@ -4,18 +4,7 @@ const assert = require('assert').strict;
 
 const { buildCustomDex, releaseCustomDex } = require('../../dist/sim/dex-custom');
 const { mergeCollections, toCollection, MAX_PAYLOAD_BYTES } = require('../../dist/server/custom/dex');
-
-function standalone(name, species = {}) {
-	return {
-		name, num: -100001, inheritsfrom: null,
-		species: {
-			name, types: ['Steel'], abilities: { 0: 'Levitate' },
-			baseStats: { hp: 100, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
-			eggGroups: ['Undiscovered'], weightkg: 10, ...species,
-		},
-		learnset: { tackle: ['9M'] },
-	};
-}
+const { speciesRow: standalone } = require('../custom-fixtures');
 
 describe('Custom dex payloads', () => {
 	it('should key entries by the id of their name', () => {

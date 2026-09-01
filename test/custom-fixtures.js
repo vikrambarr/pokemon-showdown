@@ -1,15 +1,19 @@
 'use strict';
 
 /** The one custom species the custom-* tests build with, in the shape a database row has. */
-exports.SPECIES_ROW = {
-	name: 'Testmon', num: -100001, inheritsfrom: null,
-	species: {
-		name: 'Testmon', types: ['Steel'], abilities: { 0: 'Levitate' },
-		baseStats: { hp: 100, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
-		eggGroups: ['Undiscovered'], weightkg: 10,
-	},
+exports.species = () => ({
+	name: 'Testmon', types: ['Steel'], abilities: { 0: 'Levitate' },
+	baseStats: { hp: 100, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
+	eggGroups: ['Undiscovered'], weightkg: 10,
+});
+
+exports.speciesRow = (name = 'Testmon', species = {}) => ({
+	name, num: -100001, inheritsfrom: null,
+	species: { ...exports.species(), name, ...species },
 	learnset: { tackle: ['9M'] },
-};
+});
+
+exports.SPECIES_ROW = exports.speciesRow();
 
 /** A team of exactly that species, unpacked. `Teams.pack` it where a packed team is wanted. */
 exports.TEAM = [{

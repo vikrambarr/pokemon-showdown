@@ -1,9 +1,7 @@
 /**
- * Custom data storage: one Postgres pool for both custom tables.
+ * One Postgres pool for both custom tables.
  *
- * Outside chat-plugins/ because the battle path reads it, and `/hotpatch chat`
- * would close a plugin-owned pool out from under ladders.ts. Nothing closes this
- * pool for the same reason - it belongs to the process.
+ * Outside chat-plugins/ so `/hotpatch chat` can't close it out from under ladders.ts.
  */
 import { SQL, PGDatabase, type DatabaseTable } from '../../lib/database';
 import { FS } from '../../lib';
@@ -22,21 +20,20 @@ export function getTable<Row>(enabled: unknown, name: string, primaryKey: (keyof
 }
 
 /** docker/postgres/init only runs on an empty data directory, so catch an existing cluster up here. */
-export function ensureSchema(table: DatabaseTable<any, PGDatabase> | undefined, schemaFile: string) {
-	const connection = table && pool();
+export function ensureSchema(tables: (DatabaseTable<any, PGDatabase> | undefined)[], schemaFile: string) {
+	const connection = tables.every(table => table) && pool();
 	if (!connection) return null;
 	return (async () => {
-		try {
-			await table.selectOne()``;
-		} catch {
-			await connection.query(SQL(FS(`databases/schemas/${schemaFile}`).readSync()));
+		for (const table of tables) {
+			try {
+				await table!.selectOne()``;
+				continue;
+			} catch {}
+			// nothing awaits this, so a probe that failed for any other reason must not reject
+			try {
+				await connection.query(SQL(FS(`databases/schemas/${schemaFile}`).readSync()));
+			} catch {}
+			return;
 		}
 	})();
-}
-
-/** Postgres count() is int8, which the driver hands back as a string. */
-export async function countOwned(table: DatabaseTable<any, PGDatabase>, name: string, ownerid: ID) {
-	const result = await table.queryOne<{ count: number }>(
-	)`SELECT count(*) AS count FROM "${name}" WHERE ownerid = ${ownerid}`;
-	return Number(result?.count) || 0;
 }

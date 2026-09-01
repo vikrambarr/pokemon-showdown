@@ -1,8 +1,4 @@
-/**
- * Serves a user's custom species and formats to the teambuilder via `/crq customdex`,
- * in the same shapes the data files use, and takes its edits back through
- * `/crq custompokemon`.
- */
+/** Serves a user's custom species and formats to the teambuilder, and takes its edits back. */
 import { Utils } from '../../lib';
 import { customBattleSprites, parseCustomFormat, resolveOverlay } from '../custom/dex';
 import * as store from '../custom/entries';
@@ -69,10 +65,7 @@ const writeHandler = (
 	});
 };
 
-/**
- * The custom Pokemon a battle is being played with. A client only ever has its own user's, so
- * without this an opponent's creations render as species that don't exist.
- */
+/** The custom Pokemon a battle is played with: without these an opponent's don't exist. */
 async function battleDex(user: User, target: string) {
 	const room = Rooms.get(target.trim());
 	const payload = room?.battle?.options.customData;

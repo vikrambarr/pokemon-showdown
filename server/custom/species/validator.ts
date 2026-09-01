@@ -1,16 +1,11 @@
 /**
- * Shape validation for user-authored species.
- *
- * This is the trust boundary. Nothing reaches the database without passing
- * through here; `Dex.modData` explicitly does not validate.
+ * Shape validation for user-authored species. This is the trust boundary: nothing reaches
+ * the database without passing through here, and `Dex.modData` does not validate.
  */
 import { err, isPlainObject } from '../entries';
 import { type CustomSpeciesRow, MAX_CUSTOM_SPECIES } from './database';
 
-/**
- * Set by the server or derived from other fields. Rejected by name rather than
- * silently dropped, so nobody thinks they set a tier and quietly didn't.
- */
+/** Set by the server or derived. Rejected by name rather than silently dropped. */
 const SERVER_OWNED_FIELDS = new Set([
 	'num', 'id', 'exists', 'gen', 'bst', 'nfe', 'spriteid', 'weighthg', 'canHatch',
 	'effectType', 'tier', 'doublesTier', 'natDexTier', 'isNonstandard', 'inheritsFrom',
@@ -22,8 +17,7 @@ const REQUIRED_STANDALONE_FIELDS = ['name', 'types', 'abilities', 'baseStats', '
 
 export const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const;
 
-// Canonical tables. These also exist in chat-plugins/datasearch.ts, but that
-// plugin runs in a subprocess and doesn't export them.
+// also in chat-plugins/datasearch.ts, which runs in a subprocess and doesn't export them
 const COLORS = ['Green', 'Red', 'Blue', 'White', 'Brown', 'Yellow', 'Purple', 'Pink', 'Gray', 'Black'];
 const EGG_GROUPS = [
 	'Amorphous', 'Bug', 'Ditto', 'Dragon', 'Fairy', 'Field', 'Flying', 'Grass', 'Human-Like',
@@ -38,10 +32,7 @@ export const MAX_NOTES_LENGTH = 500;
 
 export interface FieldLimit { min?: number; max?: number; maxLength?: number }
 
-/**
- * Every bound the checks below apply, in one table so the client can be handed the same
- * numbers with the overlay and stop bad values before they cost a round trip.
- */
+/** Every bound the checks below apply, in one table so the client can be sent the same numbers. */
 export const FIELD_LIMITS: { [field: string]: FieldLimit } = {
 	name: { maxLength: 40 },
 	forme: { maxLength: 40 },
@@ -85,21 +76,24 @@ function matchFromList(value: unknown, list: string[], what: string) {
 	return match;
 }
 
-function validateNumber(value: unknown, field: string, min: number, max: number) {
+function validateNumber(value: unknown, field: string) {
+	const { min, max } = limit(field);
 	if (typeof value !== 'number' || !Number.isFinite(value)) err(`"${field}" must be a number.`);
-	if (value < min || value > max) err(`"${field}" must be between ${min} and ${max}.`);
+	if (value < min! || value > max!) err(`"${field}" must be between ${min} and ${max}.`);
 	// Two decimals, matching how pokedex.ts stores them.
 	return Math.round(value * 100) / 100;
 }
 
-function validateInt(value: unknown, field: string, min: number, max: number) {
-	if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) {
+function validateInt(value: unknown, field: string) {
+	const { min, max } = limit(field);
+	if (!Number.isInteger(value) || (value as number) < min! || (value as number) > max!) {
 		err(`"${field}" must be a whole number from ${min} to ${max}.`);
 	}
 	return value as number;
 }
 
-function validateText(value: unknown, field: string, maxLength: number) {
+function validateText(value: unknown, field: string) {
+	const maxLength = limit(field).maxLength!;
 	if (typeof value !== 'string') err(`"${field}" must be a string.`);
 	const text = value.trim();
 	if (!text) err(`"${field}" can't be blank.`);
@@ -135,9 +129,9 @@ function validateBaseStats(value: unknown) {
 		if (!STATS.includes(stat as any)) err(`"${stat}" isn't a stat. Use: ${STATS.join(', ')}.`);
 	}
 	const baseStats: AnyObject = {};
+	const { min, max } = limit('baseStat');
 	for (const stat of STATS) {
 		const amount = value[stat];
-		const { min, max } = limit('baseStat');
 		if (!Number.isInteger(amount) || amount < min! || amount > max!) {
 			err(`baseStats.${stat} must be a whole number from ${min} to ${max}.`);
 		}
@@ -171,10 +165,7 @@ function validateGenderRatio(value: unknown) {
 	return { M, F };
 }
 
-/**
- * Fields a user may set, from the Species class in sim/dex-species.ts, each with the
- * check it has to pass. A Map, so nothing on Object.prototype counts as a field.
- */
+/** Fields a user may set, each with its check. A Map, so nothing on Object.prototype counts. */
 type FieldValidator = (value: unknown, names: Map<ID, string>) => any;
 const FIELDS = new Map<string, FieldValidator>([
 	['name', value => value],
@@ -186,8 +177,8 @@ const FIELDS = new Map<string, FieldValidator>([
 	['baseStats', validateBaseStats],
 	['abilities', validateAbilities],
 	['eggGroups', value => oneOrTwo(value, 'eggGroups', 'egg groups', g => matchFromList(g, EGG_GROUPS, 'egg group'))],
-	['weightkg', value => validateNumber(value, 'weightkg', limit('weightkg').min!, limit('weightkg').max!)],
-	['heightm', value => validateNumber(value, 'heightm', limit('heightm').min!, limit('heightm').max!)],
+	['weightkg', value => validateNumber(value, 'weightkg')],
+	['heightm', value => validateNumber(value, 'heightm')],
 	['color', value => matchFromList(value, COLORS, 'color')],
 	['gender', value => {
 		if (!['M', 'F', 'N', ''].includes(value as string)) {
@@ -202,14 +193,13 @@ const FIELDS = new Map<string, FieldValidator>([
 		if (!EVO_TYPES.includes(value as string)) err(`"evoType" must be one of: ${EVO_TYPES.join(', ')}.`);
 		return value;
 	}],
-	['evoLevel', value => validateInt(value, 'evoLevel', limit('evoLevel').min!, limit('evoLevel').max!)],
+	['evoLevel', value => validateInt(value, 'evoLevel')],
 	['evoItem', value => fromName(Dex.items, value, 'item')],
 	['evoMove', value => fromName(Dex.moves, value, 'move')],
-	['evoCondition', value => validateText(value, 'evoCondition', limit('evoCondition').maxLength!)],
-	// An official species, not free text: `Dex.species.get` reads tags and tiers
-	// straight off the base entry without checking that there is one.
+	['evoCondition', value => validateText(value, 'evoCondition')],
+	// an official species, not free text: `Dex.species.get` reads tags off the base entry
 	['baseSpecies', value => fromName(Dex.species, value, 'species')],
-	['forme', value => validateText(value, 'forme', limit('forme').maxLength!)],
+	['forme', value => validateText(value, 'forme')],
 	['requiredItem', value => fromName(Dex.items, value, 'item')],
 	['requiredItems', value => arrayOf(value, 'requiredItems', 'item names', i => fromName(Dex.items, i, 'item'))],
 	['maxHP', value => {
@@ -224,10 +214,10 @@ const FIELDS = new Map<string, FieldValidator>([
 	['battleOnly', value => (Array.isArray(value) ?
 		value.map(s => fromName(Dex.species, s, 'species')) : fromName(Dex.species, value, 'species'))],
 	['changesFrom', value => fromName(Dex.species, value, 'species')],
-	['tags', value => arrayOf(value, 'tags', 'strings', tag => validateText(tag, 'tag', limit('tag').maxLength!))],
+	['tags', value => arrayOf(value, 'tags', 'strings', tag => validateText(tag, 'tag'))],
 	// Flavour only; the sim never reads these.
-	['category', value => validateText(value, 'category', limit('category').maxLength!)],
-	['dexEntry', value => validateText(value, 'dexEntry', limit('dexEntry').maxLength!)],
+	['category', value => validateText(value, 'category')],
+	['dexEntry', value => validateText(value, 'dexEntry')],
 ]);
 
 export interface NormalizedSpecies {
@@ -238,12 +228,7 @@ export interface NormalizedSpecies {
 	speciesid: ID;
 }
 
-/**
- * Normalizes arbitrary user JSON into a canonical SpeciesData object, or throws.
- *
- * `otherNames` is the owner's other entries, used both for the uniqueness check
- * and to let prevo/evos point at the user's own creations.
- */
+/** Normalizes arbitrary user JSON into a canonical SpeciesData object, or throws. */
 export function normalizeSpeciesData(input: AnyObject, opts: {
 	otherNames: Map<ID, string>,
 }): NormalizedSpecies {
@@ -265,10 +250,11 @@ export function normalizeSpeciesData(input: AnyObject, opts: {
 		if (typeof inheritsInput !== 'string') err(`"inheritsFrom" must be a species name.`);
 		const base = Dex.species.get(inheritsInput);
 		// Deliberately depth-1: a chain of custom bases would need cycle detection.
-		if (!base.exists) {
+		// A cosmetic forme reports itself as existing, but its Pokedex entry is a stub.
+		if (!base.exists || !Dex.data.Pokedex[base.id]?.baseStats) {
 			err(
 				`"${inheritsInput}" isn't a real Pokemon. A variant has to inherit from an ` +
-				`official species, not from another custom one.`
+				`official species, not from another custom one or a cosmetic forme.`
 			);
 		}
 		inheritsFrom = base.id;
@@ -293,8 +279,7 @@ export function normalizeSpeciesData(input: AnyObject, opts: {
 		}
 	}
 
-	// Checked against the resolved stats rather than the supplied ones: an entry
-	// that inherits its baseStats never supplies them.
+	// resolved stats, not supplied ones: an entry that inherits baseStats never supplies them
 	const total = bst(resolveSpecies({ species, learnset: {}, inheritsfrom: inheritsFrom, num: 0 }));
 	if (total > maxBST()) err(`That's a base stat total of ${total}; the limit is ${maxBST()}.`);
 
@@ -350,22 +335,14 @@ export function normalizeMoveSources(input: unknown, moveName: string) {
 	});
 }
 
-/**
- * A custom species has an identity of its own - a variant of Garchomp-Mega is not itself
- * a forme of Garchomp - so its place in the official forme graph is the only thing it
- * doesn't inherit. A user can still set any of these explicitly; they're in FIELDS.
- */
+/** The one thing a variant doesn't inherit: its base's place in the official forme graph. */
 const NOT_INHERITED = [
 	'name', 'num', 'isNonstandard', 'baseSpecies', 'forme', 'formeOrder', 'otherFormes',
 	'cosmeticFormes', 'isCosmeticForme', 'changesFrom', 'battleOnly', 'requiredItem',
 	'requiredItems', 'canGigantamax', 'gmaxUnreleased',
 ];
 
-/**
- * The entry as a complete SpeciesData: the inherited base with the stored overrides on
- * top. A spread of the base's own table entry, the way `inherit: true` works for a mod,
- * so a field upstream adds later is carried over rather than dropped.
- */
+/** The inherited base with the stored overrides on top, spread the way `inherit: true` works. */
 export function resolveSpecies(
 	row: Pick<CustomSpeciesRow, 'species' | 'learnset' | 'inheritsfrom' | 'num'>
 ): AnyObject {

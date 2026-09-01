@@ -14,11 +14,7 @@ function findFunctions(value, path = '') {
 	return Object.entries(value).flatMap(([key, entry]) => findFunctions(entry, `${path}.${key}`));
 }
 
-const SPECIES = {
-	name: 'Testmon', types: ['Steel'], abilities: { 0: 'Levitate' },
-	baseStats: { hp: 100, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
-	eggGroups: ['Undiscovered'], weightkg: 10, learnset: { tackle: ['9M'] },
-};
+const SPECIES = { ...require('../custom-fixtures').species(), learnset: { tackle: ['9M'] } };
 
 describe('Custom data stays data', () => {
 	it('should refuse every species field that could hold code', () => {

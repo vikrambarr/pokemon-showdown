@@ -6,11 +6,7 @@ const { bst, normalizeSpeciesData, resolveSpecies } = require('../../dist/server
 
 const noNames = { otherNames: new Map() };
 
-const SPECIES = {
-	name: 'Testmon', types: ['Steel'], abilities: { 0: 'Levitate' },
-	baseStats: { hp: 100, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
-	eggGroups: ['Undiscovered'], weightkg: 10,
-};
+const SPECIES = require('../custom-fixtures').species();
 
 describe('Custom species validation', () => {
 	it('should hold a standalone entry to the base stat total limit', () => {

@@ -1,12 +1,9 @@
 /**
- * Shape validation for user-authored formats.
- *
- * This is the trust boundary. A format is composed data and never code: every rule
- * has to be a name that survives `Dex.formats.validateRule`, and the assembled
- * format has to build a rule table before it can be saved.
+ * Shape validation for user-authored formats. This is the trust boundary: a format is
+ * composed data and never code, and has to build a rule table before it can be saved.
  */
 import { Utils } from '../../../lib';
-import { customFormatName, err } from '../entries';
+import { customFormatId, customFormatName, err } from '../entries';
 import { Tags } from '../../../data/tags';
 
 import type { CustomFormatRow } from './database';
@@ -27,10 +24,7 @@ const SERVER_OWNED_FIELDS = new Set([
 export const RULE_LISTS = ['ruleset', 'banlist', 'unbanlist'] as const;
 /** `getRuleTable` throws above 50, and it's the in-play name that has to fit. */
 const MAX_NAME_LENGTH = 50;
-/**
- * A roster is spelled `-All Pokemon` plus a `+Species` per entry, so this is really the cap on how
- * many Pokemon a format may allow. The sim itself is fine with hundreds (300 builds in ~2ms).
- */
+/** A roster is `-All Pokemon` plus a `+Species` each, so this caps how many a format may allow. */
 const MAX_RULES = 500;
 export const MAX_NOTES_LENGTH = 500;
 
@@ -88,23 +82,24 @@ function validateName(input: unknown, opts: { otherNames: Map<ID, string>, owner
 	if (Dex.formats.get(id).exists) {
 		err(`"${name}" is already the name of a real format. Pick a different one.`);
 	}
+	// The in-play id loses the separators, so owner "g" plus "ame" is `customgame`, which would
+	// shadow the real format: `Dex.formats.get` reads the ruleset cache before aliases. An id
+	// already cached is this format in play, not a real one to collide with.
+	const inPlayId = toID(customFormatId(opts.ownerid, id));
+	if (!Dex.formats.rulesetCache.has(inPlayId) && Dex.formats.get(inPlayId).exists) {
+		err(`"${name}" would play under the id "${inPlayId}", which is a real format. Pick a different one.`);
+	}
 	if (opts.otherNames.has(id)) err(`You already have a format called "${opts.otherNames.get(id)}".`);
 	return name;
 }
 
-/**
- * The sim's ways of saying a rule does nothing: adding what is already there, and two spellings of
- * repealing what was never in effect (which of the two depends on whether the base format's own
- * expansion consumed the repeal). All three are no-ops by definition, so all three are safe to drop.
- */
+/** The sim's three ways of saying a rule does nothing, all safe to drop. */
 const NO_OP_RULE = /^(?:Rule ".+?" (?:did nothing|in ".*" already exists)|Multiple ".+?" rules)/;
 
 /**
- * A ruleset is intent, and what its base format supplies moves under it: `!Sleep Clause Mod` means
- * something against a gen8 base and nothing against a gen9 one, and the base is a field its owner
- * can change at any time. So a rule that has stopped doing anything is dropped instead of refused —
- * otherwise one stale entry makes every later edit fail. Anything that is a real contradiction is
- * still the owner's to fix, and still reported.
+ * Drops rules that have stopped doing anything rather than refusing them: the base is the
+ * owner's to change, and one stale entry would otherwise fail every later edit. A real
+ * contradiction is still reported.
  */
 export function resolveRuleset(format: NormalizedFormat, dex?: ModdedDex) {
 	const fail = (e: any) => err(`Those rules don't work together: ${e.message}`);
@@ -120,8 +115,7 @@ export function resolveRuleset(format: NormalizedFormat, dex?: ModdedDex) {
 			checkFormat({ ...format, ruleset: [...ruleset, rule] }, dex);
 			ruleset.push(rule);
 		} catch (e: any) {
-			// The no-op isn't always the rule itself: repealing `Standard` leaves the base format's
-			// own `!Sleep Clause Mod` with nothing to repeal. Either way the rule can't apply.
+			// the no-op isn't always the appended rule, but either way it can't apply
 			if (!NO_OP_RULE.test(e.message)) fail(e);
 		}
 	}
@@ -134,10 +128,8 @@ export function resolveRuleset(format: NormalizedFormat, dex?: ModdedDex) {
 }
 
 /**
- * The rules a base format hands a new custom format. Copied one level deep, exactly as the format's
- * author wrote them, so `Standard` arrives as one line its owner can delete rather than as an
- * inherited layer they can only work around. What doesn't come along: a base format's own code
- * hooks, and its `restricted` list, which this schema has no field for.
+ * The rules a base format hands a new custom format, copied one level deep so its owner can
+ * delete any of them. Code hooks and `restricted` don't come along.
  */
 export function baseSnapshot(base: unknown) {
 	const format = Dex.formats.get(typeof base === 'string' ? base : '');
@@ -150,10 +142,7 @@ export function baseSnapshot(base: unknown) {
 }
 
 let catalogue: { id: string, name: string, desc?: string }[] | null = null;
-/**
- * Every named ruleset a format can switch on, for the builder to offer. Rules that take a value
- * ("Force Monotype = Water") need more than a toggle, so they're left out until there's UI for one.
- */
+/** Every named ruleset the builder can toggle. Rules taking a value need more than a toggle. */
 export function rulesetCatalogue() {
 	if (!catalogue) {
 		catalogue = [];
@@ -168,11 +157,7 @@ export function rulesetCatalogue() {
 }
 
 let tags: { id: string, name: string, kind: string }[] | null = null;
-/**
- * Every tag a format can ban, for the builder to offer. `validTag` is the sim's own test, so this
- * is exactly what a rule may name; what it leaves out are the tags that take a comparison
- * ("-BST > 600") rather than a toggle.
- */
+/** Every tag a format can ban, by the sim's own `validTag`. Tags taking a comparison are left out. */
 export function tagCatalogue() {
 	if (!tags) {
 		tags = [];
@@ -188,7 +173,8 @@ export function tagCatalogue() {
 
 /** Exactly the mods `validateMod` accepts, so the builder can't offer one it would reject. */
 export function modList() {
-	return Object.keys(Dex.dexes).filter(id => id !== 'base');
+	// `buildCustomDex` keeps a `custom-N` dex in here for the life of every custom battle
+	return Object.keys(Dex.dexes).filter(id => id !== 'base' && !/^custom-\d+$/.test(id));
 }
 
 /** The mechanics a format is played under, independent of whatever base format it layers on. */
@@ -196,8 +182,9 @@ function validateMod(input: unknown) {
 	if (input === undefined || input === null || input === '') return null;
 	if (typeof input !== 'string') err(`"mod" must be a mod name like "gen9" or "gen8bdsp".`);
 	const modid = toID(input);
-	if (!Dex.dexes[modid]) {
-		err(`"${input}" isn't a mod. Valid mods: ${Object.keys(Dex.dexes).filter(id => id !== 'base').join(', ')}.`);
+	const mods = modList();
+	if (!mods.includes(modid)) {
+		err(`"${input}" isn't a mod. Valid mods: ${mods.join(', ')}.`);
 	}
 	return modid;
 }
@@ -241,19 +228,23 @@ function validateRules(input: unknown, field: typeof RULE_LISTS[number], prefix:
 	});
 }
 
-/** The format as the dex wants it: a base to inherit, then this row's rules on top. */
+/** `Custom` and `tag:custom` both resolve to `tag:custom`, under any prefix */
+const namesCustomTag = (rule: string) => toID(rule) === 'custom' || toID(rule) === 'tagcustom';
+
 export function toFormatData(row: FormatComposition): FormatData {
 	const base = row.base ? Dex.formats.get(row.base) : null;
+	// custom species are nonstandard, which `Standard` bans; a format naming the tag itself
+	// has said what it wants, and a second rule would collide with it
+	const unbanCustom = ![...row.ruleset, ...row.banlist, ...row.unbanlist].some(namesCustomTag);
 	return {
 		name: row.name,
 		mod: row.mod || base!.mod,
 		gameType: base?.gameType || 'singles',
 		effectType: 'Format',
-		// The base format is where a format's rules came from, not a layer over them: picking one
-		// copies its rules in (see `baseSnapshot`), so everything here is the format's own.
+		// the base is where these came from, not a layer over them: see `baseSnapshot`
 		ruleset: [...row.ruleset],
 		banlist: [...row.banlist],
-		unbanlist: [...row.unbanlist],
+		unbanlist: unbanCustom ? ['tag:custom', ...row.unbanlist] : [...row.unbanlist],
 		rated: false,
 		searchShow: false,
 		challengeShow: false,

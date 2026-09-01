@@ -1,7 +1,4 @@
-/**
- * What the custom Pokemon and custom format plugins do identically: the access
- * gate, owner-scoped lookups, and parsing the targets they both take.
- */
+/** Access gates, owner-scoped lookups and target parsing, shared by both custom plugins. */
 import * as crypto from 'crypto';
 import { Utils } from '../../lib';
 
@@ -10,12 +7,7 @@ const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'.split('');
 /** How a custom format is named where a format id is expected. */
 export const customFormatId = (ownerid: ID, formatid: ID) => `custom-${ownerid}-${formatid}`;
 
-/**
- * The display name a custom format carries in play, chosen so that
- * `toID(customFormatName(owner, name)) === toID(customFormatId(owner, toID(name)))`:
- * the registered id, the id in its room name and the id it's challenged by must agree,
- * or a restarted battle can't find its format again.
- */
+/** Must keep `toID(customFormatName(o, n)) === toID(customFormatId(o, toID(n)))`. */
 export const customFormatName = (ownerid: ID, name: string) => `Custom (${ownerid}) ${name}`;
 
 /** An owner-scoped row, as much of one as anything here needs to know. */
@@ -33,6 +25,9 @@ export function isPlainObject(value: unknown): value is AnyObject {
 export function err(message: string): never {
 	throw new Chat.ErrorMessage(message);
 }
+
+/** Postgres unique violation: the index is what settles a name race the checks above can't. */
+export const isDuplicateName = (e: any) => e?.code === '23505';
 
 /** `[a], [b], ...`, trimmed. */
 export function parts(target: string, limit = 1) {

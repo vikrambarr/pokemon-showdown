@@ -488,6 +488,16 @@ class Ladder extends LadderStore {
 		}
 		let customData = readies[0].customData;
 		if (customData) {
+			// Each side resolved the format when it readied, so an edit in between would run the
+			// battle under one player's copy of the rules while the other's team was validated
+			// against the other's.
+			const rules = (data: CustomBattleData) => JSON.stringify(data.format);
+			if (readies.some(ready => ready.customData && rules(ready.customData) !== rules(customData!))) {
+				for (const ready of readies) {
+					Users.get(ready.userid)?.popup(`That custom format was edited while you were waiting. Try again.`);
+				}
+				return undefined;
+			}
 			const collections = readies.flatMap(ready => ready.customData || []);
 			try {
 				customData = { ...mergeCollections(collections), format: customData.format };

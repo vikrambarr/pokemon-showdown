@@ -1,9 +1,8 @@
 /**
  * Pixel art for user-authored Pokemon.
  *
- * Postgres holds the bytes; the served directory is a write-through cache that can be
- * rebuilt from it at any time. Files are named by the sha256 of their contents, so a
- * URL is immutable and nginx can cache them indefinitely.
+ * Postgres holds the bytes; the served directory is a write-through cache. Files are named
+ * by the sha256 of their contents, so a URL is immutable.
  */
 import * as crypto from 'crypto';
 import { FS } from '../../../lib';

@@ -1,7 +1,6 @@
 /**
- * Custom formats: the command layer. A format here is composition over the rules in
- * data/rulesets.ts - a base format plus rule names - so nothing a user writes can
- * execute; ../custom/formats/validator.ts is what enforces that.
+ * Custom formats: the command layer. A format is composition over data/rulesets.ts, so
+ * nothing a user writes can execute; ../custom/formats/validator.ts enforces that.
  */
 import { Utils } from '../../lib';
 import * as database from '../custom/formats/database';
@@ -37,13 +36,17 @@ const getOwn = (user: User, name: string) => store.getOwn(user, name, NOUN, data
 const getVisible = (user: User, ownerid: ID, name: string) =>
 	store.getVisible(user, ownerid, name, NOUN, database.get);
 
-/**
- * Runs `fn` against a dex that also holds the owner's custom species. Rules may name them, and
- * `Dex.formats.validateRule` only resolves what its own dex knows about.
- */
-async function withOwnerDex<T>(ownerid: ID, input: AnyObject, fn: (dex: ModdedDex) => T | Promise<T>) {
+/** Runs `fn` against a dex holding the owner's species, since rules may name them. */
+async function withOwnerDex<T>(
+	ownerid: ID, input: AnyObject, fn: (dex: ModdedDex) => T | Promise<T>, viewerid?: ID
+) {
 	const mod = toID(input.mod) || (input.base ? Dex.formats.get(input.base).mod : undefined);
-	const dex = buildCustomDex(await resolveCollection(ownerid), mod);
+	// a roster built from this dex is sent back, so hide private species from anyone else
+	const collection = await resolveCollection(ownerid, {
+		publicOnly: !!viewerid && viewerid !== ownerid,
+		namedBy: [...input.ruleset || [], ...input.banlist || [], ...input.unbanlist || []],
+	});
+	const dex = buildCustomDex(collection, mod);
 	try {
 		return await fn(dex);
 	} finally {
@@ -59,8 +62,7 @@ async function revalidate(row: CustomFormatRow, changes: AnyObject) {
 	};
 	if (row.base) editable.base = Dex.formats.get(row.base).name;
 	const otherNames = await ownedNames(row.ownerid, row.entryid);
-	// Picking a different base format starts the rules over from that format, unless the same edit
-	// says what they should be: it's a starting point, and there's nothing left of the old one to keep.
+	// a new base restarts the rules from it, unless the same edit says what they should be
 	const restart = changes.base !== undefined && toID(changes.base) !== toID(row.base) ?
 		baseSnapshot(changes.base) : null;
 	const merged = { ...editable, ...restart, ...changes };
@@ -104,17 +106,21 @@ export async function createFormat(user: User, input: AnyObject) {
 	const normalized = await withOwnerDex(user.id, input, dex => normalizeFormatData(input, {
 		otherNames, ownerid: user.id, dex,
 	}));
-	if (await database.count(user.id) >= MAX_CUSTOM_FORMATS) {
+	if (otherNames.size >= MAX_CUSTOM_FORMATS) {
 		throw new Chat.ErrorMessage(
 			`You already have ${MAX_CUSTOM_FORMATS} custom formats, which is the limit. Delete one first.`
 		);
 	}
-	return database.create({ ownerid: user.id, ...normalized, notes: null });
+	try {
+		return await database.create({ ownerid: user.id, ...normalized, notes: null });
+	} catch (e) {
+		if (!store.isDuplicateName(e)) throw e;
+		throw new Chat.ErrorMessage(`You already have a custom format called "${normalized.name}".`);
+	}
 }
 
 /** The four lists the builder edits with a picker, in the order it shows them. */
-export const ROSTER_KINDS = ['pokemon', 'move', 'ability', 'item'] as const;
-export type Roster = { [kind in typeof ROSTER_KINDS[number]]: string[] };
+type Roster = { pokemon: string[], move: string[], ability: string[], item: string[] };
 
 /** Whether a resolved rule is one of the four lists' own: an entry, or the `-All X` above it. */
 function pickerSpec(spec: string) {
@@ -132,11 +138,8 @@ function pickerRule(rule: string, dex: ModdedDex) {
 }
 
 /**
- * Formes that only ever exist mid-battle, which no teambuilder offers: the client's tier tables
- * leave exactly these out (`build-tools/build-indexes`, the `species.forme` skip), so a roster that
- * kept them would name species the picker can't show. Battle-only alone is the wrong test —
- * Zacian-Crowned, Palafin-Hero and every mega are battle-only and perfectly buildable — and no flag
- * in the dex separates the two groups, so this mirrors the client's own list.
+ * Formes no teambuilder offers, mirroring the client's own tier tables. `battleOnly` is the
+ * wrong test - Zacian-Crowned and every mega set it and are buildable - and no dex flag separates them.
  */
 const UNBUILDABLE_BASES = [
 	'Aegislash', 'Castform', 'Cherrim', 'Cramorant', 'Eiscue', 'Meloetta', 'Mimikyu', 'Minior',
@@ -148,27 +151,19 @@ function unbuildableForme(species: Species) {
 		species.forme.includes('Zen') || (species.baseSpecies === 'Ogerpon' && species.forme.includes('Tera'));
 }
 
-/**
- * Which species a format allows, asked of the team validator rather than worked out by hand:
- * `checkSpecies` is the same call `validateSet` makes, so it accounts for bans, tags, tiers and
- * whether the species exists in the mod at all.
- */
+/** Which species a format allows, via the same `checkSpecies` call `validateSet` makes. */
 function legalRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex): Roster {
-	// `buildCustomDex` registers its dex in `Dex.dexes`, so naming it as the format's mod is how
-	// the base Dex reaches it. Handing the modded dex over directly fails: only the base Dex can
-	// resolve mods for a format.
+	// only the base Dex can resolve a format's mod, so name the custom dex rather than pass it
 	const format = new Dex.Format({ ...toFormatData(row), mod: dex.currentMod });
 	const validator = new TeamValidator(format);
 	const roster: Roster = { pokemon: [], move: [], ability: [], item: [] };
-	// The checks read a set but never write one, and a species is named because `checkAbility` looks
-	// one up in the formats that hand out extra abilities.
+	// the checks only read this set; `checkAbility` looks the species up in some formats
 	const set = {
 		name: 'Set', species: 'Pikachu', moves: [], ability: '', item: '',
 		evs: {}, ivs: {}, level: 100, nature: '',
 	} as unknown as PokemonSet;
 	for (const species of validator.dex.species.all()) {
-		// `checkSpecies` calls a mid-battle forme legal, because `validateSet` is what swaps it back
-		// for its base species.
+		// `checkSpecies` calls a mid-battle forme legal; `validateSet` is what swaps it back
 		if (!species.exists || species.isCosmeticForme || unbuildableForme(species)) continue;
 		set.name = set.species = species.name;
 		if (!validator.checkSpecies(set, species, species, {})) roster.pokemon.push(species.id);
@@ -187,11 +182,7 @@ function legalRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex): R
 	return roster;
 }
 
-/**
- * Which rules the format switches off, and what switched each one off. A `!` rule never reaches the
- * rule table — it just stops something from being added — so the only way to see one is to walk the
- * rulesets the format is composed of.
- */
+/** Which rules the format switches off. A `!` rule never reaches the rule table, so walk instead. */
 function repealedRules(row: Parameters<typeof toFormatData>[0]) {
 	const repealed: { [ruleid: string]: string } = {};
 	const walk = (format: Format, depth: number) => {
@@ -211,10 +202,8 @@ function repealedRules(row: Parameters<typeof toFormatData>[0]) {
 }
 
 /**
- * Active rules the format can't switch off, and why. `[Gen 9] OU` adds `Standard` and then repeals
- * `Sleep Clause Mod` from inside it, so repealing `Standard` leaves that repeal with nothing to do
- * and the sim refuses the whole format. Asking it rule by rule costs about 8ms for a format's
- * twenty, which beats guessing which compositions are safe to offer.
+ * Active rules the format can't switch off, and why: `[Gen 9] OU` repeals `Sleep Clause Mod`
+ * from inside `Standard`, so repealing `Standard` leaves that repeal with nothing to do.
  */
 function lockedRules(
 	row: Parameters<typeof toFormatData>[0], dex: ModdedDex, active: string[],
@@ -225,15 +214,19 @@ function lockedRules(
 	for (const id of active) {
 		const rule = rulesetCatalogue().find(entry => entry.id === id);
 		if (!rule) continue;
-		// Ask about the edit the builder would actually make: deleting the line that adds the rule
-		// if the format has one, and repealing it otherwise. And ask whether it would *save*, which
-		// is `resolveRuleset`, not `checkFormat`: dropping `Standard` leaves the repeals of the
-		// rules it used to bring with nothing to do, and those get cleaned up on the way in.
+		// the edit the builder would make: delete the line that adds the rule, or repeal it
 		const ruleset = row.ruleset.some(existing => named(existing, id) && !existing.includes('!')) ?
 			row.ruleset.filter(existing => !named(existing, id)) :
 			[...row.ruleset, `!${rule.name}`];
 		try {
-			resolveRuleset({ ...row, ruleset } as Parameters<typeof resolveRuleset>[0], dex);
+			const edited = { ...row, ruleset } as Parameters<typeof resolveRuleset>[0];
+			// `resolveRuleset` rebuilds the rule table once per rule, up to MAX_RULES times;
+			// a composition that builds first time needs none of that, and most do
+			try {
+				checkFormat(edited, dex);
+			} catch {
+				resolveRuleset(edited, dex);
+			}
 		} catch (e: any) {
 			// The sim names the rule left with nothing to repeal; say whose repeal that is.
 			const blocker = toID(/"!(.+?)"/.exec(e.message)?.[1] || '');
@@ -247,18 +240,12 @@ function lockedRules(
 	return locked;
 }
 
-/**
- * Which tags the format bans, and anything else in its lists that no picker or tag chip covers:
- * `-unreleased`, a nature ban, a `-BST > 600`. Those are reported so nothing a format does is
- * invisible, even where there's no UI to change it. Everything the four pickers own is left out —
- * there can be hundreds of those.
- */
+/** Tags the format bans, plus anything in its lists no picker or chip covers, so nothing is invisible. */
 function banRules(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) {
 	const bans: { tags: { [tagid: string]: 'banned' | 'restricted' | 'unbanned' }, other: string[] } = {
 		tags: {}, other: [],
 	};
-	// Tag names aren't in the dex data, and neither are pseudo-tags like `-unreleased`, so anything
-	// that can't be looked up is title-cased from its own id.
+	// tag names aren't in the dex data, so anything unresolvable is title-cased from its id
 	const titleCase = (id: string) => id.replace(/(?:^|[\s-])[a-z]/g, match => match.toUpperCase());
 	const label = (rule: string) => {
 		const [kind, id] = rule.includes(':') ? Utils.splitFirst(rule, ':') : ['', rule];
@@ -271,8 +258,7 @@ function banRules(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) {
 		const body = rule.slice(1);
 		if (pickerSpec(body)) continue;
 		const state = rule.startsWith('-') ? 'banned' : rule.startsWith('*') ? 'restricted' : 'unbanned';
-		// `-nonexistent` is a tag the sim spells without its prefix, and the chip for it is the
-		// same chip, so it belongs with the tags rather than in the leftovers beside them.
+		// the sim spells `-nonexistent` without its prefix, but it's the same chip
 		if (body.startsWith('tag:') || body === 'nonexistent') {
 			bans.tags[body.startsWith('tag:') ? body.slice(4) : body] = state;
 		} else {
@@ -283,10 +269,8 @@ function banRules(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) {
 }
 
 /**
- * What "reset" goes back to: what this format's rules allow on their own, with everything the
- * pickers wrote dropped. Not the base format's lists — the base is a starting point the owner has
- * since edited, and a rule they switched off has to keep counting. The `-All X` rules go too: an
- * allowlist is spelled with one, so leaving it in would make that list's default empty.
+ * What "reset" goes back to: this format's own rules with everything the pickers wrote dropped,
+ * `-All X` included, since an allowlist is spelled with one.
  */
 function defaultRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) {
 	const kept = (rule: string) => !pickerRule(rule, dex);
@@ -297,10 +281,7 @@ function defaultRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) 
 	}, dex);
 }
 
-/**
- * Enough of someone else's format for a client to offer it in a format selector, so that a player
- * challenged to one can build a team for it without having to be told what it's based on.
- */
+/** Enough of someone else's format for a client to offer it in a format selector. */
 export async function formatInfo(user: User, target: string) {
 	validateRead();
 	const ref = parseCustomFormat(target);
@@ -317,8 +298,7 @@ export async function formatRoster(user: User, target: string) {
 	const row = ref ?
 		await getVisible(user, ref.ownerid, ref.formatid) :
 		await getOwn(user, name.trim());
-	// The default roster costs as much to work out as the real one, and only changes when the base
-	// format does, so it's sent when the builder says it hasn't got one.
+	// as expensive as the real roster and only changes with the base, so sent on request
 	const wantDefault = toID(options) === 'default';
 	return withOwnerDex(row.ownerid, row, dex => {
 		const active = [...checkFormat(row, dex).keys()]
@@ -328,21 +308,17 @@ export async function formatRoster(user: User, target: string) {
 			// The id the format plays under, so a roster is cached under the same key everywhere.
 			id: store.customFormatId(row.ownerid, row.formatid),
 			name: row.name,
-			// Which named rulesets are on: bans and value rules carry a prefix or a colon, and the
-			// builder has nothing to toggle for those.
+			// bans and value rules carry a prefix or a colon; the builder can't toggle those
 			rules: active,
 			locked: lockedRules(row, dex, active, repealed),
 			bans: banRules(row, dex),
 			legal: legalRoster(row, dex),
 			...wantDefault ? { defaultLegal: defaultRoster(row, dex) } : {},
 		};
-	});
+	}, user.id);
 }
 
-/**
- * Back to the rules the base format was copied in with. Picking the same base again is not an edit,
- * so without this the only way back is to pick another base and pick this one again.
- */
+/** Back to the rules the base was copied in with; re-picking the same base is not an edit. */
 export async function resetFormat(user: User, name: string) {
 	validateAccess(user);
 	const row = await getOwn(user, name);
@@ -423,7 +399,9 @@ export const commands: Chat.ChatCommands = {
 			validateAccess(user);
 			const row = await getVisible(user, ...store.parseOwnerAndName(target, user));
 			// The assembled rule table, which is what a battle would actually run under.
-			const rules = await withOwnerDex(row.ownerid, row, dex => [...checkFormat(row, dex).keys()].sort());
+			const rules = await withOwnerDex(
+				row.ownerid, row, dex => [...checkFormat(row, dex).keys()].sort(), user.id
+			);
 			return this.sendReplyBox(
 				`<details open><summary><strong>${Utils.escapeHTML(row.name)}</strong> ` +
 				`(${Chat.count(rules, "rules")})</summary>${Utils.escapeHTML(rules.join(', '))}</details>`

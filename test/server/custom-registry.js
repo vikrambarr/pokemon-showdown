@@ -1,10 +1,6 @@
 'use strict';
 
-/**
- * A custom format has to be findable by `Dex.formats.get` while a battle is running it:
- * upstream code resolves `room.battle.format` back into a Format for the battle timer,
- * the replay uploader and `/importinputlog`, and a nonexistent format there is silent.
- */
+/** A running battle's format has to be findable by `Dex.formats.get`, which fails silently. */
 
 const assert = require('assert').strict;
 
@@ -12,10 +8,11 @@ const {
 	customFormat, parseCustomFormat, registerCustomFormat, releaseCustomFormat,
 } = require('../../dist/server/custom/dex');
 const { customFormatId, customFormatName } = require('../../dist/server/custom/entries');
-const { normalizeFormatData, toFormatData } = require('../../dist/server/custom/formats/validator');
+const { baseSnapshot, normalizeFormatData, toFormatData } = require('../../dist/server/custom/formats/validator');
 
 function battleOptions(ownerid, name, base = '[Gen 9] OU') {
-	const normalized = normalizeFormatData({ name, base }, { otherNames: new Map(), ownerid });
+	const input = { ...baseSnapshot(base), name, base };
+	const normalized = normalizeFormatData(input, { otherNames: new Map(), ownerid });
 	const format = { ...toFormatData(normalized), name: customFormatName(ownerid, normalized.name) };
 	return { customData: { Pokedex: {}, Learnsets: {}, FormatsData: {}, format } };
 }

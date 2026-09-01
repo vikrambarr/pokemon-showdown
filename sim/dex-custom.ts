@@ -2,8 +2,7 @@
  * Custom Dex
  * Pokemon Showdown - http://pokemonshowdown.com/
  *
- * A dex built from a payload the battle carries, not from files, so a battle
- * using user-authored data needs nothing outside itself.
+ * A dex built from a payload the battle carries, not from files.
  *
  * @license MIT
  */

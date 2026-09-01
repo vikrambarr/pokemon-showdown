@@ -1,7 +1,4 @@
-/**
- * Custom dex payloads: stored custom species as the payload a battle carries,
- * so the simulator and validator processes never have to read the database.
- */
+/** Stored custom species as the payload a battle carries, so the sim never reads the database. */
 import { customFormatId, customFormatName, isPlainObject } from './entries';
 import * as formatDatabase from './formats/database';
 import { modList, rulesetCatalogue, tagCatalogue, toFormatData } from './formats/validator';
@@ -26,7 +23,8 @@ const CUSTOM_FORMAT_NAME_REGEX = /^custom \(([a-z0-9]+)\) (.+)$/i;
 export type CustomCollection = Required<Omit<CustomDexPayload, 'format'>>;
 /** A collection plus the format it's being played under: everything a battle needs. */
 export type CustomBattleData = CustomCollection & { format: FormatData };
-type CollectionRow = Pick<CustomSpeciesRow, 'name' | 'num' | 'inheritsfrom' | 'species' | 'learnset' | 'sprites'>;
+type CollectionRow =
+	Pick<CustomSpeciesRow, 'name' | 'num' | 'inheritsfrom' | 'species' | 'learnset' | 'sprites' | 'private'>;
 
 /** One entry as its owner wrote it: overrides only, so the client's editor round-trips an edit. */
 export interface CustomDexEntry {
@@ -76,9 +74,26 @@ export function toCollection(rows: CollectionRow[]): CustomCollection {
 	return collection;
 }
 
-export async function resolveCollection(ownerid: ID): Promise<CustomCollection> {
+/** The species a rule list names, however each rule spells them: signs, values and complex bans. */
+function ruleNames(rules: string[]) {
+	const named: { [id: string]: boolean } = {};
+	for (const rule of rules) {
+		for (const part of rule.split(/[+,]/)) {
+			named[toID(part.split('=')[0].replace(/^[!^]/, ''))] = true;
+		}
+	}
+	return named;
+}
+
+/** `publicOnly` drops private entries, except any the rules name: without those no rule table builds. */
+export async function resolveCollection(
+	ownerid: ID, opts?: { publicOnly?: boolean, namedBy?: string[] }
+): Promise<CustomCollection> {
 	if (!database.entries) return emptyCollection();
-	return toCollection(await database.collection(ownerid));
+	const rows = await database.collection(ownerid);
+	if (!opts?.publicOnly) return toCollection(rows);
+	const named = ruleNames(opts.namedBy || []);
+	return toCollection(rows.filter(row => !row.private || named[toID(row.name)]));
 }
 
 /** As much of a stored format as a client needs to offer it: its id, name and what it's built on. */
@@ -87,8 +102,7 @@ export function formatSummary(row: CustomFormatRow) {
 	return {
 		id: customFormatId(row.ownerid, row.formatid),
 		name: row.name,
-		// The mod as the owner set it, plus what the base would supply on its own, so the builder
-		// can offer "same as base format" without guessing.
+		// both, so the builder can offer "same as base format" without guessing
 		mod: row.mod || '',
 		baseMod: base?.mod || '',
 		base: base?.name || '',
@@ -131,11 +145,7 @@ export async function resolveOverlay(userid: ID): Promise<CustomDexOverlay> {
 	return toOverlay(rows, formatRows);
 }
 
-/**
- * The payload a battle was started with, recovered from its own input log, since
- * `/importinputlog` and a restart both hand us a log and nothing else. Re-checked on the
- * way out: a log is only ever as trustworthy as whoever handed it over.
- */
+/** The payload recovered from a battle's input log. Re-checked: a log is only as trusted as its sender. */
 export function customDataFromInputLog(inputLog: string): CustomDexPayload | undefined {
 	let start = inputLog.startsWith('>start ') ? 0 : inputLog.indexOf('\n>start ');
 	if (start < 0) return undefined;
@@ -166,13 +176,15 @@ function validatePayload(payload: unknown): CustomDexPayload | undefined {
 	}
 	if (payload.format !== undefined) {
 		if (!isPlainObject(payload.format)) return undefined;
-		const dex = buildCustomDex(payload as CustomDexPayload, `${payload.format.mod || ''}`);
+		// an input log can name a mod that doesn't exist, which `Dex.mod` throws on
+		let dex;
 		try {
+			dex = buildCustomDex(payload as CustomDexPayload, `${payload.format.mod || ''}`);
 			Dex.formats.getRuleTable(new Dex.Format({ ...payload.format, effectType: 'Format', mod: dex.currentMod }));
 		} catch {
 			return undefined;
 		} finally {
-			releaseCustomDex(dex);
+			if (dex) releaseCustomDex(dex);
 		}
 	}
 	return payload as CustomDexPayload;
@@ -190,41 +202,36 @@ export function toBattleData(payload: CustomDexPayload | undefined): CustomBattl
 }
 
 /** The inline format a battle is running under, cached per payload the way real formats are. */
-const formatCache = new WeakMap<CustomDexPayload, { format: Format, dex: ModdedDex }>();
+const formatCache = new WeakMap<CustomDexPayload, { format: Format, dex: ModdedDex, rooms: number }>();
 export function customFormat(options: { customData?: CustomDexPayload }) {
 	const payload = options.customData;
 	if (!payload?.format) return null;
 	let cached = formatCache.get(payload);
 	if (!cached) {
-		// A format's rules may name the author's own species, and a rule table only resolves what
-		// its dex knows about, so it's built on the same dex the battle itself will run on.
+		// rules may name the author's species, and a rule table only resolves what its dex knows
 		const dex = buildCustomDex(payload, payload.format.mod);
-		cached = { format: new Dex.Format({ ...payload.format, mod: dex.currentMod }), dex };
+		cached = { format: new Dex.Format({ ...payload.format, mod: dex.currentMod }), dex, rooms: 0 };
 		formatCache.set(payload, cached);
 	}
 	return cached.format;
 }
 
-/**
- * A live battle's format, published where `Dex.formats.get` will find it. Kept out of
- * `formatsListCache` - the list every connection pays for - but still resolvable, or the
- * upstream `Dex.formats.get(room.battle.format)` call sites silently get a nonexistent
- * format: the battle timer, the replay uploader and `/importinputlog` all read one.
- */
+/** A live battle's format, resolvable by `Dex.formats.get` but kept out of `formatsListCache`. */
 const registered = new Map<RoomID, { id: ID, payload: CustomDexPayload }>();
 
 export function registerCustomFormat(roomid: RoomID, options: { customData?: CustomDexPayload }) {
 	const format = customFormat(options);
 	if (!format) return null;
-	registered.set(roomid, { id: format.id, payload: options.customData! });
+	const payload = options.customData!;
+	// re-registering a roomid would count its dex twice
+	if (registered.has(roomid)) releaseCustomFormat(roomid);
+	formatCache.get(payload)!.rooms++;
+	registered.set(roomid, { id: format.id, payload });
 	Dex.formats.rulesetCache.set(format.id, format);
 	return format;
 }
 
-/**
- * The art a battle's custom species were uploaded with. The payload the simulator carries has no
- * room for it - and no use for it - so it's resolved from the database when a client asks.
- */
+/** Art for a battle's custom species: not in the payload, so resolved when a client asks. */
 const battleSprites = new Map<RoomID, { [speciesid: string]: { [kind: string]: string } }>();
 
 export async function customBattleSprites(roomid: RoomID, ownerids: ID[], speciesids: string[]) {
@@ -243,7 +250,8 @@ export async function customBattleSprites(roomid: RoomID, ownerids: ID[], specie
 			}
 		}
 	}
-	battleSprites.set(roomid, sprites);
+	// caching nothing would hide art uploaded later in the battle
+	if (Object.keys(sprites).length) battleSprites.set(roomid, sprites);
 	return sprites;
 }
 
@@ -254,9 +262,18 @@ export function releaseCustomFormat(roomid: RoomID) {
 	if (!entry) return;
 	registered.delete(roomid);
 	const cached = formatCache.get(entry.payload);
-	if (cached) releaseCustomDex(cached.dex);
+	// one dex per payload, which a Bo3's parent and sub-battles all share
+	if (cached && --cached.rooms <= 0) {
+		releaseCustomDex(cached.dex);
+		formatCache.delete(entry.payload);
+	}
+	// two battles of one format share an id, so re-point the cache at one whose dex still exists
 	for (const stillOpen of registered.values()) {
-		if (stillOpen.id === entry.id) return;
+		if (stillOpen.id !== entry.id) continue;
+		const survivor = formatCache.get(stillOpen.payload);
+		if (!survivor) continue;
+		Dex.formats.rulesetCache.set(entry.id, survivor.format);
+		return;
 	}
 	Dex.formats.rulesetCache.delete(entry.id);
 }
@@ -281,20 +298,19 @@ export async function resolveFormat(ownerid: ID, formatid: ID): Promise<FormatDa
 	return { ...toFormatData(row), name: customFormatName(row.ownerid, row.name) };
 }
 
-/**
- * The format and everything the player may build with, resolved at challenge time: their own
- * collection, plus the author's, since a format's rules are written against the author's dex and
- * anyone invited to play it has to be able to field what those rules allow.
- */
+/** The format plus what the player may build with: their own collection, and the author's. */
 export async function resolveBattleData(ref: { ownerid: ID, formatid: ID }, userid: ID): Promise<CustomBattleData> {
-	const [format, authored, own] = await Promise.all([
-		resolveFormat(ref.ownerid, ref.formatid),
-		resolveCollection(ref.ownerid),
-		userid === ref.ownerid ? null : resolveCollection(userid),
-	]);
+	const format = await resolveFormat(ref.ownerid, ref.formatid);
 	if (!format) {
 		throw new Chat.ErrorMessage(`${ref.ownerid} doesn't have a custom format called "${ref.formatid}".`);
 	}
+	const [authored, own] = await Promise.all([
+		resolveCollection(ref.ownerid, {
+			publicOnly: userid !== ref.ownerid,
+			namedBy: [...format.ruleset || [], ...format.banlist || [], ...format.unbanlist || []],
+		}),
+		userid === ref.ownerid ? null : resolveCollection(userid),
+	]);
 	return { ...mergeCollections(own ? [authored, own] : [authored]), format };
 }
 

@@ -1,8 +1,6 @@
 /**
- * Custom Pokemon: a per-account library of user-authored species.
- *
- * Storage, validation and payload building live under ../custom/, where the
- * battle path can reach them without going through a hotpatchable plugin.
+ * Custom Pokemon: a per-account library of user-authored species. Storage and validation
+ * live under ../custom/, which the battle path can reach without a hotpatchable plugin.
  */
 import { Utils } from '../../lib';
 import * as database from '../custom/species/database';
@@ -40,17 +38,23 @@ export async function revalidate(row: CustomSpeciesRow, changes: AnyObject) {
 
 export async function createSpecies(user: User, input: AnyObject) {
 	validateAccess(user);
-	const normalized = normalizeSpeciesData(input, { otherNames: await ownedNames(user.id) });
-	if (await database.count(user.id) >= MAX_CUSTOM_SPECIES) {
+	const otherNames = await ownedNames(user.id);
+	const normalized = normalizeSpeciesData(input, { otherNames });
+	if (otherNames.size >= MAX_CUSTOM_SPECIES) {
 		throw new Chat.ErrorMessage(
 			`You already have ${MAX_CUSTOM_SPECIES} custom Pokemon, which is the limit. Delete one first.`
 		);
 	}
-	return database.create({
-		ownerid: user.id, speciesid: normalized.speciesid, name: normalized.name,
-		inheritsfrom: normalized.inheritsFrom, species: normalized.species,
-		learnset: normalized.learnset, notes: null,
-	});
+	try {
+		return await database.create({
+			ownerid: user.id, speciesid: normalized.speciesid, name: normalized.name,
+			inheritsfrom: normalized.inheritsFrom, species: normalized.species,
+			learnset: normalized.learnset, notes: null,
+		});
+	} catch (e) {
+		if (!store.isDuplicateName(e)) throw e;
+		throw new Chat.ErrorMessage(`You already have a custom Pokemon called "${normalized.name}".`);
+	}
 }
 
 export async function editSpecies(user: User, name: string, changes: AnyObject) {
@@ -335,7 +339,8 @@ export const commands: Chat.ChatCommands = {
 			if (!Object.keys(filters).length) {
 				throw new Chat.ErrorMessage(`Usage: /custompokemon search type=Dragon, minbst=500`);
 			}
-			if (Number.isNaN(filters.minbst) || Number.isNaN(filters.maxbst)) {
+			// `Number('1e999')` is Infinity, which Postgres refuses to compare against an int.
+			if ([filters.minbst, filters.maxbst].some(limit => limit !== undefined && !Number.isFinite(limit))) {
 				throw new Chat.ErrorMessage(`BST filters must be numbers.`);
 			}
 			const rows = await database.search(filters, MAX_SEARCH);

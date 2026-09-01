@@ -5,7 +5,7 @@ const assert = require('assert').strict;
 const { buildCustomDex, releaseCustomDex } = require('../../dist/sim/dex-custom');
 const { TeamValidator } = require('../../dist/sim/team-validator');
 const { mergeCollections, toCollection } = require('../../dist/server/custom/dex');
-const { normalizeFormatData, toFormatData } = require('../../dist/server/custom/formats/validator');
+const { baseSnapshot, normalizeFormatData, toFormatData } = require('../../dist/server/custom/formats/validator');
 const { SPECIES_ROW, TEAM } = require('../custom-fixtures');
 
 const normalize = input => normalizeFormatData(input, { otherNames: new Map(), ownerid: 'tester' });
@@ -43,17 +43,23 @@ describe('Custom formats', () => {
 			assert.throws(() => normalize({ name: 'X', base: 'Garchomp' }), /isn't a format/);
 		});
 
-		it('should reject rules that do not exist, repeat the base, or carry their own sign', () => {
+		it('should reject rules that do not exist or carry their own sign', () => {
 			assert.throws(() => normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['Notapokemon'] }), Chat.ErrorMessage);
-			assert.throws(() => normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['Uber'] }), /already exists in/);
 			assert.throws(() => normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['-Uber'] }), /already means that/);
+		});
+
+		it('should drop a rule the format already has rather than refusing it', () => {
+			assert.deepEqual(normalize({ name: 'X', base: '[Gen 9] OU', ruleset: ['Standard', 'Standard'] }).ruleset, ['Standard']);
 		});
 	});
 
 	describe('composition', () => {
-		it('should inherit the base by naming it first in the ruleset', () => {
-			const format = toFormatData(normalize({ name: 'X', base: '[Gen 9] OU', ruleset: ['Sleep Clause Mod'] }));
-			assert.deepEqual(format.ruleset, ['[Gen 9] OU', 'Sleep Clause Mod']);
+		it('should copy the base rules in rather than naming the base', () => {
+			const snapshot = baseSnapshot('[Gen 9] OU');
+			const format = toFormatData(normalize({ ...snapshot, name: 'X', base: '[Gen 9] OU' }));
+			assert(!format.ruleset.includes('[Gen 9] OU'));
+			assert.deepEqual(format.ruleset, Dex.formats.get('gen9ou').ruleset);
+			assert.deepEqual(format.banlist, Dex.formats.get('gen9ou').banlist);
 			assert.equal(format.mod, Dex.formats.get('gen9ou').mod);
 		});
 

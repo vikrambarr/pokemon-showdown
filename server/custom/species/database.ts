@@ -1,16 +1,8 @@
-/**
- * Storage for user-authored Pokemon species.
- *
- * Postgres only, on the pool in ../database.ts. Everything user-facing lives in
- * chat-plugins/custom-species.ts; this file returns data, never messages.
- */
+/** Storage for user-authored Pokemon species. Returns data, never messages. */
 import { SQL, type PGDatabase, type DatabaseTable } from '../../../lib/database';
-import { countOwned, ensureSchema, getTable } from '../database';
+import { ensureSchema, getTable } from '../database';
 
-/**
- * Dex number band for custom species. Negative `num` is upstream's convention for
- * non-canonical Pokemon; CAP occupies -1 to -5014, so start well clear of it.
- */
+/** Negative `num` is upstream's convention for non-canonical Pokemon; CAP holds -1 to -5014. */
 const NUM_BASE = -100000;
 
 /** How many custom species one account may own. */
@@ -56,7 +48,7 @@ export function connect() {
 	entries = getTable<CustomSpeciesRow>(Config.custompokemon, 'custom_species', 'entryid');
 	// No single-column primary key: (entryid, kind).
 	sprites = getTable<CustomSpeciesSpriteRow>(Config.custompokemon, 'custom_species_sprites');
-	return ensureSchema(entries, 'custom-species.sql');
+	return ensureSchema([entries, sprites], 'custom-species.sql');
 }
 
 /** JSONB columns have to be passed as text; the driver sends `$n` untyped and Postgres casts. */
@@ -101,12 +93,8 @@ export function ownedNames(ownerid: ID) {
 /** Everything an owner's entries need to become dex data. */
 export function collection(ownerid: ID, limit = MAX_CUSTOM_SPECIES) {
 	return entries!.selectAll(
-		['entryid', 'name', 'num', 'inheritsfrom', 'species', 'learnset', 'sprites']
+		['entryid', 'name', 'num', 'inheritsfrom', 'species', 'learnset', 'sprites', 'private']
 	)`WHERE ownerid = ${ownerid} ORDER BY updated DESC LIMIT ${limit}`;
-}
-
-export function count(ownerid: ID) {
-	return countOwned(entries!, 'custom_species', ownerid);
 }
 
 export function update(entryid: number, data: {
@@ -159,8 +147,8 @@ export function search(filters: SearchFilters, limit: number) {
 		COALESCE((species -> 'baseStats' ->> 'spd')::int, 0) +
 		COALESCE((species -> 'baseStats' ->> 'spe')::int, 0)
 	)`;
-	if (filters.minbst) where.push(SQL` AND ${bst} >= ${filters.minbst}`);
-	if (filters.maxbst) where.push(SQL` AND ${bst} <= ${filters.maxbst}`);
+	if (filters.minbst !== undefined) where.push(SQL` AND ${bst} >= ${filters.minbst}`);
+	if (filters.maxbst !== undefined) where.push(SQL` AND ${bst} <= ${filters.maxbst}`);
 	return entries!.selectAll()`${where} ORDER BY updated DESC LIMIT ${limit}`;
 }
 

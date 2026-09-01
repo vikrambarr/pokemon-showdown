@@ -1,11 +1,6 @@
-/**
- * Storage for user-authored battle formats.
- *
- * Postgres only, on the pool in ../database.ts. Everything user-facing lives in
- * chat-plugins/custom-formats.ts; this file returns data, never messages.
- */
+/** Storage for user-authored battle formats. Returns data, never messages. */
 import { SQL, type PGDatabase, type DatabaseTable } from '../../../lib/database';
-import { countOwned, ensureSchema, getTable } from '../database';
+import { ensureSchema, getTable } from '../database';
 
 /** How many custom formats one account may own. */
 export const MAX_CUSTOM_FORMATS = 25;
@@ -34,7 +29,7 @@ export let entries: DatabaseTable<CustomFormatRow, PGDatabase> | undefined;
 
 export function connect() {
 	entries = getTable<CustomFormatRow>(Config.customformats, 'custom_formats', 'entryid');
-	return ensureSchema(entries, 'custom-formats.sql');
+	return ensureSchema([entries], 'custom-formats.sql');
 }
 
 const json = (value: unknown) => JSON.stringify(value ?? []);
@@ -69,10 +64,6 @@ export function ownedNames(ownerid: ID) {
 export function list(ownerid: ID, limit: number, publicOnly = false) {
 	const publicOnlyQuery = publicOnly ? SQL`AND private IS NULL ` : SQL``;
 	return entries!.selectAll()`WHERE ownerid = ${ownerid} ${publicOnlyQuery}ORDER BY updated DESC LIMIT ${limit}`;
-}
-
-export function count(ownerid: ID) {
-	return countOwned(entries!, 'custom_formats', ownerid);
 }
 
 export function update(entryid: number, data: {
