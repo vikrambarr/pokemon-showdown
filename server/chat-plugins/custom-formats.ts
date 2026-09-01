@@ -11,11 +11,12 @@ import {
 } from '../custom/formats/validator';
 import { TeamValidator } from '../../sim/team-validator';
 import { buildCustomDex, releaseCustomDex } from '../../sim/dex-custom';
-import { formatSummary, parseCustomFormat, resolveCollection } from '../custom/dex';
+import { type CustomBattleData, formatSummary, parseCustomFormat, resolveBattleData, resolveCollection, resolveFormatRef } from '../custom/dex';
 
 import { type CustomFormatRow, MAX_CUSTOM_FORMATS } from '../custom/formats/database';
 
 import type { ModdedDex } from '../../sim/dex';
+import type { Format } from '../../sim/dex-formats';
 import type { PokemonSet } from '../../sim/teams';
 
 const NOUN = 'custom format';
@@ -345,6 +346,36 @@ export async function editFormat(user: User, name: string, changes: AnyObject) {
 }
 
 export const commands: Chat.ChatCommands = {
+	// Overrides core's vtm: a custom format's id resolves through no global Dex.formats entry.
+	async vtm(target, room, user, connection) {
+		if (Monitor.countPrepBattle(connection.ip, connection)) return;
+		if (!target) throw new Chat.ErrorMessage(this.tr`Provide a valid format.`);
+		const customRef = await resolveFormatRef(target);
+		let format: Format;
+		let customData: CustomBattleData | null = null;
+		let notFound = '';
+		if (customRef) {
+			customData = await resolveBattleData(customRef, user.id);
+			format = Dex.formats.get(customRef.id);
+		} else {
+			const originalFormat = Dex.formats.get(target);
+			format = originalFormat.effectType === 'Format' ? originalFormat : Dex.formats.get('Anything Goes');
+			if (format.effectType !== 'Format') return this.popupReply(this.tr`Please provide a valid format.`);
+			if (originalFormat !== format) notFound = this.tr`The format '${originalFormat.name}' was not found.`;
+		}
+		const result = await TeamValidatorAsync.get(format.id)
+			.validateTeam(user.battleSettings.team, { user: user.id, customData });
+		if (result.startsWith('1')) {
+			connection.popup(`${notFound ? notFound + "\n\n" : ""}${this.tr`Your team is valid for ${format.name}.`}`);
+		} else {
+			connection.popup(
+				`${notFound ? notFound + "\n\n" : ""}${this.tr`Your team was rejected for the following reasons:`}` +
+				`\n\n- ${result.slice(1).replace(/\n/g, '\n- ')}`
+			);
+		}
+	},
+	vtmhelp: [`/vtm [format] - Validates your current team (set with /utm).`],
+
 	customformat: {
 		async create(target, room, user, connection, cmd) {
 			validateAccess(user);

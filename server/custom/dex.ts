@@ -290,6 +290,16 @@ export function parseCustomFormat(formatName: string) {
 	return { ownerid, formatid, id: customFormatId(ownerid, formatid) };
 }
 
+/** `parseCustomFormat`, plus the bare id a saved team's `format` field collapses to. */
+export async function resolveFormatRef(formatName: string) {
+	const parsed = parseCustomFormat(formatName);
+	if (parsed) return parsed;
+	const bareid = toID(formatName);
+	if (!bareid.startsWith('custom') || !formatDatabase.entries) return null;
+	const row = await formatDatabase.getByBareId(bareid);
+	return row ? { ownerid: row.ownerid, formatid: row.formatid, id: customFormatId(row.ownerid, row.formatid) } : null;
+}
+
 /** A stored format as the dex wants it, named so that `toID(name)` is the id it plays under. */
 export async function resolveFormat(ownerid: ID, formatid: ID): Promise<FormatData | null> {
 	if (!formatDatabase.entries) return null;

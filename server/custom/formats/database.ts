@@ -54,6 +54,11 @@ export function get(ownerid: ID, formatid: ID) {
 	return entries!.selectOne()`WHERE ownerid = ${ownerid} AND formatid = ${formatid}`;
 }
 
+/** The id a saved team's `format` field carries: `toID()` collapses `customFormatId`'s hyphens. */
+export function getByBareId(bareid: ID) {
+	return entries!.selectOne()`WHERE 'custom' || ownerid || formatid = ${bareid}`;
+}
+
 /** Just enough to check a name against the owner's other entries. */
 export function ownedNames(ownerid: ID) {
 	return entries!.selectAll(

@@ -19,7 +19,7 @@ import type { ChallengeType } from './room-battle';
 import type { CustomDexPayload } from '../sim/dex-custom';
 import { BattleReady, BattleChallenge, GameChallenge, BattleInvite, challenges } from './ladders-challenges';
 import {
-	type CustomBattleData, customFormat, mergeCollections, parseCustomFormat, resolveBattleData, toBattleData,
+	type CustomBattleData, customFormat, mergeCollections, resolveBattleData, resolveFormatRef, toBattleData,
 } from './custom/dex';
 
 /**
@@ -67,7 +67,7 @@ class Ladder extends LadderStore {
 		}
 
 		// Custom formats aren't in the global format list, so they're resolved here, never rated.
-		const customRef = parseCustomFormat(this.formatid);
+		const customRef = await resolveFormatRef(this.formatid);
 		let customData: CustomBattleData | null = null;
 		if (customRef) isRated = false;
 		try {
