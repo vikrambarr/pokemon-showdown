@@ -11,7 +11,9 @@ import {
 } from '../custom/formats/validator';
 import { TeamValidator } from '../../sim/team-validator';
 import { buildCustomDex, releaseCustomDex } from '../../sim/dex-custom';
-import { type CustomBattleData, formatSummary, parseCustomFormat, resolveBattleData, resolveCollection, resolveFormatRef } from '../custom/dex';
+import {
+	type CustomBattleData, formatSummary, parseCustomFormat, resolveBattleData, resolveCollection, resolveFormatRef,
+} from '../custom/dex';
 
 import { type CustomFormatRow, MAX_CUSTOM_FORMATS } from '../custom/formats/database';
 
@@ -349,7 +351,7 @@ export const commands: Chat.ChatCommands = {
 	// Overrides core's vtm: a custom format's id resolves through no global Dex.formats entry.
 	async vtm(target, room, user, connection) {
 		if (Monitor.countPrepBattle(connection.ip, connection)) return;
-		if (!target) throw new Chat.ErrorMessage(this.tr`Provide a valid format.`);
+		if (!target) throw new Chat.ErrorMessage(this.TL`Provide a valid format.`);
 		const customRef = await resolveFormatRef(target);
 		let format: Format;
 		let customData: CustomBattleData | null = null;
@@ -360,16 +362,16 @@ export const commands: Chat.ChatCommands = {
 		} else {
 			const originalFormat = Dex.formats.get(target);
 			format = originalFormat.effectType === 'Format' ? originalFormat : Dex.formats.get('Anything Goes');
-			if (format.effectType !== 'Format') return this.popupReply(this.tr`Please provide a valid format.`);
-			if (originalFormat !== format) notFound = this.tr`The format '${originalFormat.name}' was not found.`;
+			if (format.effectType !== 'Format') return this.popupReply(this.TL`Please provide a valid format.`);
+			if (originalFormat !== format) notFound = this.TL`The format '${originalFormat.name}' was not found.`;
 		}
 		const result = await TeamValidatorAsync.get(format.id)
 			.validateTeam(user.battleSettings.team, { user: user.id, customData });
 		if (result.startsWith('1')) {
-			connection.popup(`${notFound ? notFound + "\n\n" : ""}${this.tr`Your team is valid for ${format.name}.`}`);
+			connection.popup(`${notFound ? notFound + "\n\n" : ""}${this.TL`Your team is valid for ${format.name}.`}`);
 		} else {
 			connection.popup(
-				`${notFound ? notFound + "\n\n" : ""}${this.tr`Your team was rejected for the following reasons:`}` +
+				`${notFound ? notFound + "\n\n" : ""}${this.TL`Your team was rejected for the following reasons:`}` +
 				`\n\n- ${result.slice(1).replace(/\n/g, '\n- ')}`
 			);
 		}
