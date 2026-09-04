@@ -231,24 +231,32 @@ export function registerCustomFormat(roomid: RoomID, options: { customData?: Cus
 	return format;
 }
 
+/** Art for one owner's species, keyed the way an overlay keys their own. */
+export async function collectionSprites(ownerid: ID, speciesids: string[]) {
+	const sprites: { [speciesid: string]: { [kind: string]: string } } = {};
+	if (!database.entries) return sprites;
+	const wanted = new Set(speciesids);
+	for (const row of await database.collection(ownerid)) {
+		const id = toID(row.name);
+		if (!wanted.has(id)) continue;
+		const urls: { [kind: string]: string } = {};
+		for (const kind in row.sprites || {}) urls[kind] = spriteURL(row.sprites[kind]);
+		if (Object.keys(urls).length) sprites[id] = urls;
+	}
+	return sprites;
+}
+
 /** Art for a battle's custom species: not in the payload, so resolved when a client asks. */
 const battleSprites = new Map<RoomID, { [speciesid: string]: { [kind: string]: string } }>();
 
 export async function customBattleSprites(roomid: RoomID, ownerids: ID[], speciesids: string[]) {
 	const cached = battleSprites.get(roomid);
 	if (cached) return cached;
-	const wanted = new Set(speciesids);
 	const sprites: { [speciesid: string]: { [kind: string]: string } } = {};
-	if (database.entries) {
-		for (const ownerid of new Set(ownerids)) {
-			for (const row of await database.collection(ownerid)) {
-				const id = toID(row.name);
-				if (!wanted.has(id) || sprites[id]) continue;
-				const urls: { [kind: string]: string } = {};
-				for (const kind in row.sprites || {}) urls[kind] = spriteURL(row.sprites[kind]);
-				if (Object.keys(urls).length) sprites[id] = urls;
-			}
-		}
+	for (const ownerid of new Set(ownerids)) {
+		const owned = await collectionSprites(ownerid, speciesids);
+		// the first owner of a name wins, as `mergeCollections` decided it does
+		for (const id in owned) sprites[id] ||= owned[id];
 	}
 	// caching nothing would hide art uploaded later in the battle
 	if (Object.keys(sprites).length) battleSprites.set(roomid, sprites);

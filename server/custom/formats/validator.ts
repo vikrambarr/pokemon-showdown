@@ -57,9 +57,31 @@ export function normalizeFormatData(input: AnyObject, opts: {
 		banlist: validateRules(input.banlist, 'banlist', '-', opts.dex),
 		unbanlist: validateRules(input.unbanlist, 'unbanlist', '+', opts.dex),
 	};
+	orderRules(normalized, opts.dex);
 	// Every rule is legal on its own by now; this catches rules that contradict each other.
 	normalized.ruleset = resolveRuleset(normalized, opts.dex);
 	return normalized;
+}
+
+/**
+ * `All Pokemon` has to precede every other Pokemon rule, tag bans included, and the sim only
+ * reads it from the ruleset. Which list an owner picked it in is ours to fix, not theirs.
+ */
+function orderRules(normalized: NormalizedFormat, dex?: ModdedDex) {
+	const isAll = (rule: string, prefix: string) => {
+		try {
+			const spec = (dex || Dex).formats.validateRule(prefix + rule);
+			return typeof spec === 'string' && spec.slice(1) === 'tag:allpokemon';
+		} catch {
+			return false;
+		}
+	};
+	const hoisted = normalized.unbanlist.filter(rule => isAll(rule, '+')).map(rule => `+${rule}`);
+	normalized.unbanlist = normalized.unbanlist.filter(rule => !isAll(rule, '+'));
+	normalized.banlist = Utils.sortBy(normalized.banlist, rule => (isAll(rule, '-') ? 0 : 1));
+	normalized.ruleset = [
+		...hoisted, ...Utils.sortBy(normalized.ruleset, rule => (isAll(rule, '') ? 0 : 1)),
+	];
 }
 
 function validateName(input: unknown, opts: { otherNames: Map<ID, string>, ownerid: ID }) {
@@ -93,8 +115,9 @@ function validateName(input: unknown, opts: { otherNames: Map<ID, string>, owner
 	return name;
 }
 
-/** The sim's three ways of saying a rule does nothing, all safe to drop. */
-const NO_OP_RULE = /^(?:Rule ".+?" (?:did nothing|in ".*" already exists)|Multiple ".+?" rules)/;
+/** The sim's four ways of saying a rule does nothing, all safe to drop. */
+const NO_OP_RULE =
+	/^(?:Rule ".+?" (?:did nothing|in ".*" already exists)|Multiple ".+?" rules|".+?" rule has no effect)/;
 
 /**
  * Drops rules that have stopped doing anything rather than refusing them: the base is the
@@ -228,14 +251,8 @@ function validateRules(input: unknown, field: typeof RULE_LISTS[number], prefix:
 	});
 }
 
-/** `Custom` and `tag:custom` both resolve to `tag:custom`, under any prefix */
-const namesCustomTag = (rule: string) => toID(rule) === 'custom' || toID(rule) === 'tagcustom';
-
 export function toFormatData(row: FormatComposition): FormatData {
 	const base = row.base ? Dex.formats.get(row.base) : null;
-	// custom species are nonstandard, which `Standard` bans; a format naming the tag itself
-	// has said what it wants, and a second rule would collide with it
-	const unbanCustom = ![...row.ruleset, ...row.banlist, ...row.unbanlist].some(namesCustomTag);
 	return {
 		name: row.name,
 		mod: row.mod || base!.mod,
@@ -244,7 +261,7 @@ export function toFormatData(row: FormatComposition): FormatData {
 		// the base is where these came from, not a layer over them: see `baseSnapshot`
 		ruleset: [...row.ruleset],
 		banlist: [...row.banlist],
-		unbanlist: unbanCustom ? ['tag:custom', ...row.unbanlist] : [...row.unbanlist],
+		unbanlist: [...row.unbanlist],
 		rated: false,
 		searchShow: false,
 		challengeShow: false,

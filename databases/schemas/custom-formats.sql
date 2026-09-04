@@ -17,3 +17,4 @@ CREATE TABLE custom_formats (
 
 CREATE UNIQUE INDEX custom_formats_owner_formatid_idx ON custom_formats(ownerid, formatid);
 CREATE INDEX custom_formats_owner_updated_idx ON custom_formats(ownerid, updated DESC);
+CREATE INDEX custom_formats_public_updated_idx ON custom_formats(updated DESC) WHERE private IS NULL;

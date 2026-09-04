@@ -2,7 +2,10 @@
 import { Utils } from '../../lib';
 import { customBattleSprites, parseCustomFormat, resolveOverlay } from '../custom/dex';
 import * as store from '../custom/entries';
-import { createFormat, editFormat, formatInfo, formatRoster, removeFormat, resetFormat } from './custom-formats';
+import {
+	createFormat, editFormat, formatDex, formatBuild, formatDraft, formatInfo, formatRoster, removeFormat,
+	resetFormat,
+} from './custom-formats';
 import { clearSprite, createSpecies, editSpecies, removeSpecies, setSprite } from './custom-species';
 
 /** The write half of the overlay, so the teambuilder room needn't send chat commands. */
@@ -94,10 +97,25 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		if (!trustable || !user.named) return null;
 		return attempt(() => formatRoster(user, target.trim()));
 	},
+	/** The same, for changes the formatbuilder is holding: a preview of what saving would do. */
+	customformatdraft(target, user, trustable) {
+		if (!trustable || !user.named) return null;
+		return attempt(() => formatDraft(user, target));
+	},
 	/** What another user's format is called and built on, so a client can offer it. */
 	customformatinfo(target, user, trustable) {
 		if (!trustable || !user.named) return null;
 		return attempt(() => formatInfo(user, target.trim()));
+	},
+	/** A directory row's button: what the client needs to open a team in someone else's format. */
+	customformatbuild(target, user, trustable) {
+		if (!trustable || !user.named) return null;
+		return attempt(() => formatBuild(user, target.trim()));
+	},
+	/** The species another user's format is built with: without these a team can't be built for it. */
+	customformatdex(target, user, trustable) {
+		if (!trustable || !user.named) return null;
+		return attempt(() => formatDex(user, target.trim()));
 	},
 	battledex(target, user, trustable) {
 		if (!trustable || !user.named) return null;

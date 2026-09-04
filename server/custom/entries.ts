@@ -60,7 +60,6 @@ export function generatePassword(len = 20) {
 	return pw;
 }
 
-/** The same gate the teams database uses, for the same reasons. */
 /** Looking something up needs the database to be up, but not the right to author anything. */
 export function validateRead(ready: boolean, setting: unknown, what: string) {
 	if (!Config.usepostgres || !setting || !ready) {
@@ -72,12 +71,6 @@ export function validateAccess(user: User, ready: boolean, setting: unknown, wha
 	validateRead(ready, setting, what);
 	if (user.locked || user.semilocked) {
 		throw new Chat.ErrorMessage(`You cannot use the ${what} database while locked.`);
-	}
-	if (!user.autoconfirmed) {
-		throw new Chat.ErrorMessage(
-			`To use the ${what} database, you must be autoconfirmed, which means being ` +
-			`registered for at least one week and winning one rated game.`
-		);
 	}
 	if (!Users.globalAuth.atLeast(user, setting as GroupSymbol)) {
 		throw new Chat.ErrorMessage(`You cannot currently use the ${what} database.`);
@@ -105,14 +98,15 @@ export async function getOwn<T extends OwnedRow>(user: User, name: string, what:
 	return row;
 }
 
-/** Readable by the viewer: their own, or someone else's that isn't private. */
+/** Readable by the viewer: their own, someone else's that isn't private, or one they have the password to. */
 export async function getVisible<T extends OwnedRow>(
-	user: User, ownerid: ID, name: string, what: string, get: Getter<T>
+	user: User, ownerid: ID, name: string, what: string, get: Getter<T>, password?: string
 ) {
 	const id = toID(name);
 	if (!id) throw new Chat.ErrorMessage(`Specify which ${what}.`);
 	const row = await get(ownerid, id);
-	if (!row || (row.private && row.ownerid !== user.id && !user.can('rangeban'))) {
+	const shared = !!password && row?.private === password;
+	if (!row || (row.private && row.ownerid !== user.id && !shared && !user.can('rangeban'))) {
 		throw new Chat.ErrorMessage(`${ownerid} doesn't have a ${what} named "${name}".`);
 	}
 	return row;

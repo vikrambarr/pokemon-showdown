@@ -191,8 +191,8 @@ export const commands: Chat.ChatCommands = {
 		},
 		check: 'create',
 		createhelp: [
-			`/custompokemon create {json} - Saves a custom Pokemon. Requires: autoconfirmed`,
-			`/custompokemon check {json} - Validates without saving. Requires: autoconfirmed`,
+			`/custompokemon create {json} - Saves a custom Pokemon.`,
+			`/custompokemon check {json} - Validates without saving.`,
 		],
 
 		async list(target, room, user) {

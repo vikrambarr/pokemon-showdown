@@ -71,6 +71,15 @@ export function list(ownerid: ID, limit: number, publicOnly = false) {
 	return entries!.selectAll()`WHERE ownerid = ${ownerid} ${publicOnlyQuery}ORDER BY updated DESC LIMIT ${limit}`;
 }
 
+/** Every owner's public formats: what the directory browses, narrowed the way its search asks. */
+export function browse(search: { ownerid?: ID, name?: ID }, sorter: string, limit: number) {
+	const where = [SQL`WHERE private IS NULL`];
+	if (search.ownerid) where.push(SQL` AND ownerid = ${search.ownerid}`);
+	if (search.name) where.push(SQL` AND formatid LIKE ${`%${search.name}%`}`);
+	const order = sorter === 'views' ? SQL` ORDER BY views DESC` : SQL` ORDER BY updated DESC`;
+	return entries!.selectAll()`${where}${order} LIMIT ${limit}`;
+}
+
 export function update(entryid: number, data: {
 	formatid?: ID, name?: string, mod?: ID | null, base?: ID | null, ruleset?: string[], banlist?: string[],
 	unbanlist?: string[], notes?: string | null, private?: string | null,

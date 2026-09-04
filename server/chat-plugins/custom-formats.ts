@@ -12,7 +12,8 @@ import {
 import { TeamValidator } from '../../sim/team-validator';
 import { buildCustomDex, releaseCustomDex } from '../../sim/dex-custom';
 import {
-	type CustomBattleData, formatSummary, parseCustomFormat, resolveBattleData, resolveCollection, resolveFormatRef,
+	collectionSprites, type CustomBattleData, formatSummary, parseCustomFormat, resolveBattleData, resolveCollection,
+	resolveFormatRef,
 } from '../custom/dex';
 
 import { type CustomFormatRow, MAX_CUSTOM_FORMATS } from '../custom/formats/database';
@@ -22,6 +23,9 @@ import type { Format } from '../../sim/dex-formats';
 import type { PokemonSet } from '../../sim/teams';
 
 const NOUN = 'custom format';
+/** How many formats one page of the directory adds, and the most it will ever show. */
+const BROWSE_COUNT = 20;
+const MAX_BROWSE = 500;
 
 function validateAccess(user: User) {
 	store.validateAccess(user, !!database.entries, Config.customformats, NOUN);
@@ -36,8 +40,8 @@ async function ownedNames(ownerid: ID, excludeEntryid?: number) {
 }
 
 const getOwn = (user: User, name: string) => store.getOwn(user, name, NOUN, database.get);
-const getVisible = (user: User, ownerid: ID, name: string) =>
-	store.getVisible(user, ownerid, name, NOUN, database.get);
+const getVisible = (user: User, ownerid: ID, name: string, password?: string) =>
+	store.getVisible(user, ownerid, name, NOUN, database.get, password);
 
 /** Runs `fn` against a dex holding the owner's species, since rules may name them. */
 async function withOwnerDex<T>(
@@ -96,6 +100,37 @@ function details(row: CustomFormatRow) {
 		buf += `<p><strong>${field}:</strong> ${Utils.escapeHTML(row[field].join(', '))}</p>`;
 	}
 	if (row.notes) buf += `<p>${Utils.escapeHTML(row.notes)}</p>`;
+	return buf;
+}
+
+function refresh(context: Chat.PageContext) {
+	return (
+		`<button class="button" name="send" value="/j ${context.pageid}" style="float: right">` +
+		` <i class="fa fa-refresh"></i> ${context.TL('Refresh')}</button>`
+	);
+}
+
+/** The page one format has to itself. A private one is only reachable with the password in the link. */
+const formatLink = (row: CustomFormatRow) =>
+	`view-customformats-view-${row.ownerid}-${row.formatid}${row.private ? `-${row.private}` : ''}`;
+
+/** A team is what a format is for: making one is how you pick a format out of the directory. */
+const buildButton = (row: CustomFormatRow) => (
+	`<button class="button" name="send" value="/cmd customformatbuild ` +
+	`${store.customFormatId(row.ownerid, row.formatid)}${row.private ? `, ${row.private}` : ''}">` +
+	`Build a team</button>`
+);
+
+/** One directory row, the way `/teams browse` previews a team. */
+function preview(row: CustomFormatRow) {
+	let buf = `<strong>${Utils.escapeHTML(row.name)}</strong>`;
+	if (row.private) buf += ` <small>[private]</small>`;
+	buf += `<br /><small>By: <strong>${row.ownerid}</strong></small><br />`;
+	buf += `<small>Based on: ${Utils.escapeHTML(basedOn(row))}</small><br />`;
+	buf += `<small>Updated: ${Chat.toTimestamp(new Date(row.updated), { human: true })}</small><br />`;
+	buf += `<small>Views: ${row.views}</small>`;
+	if (row.notes) buf += `<br />${Utils.escapeHTML(row.notes)}`;
+	buf += `<br /><a class="button" href="/${formatLink(row)}">View</a> ${buildButton(row)}`;
 	return buf;
 }
 
@@ -284,25 +319,57 @@ function defaultRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) 
 	}, dex);
 }
 
+/** A directory row: the summary a selector needs, plus what someone browsing is choosing between. */
+function directoryEntry(row: CustomFormatRow) {
+	return {
+		...formatSummary(row),
+		owner: row.ownerid,
+		notes: row.notes || '',
+		views: row.views,
+		updated: new Date(row.updated).toISOString(),
+	};
+}
+
 /** Enough of someone else's format for a client to offer it in a format selector. */
 export async function formatInfo(user: User, target: string) {
 	validateRead();
-	const ref = parseCustomFormat(target);
-	if (!ref) throw new Chat.ErrorMessage(`"${target}" isn't a custom format.`);
-	return formatSummary(await getVisible(user, ref.ownerid, ref.formatid));
+	const [name, password] = store.parts(target);
+	// a saved team carries the id `toID` collapsed the name to, which spells neither owner nor format
+	const ref = await resolveFormatRef(name);
+	if (!ref) throw new Chat.ErrorMessage(`"${name}" isn't a custom format.`);
+	return directoryEntry(await getVisible(user, ref.ownerid, ref.formatid, password));
 }
 
-export async function formatRoster(user: User, target: string) {
+/** The same, for the directory's button, plus the password the rest of the build will need. */
+export async function formatBuild(user: User, target: string) {
 	validateRead();
-	// Names can't contain a comma, so what follows one is the request's own options.
-	const [name, options] = Utils.splitFirst(target, ',');
-	// A format that isn't the asker's own is named in full, and has to not be private.
-	const ref = parseCustomFormat(name.trim());
-	const row = ref ?
-		await getVisible(user, ref.ownerid, ref.formatid) :
-		await getOwn(user, name.trim());
-	// as expensive as the real roster and only changes with the base, so sent on request
-	const wantDefault = toID(options) === 'default';
+	const [name, password] = store.parts(target);
+	const ref = parseCustomFormat(name);
+	if (!ref) throw new Chat.ErrorMessage(`"${name}" isn't a custom format.`);
+	const row = await getVisible(user, ref.ownerid, ref.formatid, password);
+	return { ...directoryEntry(row), password: row.private || '' };
+}
+
+/** The author's species, so someone else's format builds and renders like one of your own. */
+export async function formatDex(user: User, target: string) {
+	validateRead();
+	const [name, password] = store.parts(target);
+	const ref = await resolveFormatRef(name);
+	if (!ref) throw new Chat.ErrorMessage(`"${name}" isn't a custom format.`);
+	const row = await getVisible(user, ref.ownerid, ref.formatid, password);
+	if (row.ownerid !== user.id) await database.bumpViews(row.entryid);
+	const collection = await resolveCollection(row.ownerid, {
+		publicOnly: user.id !== row.ownerid,
+		namedBy: [...row.ruleset, ...row.banlist, ...row.unbanlist],
+	});
+	return {
+		...formatSummary(row), ...collection,
+		sprites: await collectionSprites(row.ownerid, Object.keys(collection.Pokedex)),
+	};
+}
+
+/** What a rules-and-roster request answers with, from a stored row or an unsaved draft of one. */
+function rosterAnswer(row: CustomFormatRow, askerid: ID, wantDefault: boolean) {
 	return withOwnerDex(row.ownerid, row, dex => {
 		const active = [...checkFormat(row, dex).keys()]
 			.filter(rule => !/^[-+*!]/.test(rule) && !rule.includes(':'));
@@ -318,7 +385,31 @@ export async function formatRoster(user: User, target: string) {
 			legal: legalRoster(row, dex),
 			...wantDefault ? { defaultLegal: defaultRoster(row, dex) } : {},
 		};
-	}, user.id);
+	}, askerid);
+}
+
+export async function formatRoster(user: User, target: string) {
+	validateRead();
+	// Names can't contain a comma, so what follows one is the request's own options.
+	const [name, options, password] = store.parts(target, 2);
+	// A format that isn't the asker's own is named in full, and has to be one they can read.
+	const ref = parseCustomFormat(name);
+	const row = ref ?
+		await getVisible(user, ref.ownerid, ref.formatid, password) :
+		await getOwn(user, name);
+	// as expensive as the real roster and only changes with the base, so sent on request
+	return rosterAnswer(row, user.id, toID(options) === 'default');
+}
+
+/** The same answer for changes the builder is holding, so an edit can be previewed before saving. */
+export async function formatDraft(user: User, target: string) {
+	validateAccess(user);
+	// `[name], [options], {json}`: the changes go last, since only they can contain a comma.
+	const [name, options, json] = store.parts(target, 2);
+	const row = await getOwn(user, name);
+	const changes = json ? store.parseInput(json, 'format') : {};
+	const draft = { ...row, ...await revalidate(row, changes) };
+	return rosterAnswer(draft, user.id, toID(options) === 'default');
 }
 
 /** Back to the rules the base was copied in with; re-picking the same base is not an edit. */
@@ -367,8 +458,10 @@ export const commands: Chat.ChatCommands = {
 		}
 		const result = await TeamValidatorAsync.get(format.id)
 			.validateTeam(user.battleSettings.team, { user: user.id, customData });
+		// a custom format has no global Dex entry, so `format.name` is its internal id
+		const shown = customData?.format.name || format.name;
 		if (result.startsWith('1')) {
-			connection.popup(`${notFound ? notFound + "\n\n" : ""}${this.TL`Your team is valid for ${format.name}.`}`);
+			connection.popup(`${notFound ? notFound + "\n\n" : ""}${this.TL`Your team is valid for ${shown}.`}`);
 		} else {
 			connection.popup(
 				`${notFound ? notFound + "\n\n" : ""}${this.TL`Your team was rejected for the following reasons:`}` +
@@ -398,8 +491,8 @@ export const commands: Chat.ChatCommands = {
 		},
 		check: 'create',
 		createhelp: [
-			`/customformat create {json} - Saves a custom format. Requires: autoconfirmed`,
-			`/customformat check {json} - Validates without saving. Requires: autoconfirmed`,
+			`/customformat create {json} - Saves a custom format.`,
+			`/customformat check {json} - Validates without saving.`,
 		],
 
 		async list(target, room, user) {
@@ -416,6 +509,14 @@ export const commands: Chat.ChatCommands = {
 			let buf = `<strong>${Utils.escapeHTML(ownerid)}'s custom formats (${rows.length}):</strong><ul>`;
 			for (const row of rows) buf += `<li>${summary(row)}</li>`;
 			return this.sendReplyBox(`${buf}</ul>`);
+		},
+
+		browse(target) {
+			return this.parse(`/j view-customformats-browse${target ? `-${toID(target)}` : ''}`);
+		},
+		search(this: Chat.CommandContext, target: string) {
+			const [owner, name] = target.split(',');
+			return this.parse(`/j view-customformats-search-${toID(owner)}--${toID(name)}`);
 		},
 
 		'': 'view',
@@ -525,6 +626,8 @@ export const commands: Chat.ChatCommands = {
 		`/customformat create {json} - Saves a custom format. See below for the fields.`,
 		`/customformat check {json} - Validates JSON without saving it.`,
 		`/customformat list [user] - Lists a user's custom formats. Defaults to yourself.`,
+		`/customformat browse [latest|views] - Browses public custom formats made by other users.`,
+		`/customformat search [owner], [name] - Searches public custom formats.`,
 		`/customformat view [user], [name] - Shows one in full.`,
 		`/customformat rules [user], [name] - Shows every rule the format resolves to.`,
 		`/customformat export [user], [name] - Shows one as JSON you can re-import.`,
@@ -537,6 +640,76 @@ export const commands: Chat.ChatCommands = {
 		`Fields: name, base, ruleset, banlist, unbanlist. Rules are the same names /tier accepts.`,
 		`Example: /customformat create {"name":"Monotype Chomp","base":"[Gen 9] OU","banlist":["Uber"],"ruleset":["Same Type Clause"]}`,
 	],
+};
+
+export const pages: Chat.PageTable = {
+	customformats: {
+		async browse(query, user) {
+			if (!user.named) return Rooms.RETRY_AFTER_LOGIN;
+			validateRead();
+			const sorter = toID(query.shift()) || 'latest';
+			if (sorter !== 'latest' && sorter !== 'views') {
+				throw new Chat.ErrorMessage(`Invalid sort term '${sorter}'. Must be either 'views' or 'latest'.`);
+			}
+			let count = Number(toID(query.shift())) || BROWSE_COUNT;
+			if (count > MAX_BROWSE) count = MAX_BROWSE;
+			this.title = `[Custom formats]`;
+			let buf = `<div class="pad"><h2>Browse ${sorter === 'views' ? 'most viewed' : 'latest'} custom formats</h2>`;
+			buf += refresh(this);
+			buf += `<br /><a class="button" href="/view-customformats-search">Search</a> `;
+			const opposite = sorter === 'views' ? 'latest' : 'views';
+			buf += `<button class="button" name="send" value="/j view-customformats-browse-${opposite}-${count}">`;
+			buf += `Sort by ${opposite}</button>`;
+			buf += `<hr />`;
+			const rows = await database.browse({}, sorter, count);
+			if (!rows.length) return `${buf}<div class="message-error">None found.</div>`;
+			for (const row of rows) buf += `${preview(row)}<hr />`;
+			if (rows.length === count && count < MAX_BROWSE) {
+				buf += `<button class="button" name="send" `;
+				buf += `value="/j view-customformats-browse-${sorter}-${count + BROWSE_COUNT}">View more</button>`;
+			}
+			return buf;
+		},
+		async search(query, user) {
+			if (!user.named) return Rooms.RETRY_AFTER_LOGIN;
+			validateRead();
+			this.title = `[Custom formats] Search`;
+			let buf = `<div class="pad">`;
+			buf += refresh(this);
+			buf += `<h2>Search custom formats</h2>`;
+			query = query.join('-').split('--');
+			if (!query.map(toID).filter(Boolean).length) {
+				buf += `<hr />`;
+				buf += `<form data-submitsend="/join view-customformats-search-{owner}--{name}">`;
+				buf += `Owner: <input name="owner" /><br />`;
+				buf += `Format name: <input name="name" /><br /><br />`;
+				buf += `<button class="button notifying" type="submit">Search!</button>`;
+				return `${buf}</form>`;
+			}
+			const [ownerid, name] = query.map(toID);
+			buf += `Search: ` + [ownerid && `Owner: ${ownerid}`, name && `Name: ${name}`].filter(Boolean).join(', ');
+			buf += `<hr />`;
+			const rows = await database.browse({ ownerid, name }, 'latest', MAX_BROWSE);
+			if (!rows.length) return `${buf}<div class="message-error">No results found.</div>`;
+			return buf + rows.map(preview).join('<hr />');
+		},
+		async view(query, user) {
+			if (!user.named) return Rooms.RETRY_AFTER_LOGIN;
+			validateRead();
+			const ownerid = toID(query.shift());
+			const formatid = toID(query.shift());
+			const row = await getVisible(user, ownerid, formatid, toID(query.shift()));
+			if (row.ownerid !== user.id) await database.bumpViews(row.entryid);
+			this.title = `[Custom format] ${row.name}`;
+			let buf = `<div class="pad">`;
+			buf += refresh(this);
+			buf += details(row);
+			buf += `<p><small>By: <strong>${row.ownerid}</strong> &middot; ${Chat.count(row.views, "views")}</small></p>`;
+			buf += `<p>${buildButton(row)} `;
+			buf += `<a class="button" href="/view-customformats-browse">Browse all</a></p>`;
+			return buf;
+		},
+	},
 };
 
 export function start() {
