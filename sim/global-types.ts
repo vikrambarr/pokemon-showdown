@@ -34,7 +34,7 @@ type SparseStatsTable = Partial<StatsTable>;
 type BoostID = StatIDExceptHP | 'accuracy' | 'evasion';
 type BoostsTable = { [boost in BoostID]: number };
 type SparseBoostsTable = Partial<BoostsTable>;
-type Nonstandard = 'Past' | 'Future' | 'Unobtainable' | 'CAP' | 'LGPE' | 'Custom';
+type Nonstandard = 'Past' | 'Future' | 'Unobtainable' | 'CAP' | 'LGPE' | 'Custom' | 'Gmax';
 
 type PokemonSet = import('./teams').PokemonSet;
 
@@ -278,7 +278,9 @@ interface ModdedBattlePokemon {
 	boostBy?: (this: Pokemon, boost: SparseBoostsTable) => boolean | number;
 	clearBoosts?: (this: Pokemon) => void;
 	clearVolatile?: (this: Pokemon, includeSwitchFlags?: boolean) => void;
-	calculateStat?: (this: Pokemon, statName: StatIDExceptHP, boost: number, modifier?: number) => number;
+	calculateStat?: (
+		this: Pokemon, statName: StatIDExceptHP, boost: number, modifier?: number, statUser?: Pokemon
+	) => number;
 	cureStatus?: (this: Pokemon, silent?: boolean) => boolean;
 	deductPP?: (
 		this: Pokemon, move: string | Move, amount?: number | null, target?: Pokemon | null | false
