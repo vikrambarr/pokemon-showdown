@@ -2,7 +2,7 @@
  * Shape validation for user-authored species. This is the trust boundary: nothing reaches
  * the database without passing through here, and `Dex.modData` does not validate.
  */
-import { err, isPlainObject } from '../entries';
+import { err, isPlainObject, MAX_NOTES_LENGTH } from '../entries';
 import { type CustomSpeciesRow, MAX_CUSTOM_SPECIES } from './database';
 
 /** Set by the server or derived. Rejected by name rather than silently dropped. */
@@ -28,12 +28,10 @@ const EVO_TYPES = ['trade', 'useItem', 'levelMove', 'levelExtra', 'levelFriendsh
 /** See the MoveSource docs in sim/dex-species.ts: gen digit, source letter, then a free tail. */
 const MOVE_SOURCE_REGEX = /^[1-9][MTLREDSVC][a-zA-Z0-9]*$/;
 
-export const MAX_NOTES_LENGTH = 500;
-
 export interface FieldLimit { min?: number; max?: number; maxLength?: number }
 
 /** Every bound the checks below apply, in one table so the client can be sent the same numbers. */
-export const FIELD_LIMITS: { [field: string]: FieldLimit } = {
+const FIELD_LIMITS: { [field: string]: FieldLimit } = {
 	name: { maxLength: 40 },
 	forme: { maxLength: 40 },
 	category: { maxLength: 40 },
@@ -62,12 +60,16 @@ export function fieldLimits() {
 	return Number.isFinite(bstMax) ? { ...FIELD_LIMITS, bst: { max: bstMax } } : FIELD_LIMITS;
 }
 
-function fromName(table: { get: (name: any) => AnyObject }, name: unknown, what: string) {
+/** The dex entry a user named something by. */
+export function fromDex(table: { get: (name: any) => AnyObject }, name: unknown, what: string) {
 	if (typeof name !== 'string') err(`Each ${what} must be a string.`);
 	const entry = table.get(name);
 	if (!entry.exists) err(`"${name}" is not a valid ${what}.`);
-	return entry.name;
+	return entry;
 }
+
+const fromName = (table: { get: (name: any) => AnyObject }, name: unknown, what: string) =>
+	fromDex(table, name, what).name as string;
 
 function matchFromList(value: unknown, list: string[], what: string) {
 	if (typeof value !== 'string') err(`Each ${what} must be a string.`);

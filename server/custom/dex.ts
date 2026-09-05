@@ -49,18 +49,25 @@ export interface CustomDexOverlay extends CustomCollection {
 	mods: string[];
 }
 
-export function emptyCollection(): CustomCollection {
+function emptyCollection(): CustomCollection {
 	return { Pokedex: {}, Learnsets: {}, FormatsData: {} };
 }
 
 function checkSize(collection: CustomCollection) {
-	const bytes = JSON.stringify(collection).length;
+	const bytes = Buffer.byteLength(JSON.stringify(collection));
 	if (bytes > MAX_PAYLOAD_BYTES) {
 		throw new Chat.ErrorMessage(
 			`Your custom Pokemon come to ${bytes} bytes, over the ${MAX_PAYLOAD_BYTES} byte limit for one battle.`
 		);
 	}
 	return collection;
+}
+
+/** A row's art as the client wants it: kind to URL, empty when it has none. */
+function spriteURLs(row: CollectionRow) {
+	const urls: { [kind: string]: string } = {};
+	for (const kind in row.sprites || {}) urls[kind] = spriteURL(row.sprites[kind]);
+	return urls;
 }
 
 export function toCollection(rows: CollectionRow[]): CustomCollection {
@@ -116,8 +123,7 @@ export function toOverlay(rows: CollectionRow[], formatRows: CustomFormatRow[]):
 		rulesets: rulesetCatalogue(), tags: tagCatalogue(), mods: modList(),
 	};
 	for (const row of rows) {
-		const urls: { [kind: string]: string } = {};
-		for (const kind in row.sprites || {}) urls[kind] = spriteURL(row.sprites[kind]);
+		const urls = spriteURLs(row);
 		if (Object.keys(urls).length) overlay.sprites[toID(row.name)] = urls;
 		overlay.entries.push({
 			name: row.name,
@@ -155,7 +161,7 @@ export function customDataFromInputLog(inputLog: string): CustomDexPayload | und
 	if (!line.includes(`"customData"`)) return undefined;
 	let options;
 	try {
-		options = JSON.parse(line.slice(7));
+		options = JSON.parse(line.slice('>start '.length));
 	} catch {
 		return undefined;
 	}
@@ -166,7 +172,7 @@ export function customDataFromInputLog(inputLog: string): CustomDexPayload | und
 /** A structural check plus a rule table that has to build, on a path only a restore reaches. */
 function validatePayload(payload: unknown): CustomDexPayload | undefined {
 	if (!isPlainObject(payload)) return undefined;
-	if (JSON.stringify(payload).length > MAX_PAYLOAD_BYTES) return undefined;
+	if (Buffer.byteLength(JSON.stringify(payload)) > MAX_PAYLOAD_BYTES) return undefined;
 	for (const table of ['Pokedex', 'Learnsets', 'FormatsData'] as const) {
 		if (payload[table] === undefined) continue;
 		if (!isPlainObject(payload[table])) return undefined;
@@ -239,8 +245,7 @@ export async function collectionSprites(ownerid: ID, speciesids: string[]) {
 	for (const row of await database.collection(ownerid)) {
 		const id = toID(row.name);
 		if (!wanted.has(id)) continue;
-		const urls: { [kind: string]: string } = {};
-		for (const kind in row.sprites || {}) urls[kind] = spriteURL(row.sprites[kind]);
+		const urls = spriteURLs(row);
 		if (Object.keys(urls).length) sprites[id] = urls;
 	}
 	return sprites;
@@ -309,7 +314,7 @@ export async function resolveFormatRef(formatName: string) {
 }
 
 /** A stored format as the dex wants it, named so that `toID(name)` is the id it plays under. */
-export async function resolveFormat(ownerid: ID, formatid: ID): Promise<FormatData | null> {
+async function resolveFormat(ownerid: ID, formatid: ID): Promise<FormatData | null> {
 	if (!formatDatabase.entries) return null;
 	const row = await formatDatabase.get(ownerid, formatid);
 	if (!row) return null;
@@ -336,6 +341,26 @@ export async function resolveBattleData(ref: { ownerid: ID, formatid: ID }, user
 function sameEntry(a: CustomCollection, b: CustomCollection, id: string) {
 	return JSON.stringify([{ ...a.Pokedex[id], num: 0 }, a.Learnsets[id]]) ===
 		JSON.stringify([{ ...b.Pokedex[id], num: 0 }, b.Learnsets[id]]);
+}
+
+/** One battle's data from both sides' readies, or null once the players have been told why not. */
+export function mergeReadies(readies: { userid: ID, customData: CustomBattleData | null }[]) {
+	const popup = (message: string) => {
+		for (const ready of readies) Users.get(ready.userid)?.popup(message);
+		return null;
+	};
+	const first = readies[0].customData!;
+	// each side resolved the format when it readied, so an edit in between would split the rules
+	const rules = (data: CustomBattleData) => JSON.stringify(data.format);
+	if (readies.some(ready => ready.customData && rules(ready.customData) !== rules(first))) {
+		return popup(`That custom format was edited while you were waiting. Try again.`);
+	}
+	try {
+		const collections = readies.flatMap(ready => ready.customData || []);
+		return { ...mergeCollections(collections), format: first.format };
+	} catch (e: any) {
+		return popup(e.message);
+	}
 }
 
 /** Names only have to be unique within the battle they're used in, not across the server. */

@@ -26,7 +26,6 @@ export const RULE_LISTS = ['ruleset', 'banlist', 'unbanlist'] as const;
 const MAX_NAME_LENGTH = 50;
 /** A roster is `-All Pokemon` plus a `+Species` each, so this caps how many a format may allow. */
 const MAX_RULES = 500;
-export const MAX_NOTES_LENGTH = 500;
 
 export type FormatComposition = Pick<CustomFormatRow, 'name' | 'mod' | 'base' | 'ruleset' | 'banlist' | 'unbanlist'>;
 
@@ -63,10 +62,7 @@ export function normalizeFormatData(input: AnyObject, opts: {
 	return normalized;
 }
 
-/**
- * `All Pokemon` has to precede every other Pokemon rule, tag bans included, and the sim only
- * reads it from the ruleset. Which list an owner picked it in is ours to fix, not theirs.
- */
+/** `All Pokemon` has to lead the ruleset, whichever list its owner wrote it in. */
 function orderRules(normalized: NormalizedFormat, dex?: ModdedDex) {
 	const isAll = (rule: string, prefix: string) => {
 		try {
@@ -104,9 +100,7 @@ function validateName(input: unknown, opts: { otherNames: Map<ID, string>, owner
 	if (Dex.formats.get(id).exists) {
 		err(`"${name}" is already the name of a real format. Pick a different one.`);
 	}
-	// The in-play id loses the separators, so owner "g" plus "ame" is `customgame`, which would
-	// shadow the real format: `Dex.formats.get` reads the ruleset cache before aliases. An id
-	// already cached is this format in play, not a real one to collide with.
+	// the in-play id loses the separators, so owner "g" plus "ame" would shadow `customgame`
 	const inPlayId = toID(customFormatId(opts.ownerid, id));
 	if (!Dex.formats.rulesetCache.has(inPlayId) && Dex.formats.get(inPlayId).exists) {
 		err(`"${name}" would play under the id "${inPlayId}", which is a real format. Pick a different one.`);
@@ -119,12 +113,8 @@ function validateName(input: unknown, opts: { otherNames: Map<ID, string>, owner
 const NO_OP_RULE =
 	/^(?:Rule ".+?" (?:did nothing|in ".*" already exists)|Multiple ".+?" rules|".+?" rule has no effect)/;
 
-/**
- * Drops rules that have stopped doing anything rather than refusing them: the base is the
- * owner's to change, and one stale entry would otherwise fail every later edit. A real
- * contradiction is still reported.
- */
-export function resolveRuleset(format: NormalizedFormat, dex?: ModdedDex) {
+/** Drops rules gone no-op rather than refusing them, since the base is the owner's to change. */
+export function resolveRuleset(format: FormatComposition, dex?: ModdedDex) {
 	const fail = (e: any) => err(`Those rules don't work together: ${e.message}`);
 	try {
 		checkFormat(format, dex);
@@ -150,10 +140,7 @@ export function resolveRuleset(format: NormalizedFormat, dex?: ModdedDex) {
 	return ruleset;
 }
 
-/**
- * The rules a base format hands a new custom format, copied one level deep so its owner can
- * delete any of them. Code hooks and `restricted` don't come along.
- */
+/** A base format's rules, copied one level deep so its owner can delete any of them. */
 export function baseSnapshot(base: unknown) {
 	const format = Dex.formats.get(typeof base === 'string' ? base : '');
 	if (!format.exists || format.effectType !== 'Format') return null;

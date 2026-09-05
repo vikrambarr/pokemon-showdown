@@ -63,10 +63,10 @@ describe('Custom formats', () => {
 			assert.equal(format.mod, Dex.formats.get('gen9ou').mod);
 		});
 
-		it('should unban custom species unless the format bans them itself', () => {
-			assert(toFormatData(normalize({ name: 'X', base: '[Gen 9] OU' })).unbanlist.includes('tag:custom'));
-			const banned = toFormatData(normalize({ name: 'X', base: '[Gen 9] OU', banlist: ['tag:custom'] }));
-			assert(!banned.unbanlist.includes('tag:custom'));
+		it('should need no rule of its own to allow custom species', () => {
+			const format = toFormatData(normalize({ name: 'X', base: '[Gen 9] OU' }));
+			const rules = [...format.ruleset, ...format.banlist, ...format.unbanlist];
+			assert(!rules.some(rule => toID(rule) === 'tagcustom'));
 		});
 	});
 

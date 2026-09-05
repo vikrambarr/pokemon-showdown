@@ -775,12 +775,34 @@ exports.grouplist = [
 ];
 
 /**
- * Custom Pokemon and formats - user-authored species and formats
- *   Both need `usepostgres` above. custompokemon/customformats are the minimum
- *   global rank allowed to use each feature; ' ' is any user, false is off.
- *   The sprite path is a rebuildable cache; Postgres holds the bytes.
+ * custompokemon - lets users author their own Pokemon species
+ *   The minimum global rank allowed to use the feature, where ' ' is any user
+ *   and false is off. Needs `usepostgres` set.
+ *
+ * @type {GroupSymbol | false}
  */
 exports.custompokemon = false;
+
+/**
+ * customformats - lets users author their own battle formats
+ *   As above, and independent of it.
+ *
+ * @type {GroupSymbol | false}
+ */
 exports.customformats = false;
+
+/**
+ * custompokemonmaxbst - the highest base stat total a custom Pokemon may have
+ *   Leave unset for no limit.
+ *
+ * @type {number}
+ */
 exports.custompokemonmaxbst = 800;
+
+/**
+ * custompokemonspritepath - where custom Pokemon sprites are written
+ *   A rebuildable cache served at /sprites/custom; Postgres holds the bytes.
+ *
+ * @type {string}
+ */
 exports.custompokemonspritepath = 'custom-sprites';

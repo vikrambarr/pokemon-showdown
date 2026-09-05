@@ -86,7 +86,6 @@ export class BattleStream extends Streams.ObjectReadWriteStream<string> {
 			try {
 				this.battle = new Battle(options);
 			} catch (err) {
-				// Nothing else will ever release it: that's `Battle.destroy`'s job.
 				if (custom) releaseCustomDex(custom.dex);
 				throw err;
 			}

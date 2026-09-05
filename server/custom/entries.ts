@@ -133,3 +133,13 @@ export function parsePrivacy(context: Chat.CommandContext, input: string) {
 	if (context.meansNo(input)) return null;
 	throw new Chat.ErrorMessage(`Invalid privacy setting - use "on" or "off".`);
 }
+
+export const MAX_NOTES_LENGTH = 500;
+
+/** Freeform notes as the column stores them: text, or null once cleared. */
+export function parseNotes(notes: string) {
+	if (notes.length > MAX_NOTES_LENGTH) {
+		throw new Chat.ErrorMessage(`Notes can be at most ${MAX_NOTES_LENGTH} characters.`);
+	}
+	return notes || null;
+}

@@ -1,8 +1,8 @@
 /**
  * Pixel art for user-authored Pokemon.
  *
- * Postgres holds the bytes; the served directory is a write-through cache. Files are named
- * by the sha256 of their contents, so a URL is immutable.
+ * Postgres holds the bytes; the served directory is a write-through cache, named by
+ * the sha256 of each file's contents so that a URL is immutable.
  */
 import * as crypto from 'crypto';
 import { FS } from '../../../lib';
@@ -25,7 +25,7 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
 /** Bind-mounted into the web container's docroot at play.pokemonshowdown.com/sprites/custom. */
 const spriteDir = () => Config.custompokemonspritepath || 'custom-sprites';
 
-export const cachePath = (sha: string) => `${spriteDir()}/${sha}.png`;
+const cachePath = (sha: string) => `${spriteDir()}/${sha}.png`;
 
 export function spriteURL(sha: string) {
 	return `https://${Config.routes?.client || 'play.pokemonshowdown.com'}/sprites/custom/${sha}.png`;
@@ -42,13 +42,13 @@ export function normalizeKind(input: string) {
 }
 
 /** Width and height from the IHDR chunk, which the PNG spec requires to come first. */
-export function readPNGDimensions(data: Buffer) {
+function readPNGDimensions(data: Buffer) {
 	if (data.length < 24 || !data.subarray(0, 8).equals(PNG_MAGIC)) return null;
 	if (data.subarray(12, 16).toString('latin1') !== 'IHDR') return null;
 	return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
 }
 
-export function decodeUpload(kind: string, input: string) {
+function decodeUpload(kind: string, input: string) {
 	// A client file picker hands back a data URI, so accept one as-is.
 	const base64 = input.trim().replace(/^data:image\/png;base64,/, '').replace(/\s+/g, '');
 	if (!base64) throw new Chat.ErrorMessage(`No image data provided.`);
@@ -81,7 +81,7 @@ export function decodeUpload(kind: string, input: string) {
 }
 
 /** Writes the file if it isn't already there. Never throws: Postgres still has the bytes. */
-export async function writeThrough(sha: string, data: Buffer) {
+async function writeThrough(sha: string, data: Buffer) {
 	const path = FS(cachePath(sha));
 	try {
 		if (path.existsSync()) return false;

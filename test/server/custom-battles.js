@@ -47,13 +47,13 @@ describe('Custom battles', () => {
 	describe('team validation', () => {
 		it('should accept a custom species in a custom format', async () => {
 			const customData = battleData({ name: 'Custom OU', base: '[Gen 9] OU' });
-			const result = await TeamValidatorAsync.get('custom-someone-customou').validateTeam(TEAM, { customData });
+			const result = await TeamValidatorAsync.get('custom-someone-customou').validateTeam(TEAM, {}, customData);
 			assert.equal(result.charAt(0), '1', result.slice(1));
 		});
 
 		it('should reject a custom species when the format bans them', async () => {
 			const customData = battleData({ name: 'Clean OU', base: '[Gen 9] OU', banlist: ['tag:custom'] });
-			const result = await TeamValidatorAsync.get('custom-someone-cleanou').validateTeam(TEAM, { customData });
+			const result = await TeamValidatorAsync.get('custom-someone-cleanou').validateTeam(TEAM, {}, customData);
 			assert.equal(result.charAt(0), '0');
 			assert(result.includes('Testmon'));
 		});

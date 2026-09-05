@@ -6,14 +6,13 @@ import { Utils } from '../../lib';
 import * as database from '../custom/formats/database';
 import * as store from '../custom/entries';
 import {
-	baseSnapshot, checkFormat, MAX_NOTES_LENGTH, normalizeFormatData, resolveRuleset, RULE_LISTS,
+	baseSnapshot, checkFormat, type FormatComposition, normalizeFormatData, resolveRuleset, RULE_LISTS,
 	rulesetCatalogue, toExportJSON, toFormatData,
 } from '../custom/formats/validator';
 import { TeamValidator } from '../../sim/team-validator';
 import { buildCustomDex, releaseCustomDex } from '../../sim/dex-custom';
 import {
-	collectionSprites, type CustomBattleData, formatSummary, parseCustomFormat, resolveBattleData, resolveCollection,
-	resolveFormatRef,
+	collectionSprites, formatSummary, parseCustomFormat, resolveBattleData, resolveCollection, resolveFormatRef,
 } from '../custom/dex';
 
 import { type CustomFormatRow, MAX_CUSTOM_FORMATS } from '../custom/formats/database';
@@ -175,22 +174,15 @@ function pickerRule(rule: string, dex: ModdedDex) {
 	}
 }
 
-/**
- * Formes no teambuilder offers, mirroring the client's own tier tables. `battleOnly` is the
- * wrong test - Zacian-Crowned and every mega set it and are buildable - and no dex flag separates them.
- */
-const UNBUILDABLE_BASES = [
-	'Aegislash', 'Castform', 'Cherrim', 'Cramorant', 'Eiscue', 'Meloetta', 'Mimikyu', 'Minior',
-	'Morpeko', 'Ramnarok', 'Wishiwashi',
-];
+/** Formes no teambuilder offers. Zacian-Crowned and the megas are battle-only but buildable. */
 function unbuildableForme(species: Species) {
-	if (!species.forme) return false;
-	return UNBUILDABLE_BASES.includes(species.baseSpecies) || species.forme.includes('Totem') ||
-		species.forme.includes('Zen') || (species.baseSpecies === 'Ogerpon' && species.forme.includes('Tera'));
+	if (species.forme.includes('Totem')) return true;
+	if (species.baseSpecies === 'Ogerpon' && species.forme.includes('Tera')) return true;
+	return !!species.battleOnly && !species.requiredItem && !species.requiredItems;
 }
 
 /** Which species a format allows, via the same `checkSpecies` call `validateSet` makes. */
-function legalRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex): Roster {
+function legalRoster(row: FormatComposition, dex: ModdedDex): Roster {
 	// only the base Dex can resolve a format's mod, so name the custom dex rather than pass it
 	const format = new Dex.Format({ ...toFormatData(row), mod: dex.currentMod });
 	const validator = new TeamValidator(format);
@@ -221,7 +213,7 @@ function legalRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex): R
 }
 
 /** Which rules the format switches off. A `!` rule never reaches the rule table, so walk instead. */
-function repealedRules(row: Parameters<typeof toFormatData>[0]) {
+function repealedRules(row: FormatComposition) {
 	const repealed: { [ruleid: string]: string } = {};
 	const walk = (format: Format, depth: number) => {
 		if (depth > 8) return;
@@ -239,12 +231,9 @@ function repealedRules(row: Parameters<typeof toFormatData>[0]) {
 	return repealed;
 }
 
-/**
- * Active rules the format can't switch off, and why: `[Gen 9] OU` repeals `Sleep Clause Mod`
- * from inside `Standard`, so repealing `Standard` leaves that repeal with nothing to do.
- */
+/** Active rules the format can't switch off, and why: a repeal left with nothing to repeal throws. */
 function lockedRules(
-	row: Parameters<typeof toFormatData>[0], dex: ModdedDex, active: string[],
+	row: FormatComposition, dex: ModdedDex, active: string[],
 	repealed: { [ruleid: string]: string }
 ) {
 	const locked: { [ruleid: string]: string } = {};
@@ -257,9 +246,8 @@ function lockedRules(
 			row.ruleset.filter(existing => !named(existing, id)) :
 			[...row.ruleset, `!${rule.name}`];
 		try {
-			const edited = { ...row, ruleset } as Parameters<typeof resolveRuleset>[0];
-			// `resolveRuleset` rebuilds the rule table once per rule, up to MAX_RULES times;
-			// a composition that builds first time needs none of that, and most do
+			const edited = { ...row, ruleset };
+			// `resolveRuleset` rebuilds the rule table once per rule; most compositions build first time
 			try {
 				checkFormat(edited, dex);
 			} catch {
@@ -279,7 +267,7 @@ function lockedRules(
 }
 
 /** Tags the format bans, plus anything in its lists no picker or chip covers, so nothing is invisible. */
-function banRules(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) {
+function banRules(row: FormatComposition, dex: ModdedDex) {
 	const bans: { tags: { [tagid: string]: 'banned' | 'restricted' | 'unbanned' }, other: string[] } = {
 		tags: {}, other: [],
 	};
@@ -306,11 +294,8 @@ function banRules(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) {
 	return bans;
 }
 
-/**
- * What "reset" goes back to: this format's own rules with everything the pickers wrote dropped,
- * `-All X` included, since an allowlist is spelled with one.
- */
-function defaultRoster(row: Parameters<typeof toFormatData>[0], dex: ModdedDex) {
+/** What "reset" goes back to: this format's rules with everything the pickers wrote dropped. */
+function defaultRoster(row: FormatComposition, dex: ModdedDex) {
 	const kept = (rule: string) => !pickerRule(rule, dex);
 	return legalRoster({
 		...row,
@@ -439,35 +424,28 @@ export async function editFormat(user: User, name: string, changes: AnyObject) {
 }
 
 export const commands: Chat.ChatCommands = {
-	// Overrides core's vtm: a custom format's id resolves through no global Dex.formats entry.
+	// core's /vtm, plus custom formats: they resolve through no global Dex.formats entry.
 	async vtm(target, room, user, connection) {
-		if (Monitor.countPrepBattle(connection.ip, connection)) return;
+		if (Monitor.countPrepBattle(connection.ip, connection)) {
+			return;
+		}
 		if (!target) throw new Chat.ErrorMessage(this.TL`Provide a valid format.`);
 		const customRef = await resolveFormatRef(target);
-		let format: Format;
-		let customData: CustomBattleData | null = null;
-		let notFound = '';
-		if (customRef) {
-			customData = await resolveBattleData(customRef, user.id);
-			format = Dex.formats.get(customRef.id);
-		} else {
-			const originalFormat = Dex.formats.get(target);
-			format = originalFormat.effectType === 'Format' ? originalFormat : Dex.formats.get('Anything Goes');
-			if (format.effectType !== 'Format') return this.popupReply(this.TL`Please provide a valid format.`);
-			if (originalFormat !== format) notFound = this.TL`The format '${originalFormat.name}' was not found.`;
-		}
-		const result = await TeamValidatorAsync.get(format.id)
-			.validateTeam(user.battleSettings.team, { user: user.id, customData });
-		// a custom format has no global Dex entry, so `format.name` is its internal id
-		const shown = customData?.format.name || format.name;
-		if (result.startsWith('1')) {
-			connection.popup(`${notFound ? notFound + "\n\n" : ""}${this.TL`Your team is valid for ${shown}.`}`);
-		} else {
-			connection.popup(
-				`${notFound ? notFound + "\n\n" : ""}${this.TL`Your team was rejected for the following reasons:`}` +
-				`\n\n- ${result.slice(1).replace(/\n/g, '\n- ')}`
-			);
-		}
+		const customData = customRef ? await resolveBattleData(customRef, user.id) : null;
+		const originalFormat = customData ? new Dex.Format(customData.format) : Dex.formats.get(target);
+		// Note: The default here of Anything Goes isn't normally hit; since the web client will send a default format
+		const format = originalFormat.effectType === 'Format' ? originalFormat : Dex.formats.get('Anything Goes');
+		if (format.effectType !== 'Format') return this.popupReply(this.TL`Please provide a valid format.`);
+
+		const validator = TeamValidatorAsync.get(format.id);
+		return validator.validateTeam(user.battleSettings.team, { user: user.id }, customData).then(result => {
+			const matchMessage = (originalFormat === format ? "" : this.TL`The format '${originalFormat.name}' was not found.`);
+			if (result.startsWith('1')) {
+				connection.popup(`${(matchMessage ? matchMessage + "\n\n" : "")}${this.TL`Your team is valid for ${format.name}.`}`);
+			} else {
+				connection.popup(`${(matchMessage ? matchMessage + "\n\n" : "")}${this.TL`Your team was rejected for the following reasons:`}\n\n- ${result.slice(1).replace(/\n/g, '\n- ')}`);
+			}
+		});
 	},
 	vtmhelp: [`/vtm [format] - Validates your current team (set with /utm).`],
 
@@ -587,11 +565,8 @@ export const commands: Chat.ChatCommands = {
 		async notes(target, room, user) {
 			validateAccess(user);
 			const [name, notes] = store.parts(target);
-			if (notes.length > MAX_NOTES_LENGTH) {
-				throw new Chat.ErrorMessage(`Notes can be at most ${MAX_NOTES_LENGTH} characters.`);
-			}
 			const row = await getOwn(user, name);
-			await database.update(row.entryid, { notes: notes || null });
+			await database.update(row.entryid, { notes: store.parseNotes(notes) });
 			return this.sendReply(notes ? `Set the notes on "${row.name}".` : `Cleared the notes on "${row.name}".`);
 		},
 

@@ -57,14 +57,13 @@ export class TeamValidatorAsync {
 		this.format = Dex.formats.get(format);
 	}
 
-	validateTeam(team: string, options?: { removeNicknames?: boolean, user?: ID, customData?: CustomDexPayload | null }) {
+	validateTeam(team: string, options?: { removeNicknames?: boolean, user?: ID }, customData?: CustomDexPayload | null) {
 		let formatid = this.format.id;
 		if (this.format.customRules) formatid += '@@@' + this.format.customRules.join(',');
 		if (team.length > (25 * 1024 - 6)) { // don't even let it go to the child process
 			return Promise.resolve('0Your team is over 25KB. Please use a smaller team.');
 		}
-		const { customData, ...rest } = options || {};
-		return PM.query({ formatid, options: rest, team, customData: customData || undefined });
+		return PM.query({ formatid, options, team, customData: customData || undefined });
 	}
 
 	static get(this: void, format: string) {

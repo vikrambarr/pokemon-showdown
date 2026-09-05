@@ -19,7 +19,7 @@ import type { ChallengeType } from './room-battle';
 import type { CustomDexPayload } from '../sim/dex-custom';
 import { BattleReady, BattleChallenge, GameChallenge, BattleInvite, challenges } from './ladders-challenges';
 import {
-	type CustomBattleData, customFormat, mergeCollections, resolveBattleData, resolveFormatRef, toBattleData,
+	type CustomBattleData, customFormat, mergeReadies, resolveBattleData, resolveFormatRef, toBattleData,
 } from './custom/dex';
 
 /**
@@ -71,14 +71,12 @@ class Ladder extends LadderStore {
 		let customData: CustomBattleData | null = null;
 		if (customRef) isRated = false;
 		try {
-			if (!customRef) {
-				this.formatid = Dex.formats.validate(this.formatid);
-			} else {
-				// Joining a running battle means playing under its payload: its dex was built at start.
+			if (customRef) {
+				// joining a running battle means playing under its payload, whose dex was built at start
 				customData = joining ? toBattleData(joining) : await resolveBattleData(customRef, user.id);
 				if (!customData) throw new Chat.ErrorMessage(`That battle isn't running a custom format.`);
-				this.formatid = customRef.id;
 			}
+			this.formatid = customRef ? customRef.id : Dex.formats.validate(this.formatid);
 		} catch (e: any) {
 			connection.popup(`Your selected format is invalid:\n\n- ${e.message}`);
 			return null;
@@ -125,7 +123,7 @@ class Ladder extends LadderStore {
 		if (isRated && !Ladders.disabled) {
 			const uid = user.id;
 			[valResult, rating] = await Promise.all([
-				TeamValidatorAsync.get(this.formatid).validateTeam(team, { removeNicknames, user: uid, customData }),
+				TeamValidatorAsync.get(this.formatid).validateTeam(team, { removeNicknames, user: uid }, customData),
 				this.getRating(uid),
 			]);
 			if (uid !== user.id) {
@@ -139,7 +137,7 @@ class Ladder extends LadderStore {
 				rating = 1;
 			}
 			const validator = TeamValidatorAsync.get(this.formatid);
-			valResult = await validator.validateTeam(team, { removeNicknames, user: user.id, customData });
+			valResult = await validator.validateTeam(team, { removeNicknames, user: user.id }, customData);
 		}
 
 		if (!valResult.startsWith('1')) {
@@ -488,23 +486,8 @@ class Ladder extends LadderStore {
 		}
 		let customData = readies[0].customData;
 		if (customData) {
-			// Each side resolved the format when it readied, so an edit in between would run the
-			// battle under one player's copy of the rules while the other's team was validated
-			// against the other's.
-			const rules = (data: CustomBattleData) => JSON.stringify(data.format);
-			if (readies.some(ready => ready.customData && rules(ready.customData) !== rules(customData!))) {
-				for (const ready of readies) {
-					Users.get(ready.userid)?.popup(`That custom format was edited while you were waiting. Try again.`);
-				}
-				return undefined;
-			}
-			const collections = readies.flatMap(ready => ready.customData || []);
-			try {
-				customData = { ...mergeCollections(collections), format: customData.format };
-			} catch (e: any) {
-				for (const ready of readies) Users.get(ready.userid)?.popup(e.message);
-				return undefined;
-			}
+			customData = mergeReadies(readies);
+			if (!customData) return undefined;
 		}
 		const options = { customData: customData || undefined };
 		const format = customFormat(options) || Dex.formats.get(formatid);

@@ -7,7 +7,7 @@ import * as database from '../custom/species/database';
 import * as sprites from '../custom/species/sprites';
 import * as store from '../custom/entries';
 import {
-	bst, MAX_NOTES_LENGTH, normalizeLearnset, normalizeMoveSources, normalizeSpeciesData,
+	bst, fromDex, normalizeLearnset, normalizeMoveSources, normalizeSpeciesData,
 	resolveLearnset, resolveSpecies, STATS, toExportJSON,
 } from '../custom/species/validator';
 
@@ -164,12 +164,6 @@ function details(row: CustomSpeciesRow) {
 	return `${buf}</p>`;
 }
 
-function fromDex(table: { get: (name: string) => AnyObject }, name: string, what: string) {
-	const entry = table.get(name);
-	if (!entry.exists) throw new Chat.ErrorMessage(`"${name}" isn't ${what}.`);
-	return entry;
-}
-
 const kb = (bytes: number) => Math.round(bytes / 102.4) / 10;
 
 export const commands: Chat.ChatCommands = {
@@ -264,7 +258,7 @@ export const commands: Chat.ChatCommands = {
 					throw new Chat.ErrorMessage(`Usage: /custompokemon learnset add [name], [move], [source]`);
 				}
 				const row = await getOwn(user, name);
-				const move = fromDex(Dex.moves, moveName, 'a move');
+				const move = fromDex(Dex.moves, moveName, 'move');
 				// Default source: level 1 in the current generation.
 				const sources = normalizeMoveSources(rawSource || `${Dex.gen}L1`, move.name);
 				const learnset = { ...row.learnset, [move.id]: sources };
@@ -279,7 +273,7 @@ export const commands: Chat.ChatCommands = {
 					throw new Chat.ErrorMessage(`Usage: /custompokemon learnset remove [name], [move]`);
 				}
 				const row = await getOwn(user, name);
-				const move = fromDex(Dex.moves, moveName, 'a move');
+				const move = fromDex(Dex.moves, moveName, 'move');
 				if (!row.learnset[move.id]) throw new Chat.ErrorMessage(`${row.name} doesn't learn ${move.name}.`);
 				const learnset = { ...row.learnset };
 				delete learnset[move.id];
@@ -295,10 +289,7 @@ export const commands: Chat.ChatCommands = {
 			validateAccess(user);
 			const [name, notes] = store.parts(target);
 			const row = await getOwn(user, name);
-			if (notes.length > MAX_NOTES_LENGTH) {
-				throw new Chat.ErrorMessage(`Notes can be at most ${MAX_NOTES_LENGTH} characters.`);
-			}
-			await database.update(row.entryid, { notes: notes || null });
+			await database.update(row.entryid, { notes: store.parseNotes(notes) });
 			return this.sendReply(notes ? `Notes updated for "${row.name}".` : `Notes cleared for "${row.name}".`);
 		},
 
@@ -325,9 +316,9 @@ export const commands: Chat.ChatCommands = {
 				if (!rawValue) continue;
 				switch (toID(rawKey)) {
 				case 'owner': filters.owner = toID(rawValue); break;
-				case 'type': filters.type = fromDex(Dex.types, rawValue, 'a type').name; break;
-				case 'ability': filters.ability = fromDex(Dex.abilities, rawValue, 'an ability').name; break;
-				case 'move': filters.move = fromDex(Dex.moves, rawValue, 'a move').id; break;
+				case 'type': filters.type = fromDex(Dex.types, rawValue, 'type').name; break;
+				case 'ability': filters.ability = fromDex(Dex.abilities, rawValue, 'ability').name; break;
+				case 'move': filters.move = fromDex(Dex.moves, rawValue, 'move').id; break;
 				case 'minbst': filters.minbst = Number(rawValue); break;
 				case 'maxbst': filters.maxbst = Number(rawValue); break;
 				default:
@@ -417,9 +408,5 @@ export const commands: Chat.ChatCommands = {
 
 export function start() {
 	void database.connect();
-	// JSON and base64 payloads both run past one line in the client's chat box.
-	Chat.multiLinePattern.register(
-		'/custompokemon create ', '/custompokemon check ', '/custompokemon edit ', '/custompokemon setsprite ',
-		'/custommon create ', '/custommon check ', '/custommon edit ', '/custommon setsprite '
-	);
+	Chat.multiLinePattern.register('/custom(mon|pokemon) (create|check|edit|setsprite) ');
 }
