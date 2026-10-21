@@ -8,21 +8,24 @@
  */
 
 import { TeamValidator } from '../sim/team-validator';
+import { buildDex, buildFormat, releaseDex, type DexData } from '../sim/dex-custom';
 import * as ConfigLoader from './config-loader';
+import { battleData } from './dexes';
 
 export const PM = new QueryProcessManager<{
-	formatid: string, options?: { removeNicknames?: boolean }, team: string,
+	formatid: string, options?: { removeNicknames?: boolean }, team: string, dex?: DexData,
 }>('team-validator', module, message => {
-	const { formatid, options, team } = message;
+	const { formatid, options, team, dex } = message;
 	const parsedTeam = Teams.unpack(team);
 
 	if (Config.debugvalidatorprocesses && process.send) {
 		process.send('DEBUG\n' + JSON.stringify(message));
 	}
 
+	const format = dex ? buildFormat(buildDex(dex), dex.format!) : formatid;
 	let problems;
 	try {
-		problems = TeamValidator.get(formatid).validateTeam(parsedTeam, options);
+		problems = TeamValidator.get(format).validateTeam(parsedTeam, options);
 	} catch (err) {
 		Monitor.crashlog(err, 'A team validation', {
 			formatid,
@@ -33,6 +36,7 @@ export const PM = new QueryProcessManager<{
 			` but if you don't want to wait, just use a different team for now.`,
 		];
 	}
+	if (typeof format !== 'string') releaseDex(Dex.mod(format.mod));
 
 	if (problems?.length) {
 		return '0' + problems.join('\n');
@@ -58,7 +62,7 @@ export class TeamValidatorAsync {
 		if (team.length > (25 * 1024 - 6)) { // don't even let it go to the child process
 			return Promise.resolve('0Your team is over 25KB. Please use a smaller team.');
 		}
-		return PM.query({ formatid, options, team });
+		return PM.query({ formatid, options, team, dex: battleData(this.format.id) });
 	}
 
 	static get(this: void, format: string) {
