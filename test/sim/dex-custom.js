@@ -115,4 +115,27 @@ describe('Custom dexes', () => {
 		releaseDex(ignored);
 		releaseDex(stale);
 	});
+
+	it('should move stat handlers to other stats', () => {
+		const dex = buildDex({
+			...DATA, hash: 'simevents', effects: {
+				Items: {
+					choicescarf: { data: {}, events: { onModifySpe: 'onModifyAtk' } },
+					eviolite: { data: {}, events: { onModifyDef: 'onModifySpD', onModifySpD: 'onModifyDef' } },
+				},
+			},
+		});
+		const scarf = dex.items.get('choicescarf');
+		assert.equal(scarf.onModifySpe, undefined);
+		assert.equal(scarf.onModifyAtk, Dex.data.Items.choicescarf.onModifySpe);
+		const eviolite = dex.items.get('eviolite');
+		assert.equal(eviolite.onModifyDef, Dex.data.Items.eviolite.onModifySpD);
+		assert.equal(eviolite.onModifySpDPriority, Dex.data.Items.eviolite.onModifyDefPriority);
+		releaseDex(dex);
+
+		const clash = { Items: { eviolite: { data: {}, events: { onModifyDef: 'onModifySpD' } } } };
+		assert.throws(() => buildDex({ ...DATA, hash: 'simclash', effects: clash }), /already has its own handler/);
+		const blaze = { Abilities: { blaze: { data: {}, events: { onModifyAtk: 'onModifySpe' } } } };
+		assert.throws(() => buildDex({ ...DATA, hash: 'simblaze', effects: blaze }), /can't become onModifySpe/);
+	});
 });

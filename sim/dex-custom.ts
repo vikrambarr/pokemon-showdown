@@ -1,7 +1,9 @@
 import { Dex, toID, type DexTable, type ModdedDex } from './dex';
 import type { Format, FormatData } from './dex-formats';
 import type { LearnsetData, SpeciesData, SpeciesFormatsData } from './dex-species';
-import { checkSlot, compileHandler, handlersOf, parseHandler, render } from './dex-handlers';
+import {
+	checkSlot, compileHandler, eventTargets, EVENT_SUFFIXES, handlersOf, parseHandler, render,
+} from './dex-handlers';
 
 export const EFFECT_TABLES = ['Moves', 'Abilities', 'Items', 'Conditions'] as const;
 export type EffectTable = typeof EFFECT_TABLES[number];
@@ -10,6 +12,7 @@ export interface EffectEdit {
 	inherit?: string;
 	data: AnyObject;
 	slots?: { [path: string]: { [index: string]: [string | number, string | number] } };
+	events?: { [path: string]: string };
 }
 
 export interface DexData {
@@ -95,6 +98,40 @@ function replaceAt(effect: AnyObject, path: string, fn: Function, compiled: Func
 	if (effect?.[last] === fn) effect[last] = compiled;
 }
 
+export function moveEvents(effect: AnyObject, base: AnyObject, events: { [path: string]: string }) {
+	const moves = new Map<AnyObject, [string, string][]>();
+	for (const path of Object.keys(events)) {
+		const keys = path.split('.');
+		const key = keys.pop()!;
+		let owner: AnyObject | undefined = effect;
+		let original: AnyObject | undefined = base;
+		for (const segment of keys) {
+			owner = owner?.[segment];
+			original = original?.[segment];
+		}
+		const fn = original?.[key];
+		if (!owner || typeof fn !== 'function' || typeof owner[key] !== 'function') continue;
+		if (!eventTargets(key, fn).includes(events[path])) {
+			throw new Error(`${path} can't become ${events[path]}: it can be ${eventTargets(key, fn).join(', ') || 'nothing else'}.`);
+		}
+		if (!moves.has(owner)) moves.set(owner, []);
+		moves.get(owner)!.push([key, events[path]]);
+	}
+	for (const [owner, pairs] of moves) {
+		const moved: AnyObject = {};
+		for (const [from, to] of pairs) {
+			for (const suffix of ['', ...EVENT_SUFFIXES]) {
+				if (owner[from + suffix] !== undefined) moved[to + suffix] = owner[from + suffix];
+				delete owner[from + suffix];
+			}
+		}
+		for (const [, to] of pairs) {
+			if (typeof owner[to] === 'function') throw new Error(`${to} already has its own handler.`);
+		}
+		for (const key of Object.keys(moved)) owner[key] = moved[key];
+	}
+}
+
 function resolveEffects(parent: ModdedDex, effects: NonNullable<DexData['effects']>, data: AnyObject) {
 	const resolved: [EffectTable, string, AnyObject, EffectEdit][] = [];
 	for (const table of EFFECT_TABLES) {
@@ -135,6 +172,7 @@ function resolveEffects(parent: ModdedDex, effects: NonNullable<DexData['effects
 			}
 			if (replacements.length) replaceAt(effect, path, fn, compileHandler(handler, replacements));
 		}
+		if (base && isObject(edit.events)) moveEvents(effect, base, edit.events);
 	}
 }
 

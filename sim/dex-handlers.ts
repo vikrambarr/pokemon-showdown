@@ -27,6 +27,8 @@ export const BOOSTS = ['atk', 'def', 'spa', 'spd', 'spe', 'accuracy', 'evasion']
 export const STATUSES = ['brn', 'par', 'slp', 'frz', 'psn', 'tox'];
 export const CATEGORIES = ['Physical', 'Special', 'Status'];
 export const MESSAGE = /^(?:\[(?:from|of)\] )?(?:move|ability|item): /;
+export const STAT_EVENT = /^on(|Source|Ally|Foe|Any)Modify(Atk|SpA|Def|SpD|Spe)$/;
+export const EVENT_SUFFIXES = ['Priority', 'Order', 'SubOrder'];
 
 const PROTOCOL = ['add', 'addMove', 'addSplit', 'attrLastMove', 'debug', 'hint', 'retargetLastMove'];
 const parsed = new WeakMap<AnyObject, WeakMap<Function, Handler | null>>();
@@ -193,6 +195,14 @@ export function handlersOf(effect: AnyObject, path = '', found: [string, Functio
 		}
 	}
 	return found;
+}
+
+export function eventTargets(key: string, fn: Function) {
+	const match = STAT_EVENT.exec(key);
+	if (!match) return [];
+	const [, prefix, stat] = match;
+	const stats = ['Atk', 'SpA', 'Def', 'SpD', ...(fn.length <= 2 && prefix !== 'Source' ? ['Spe'] : [])];
+	return stats.filter(other => other !== stat).map(other => `on${prefix}Modify${other}`);
 }
 
 export function checkSlot(slot: Slot, value: unknown, data: AnyObject): string | number {
