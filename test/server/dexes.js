@@ -24,10 +24,11 @@ const team = species => Teams.pack([{
 }]);
 
 describe('Dexes', () => {
-	let owner, editor, usepostgres;
+	let owner, editor, usepostgres, request;
 
 	before(async function () {
 		if (!Config.usepostgres) return this.skip();
+		request = LoginServer.request;
 		usepostgres = Config.usepostgres;
 		Config.usepostgres = { ...usepostgres, options: '-c search_path=dexes_test' };
 		Config.dexes = ' ';
@@ -45,6 +46,7 @@ describe('Dexes', () => {
 	});
 
 	after(() => {
+		if (request) LoginServer.request = request;
 		if (usepostgres) Config.usepostgres = usepostgres;
 		owner?.destroy();
 		editor?.destroy();
@@ -104,16 +106,19 @@ describe('Dexes', () => {
 	});
 
 	it('should keep sprites by their contents', async () => {
-		const loaded = await Dexes.setSprite(Dexes.getDex('mochadex'), 'Voltlet', 'front', png(96, 96));
-		const sha = loaded.entries.get('voltlet').sprites.front;
-		assert.match(sha, /^[0-9a-f]{64}$/);
+		const loaded = await Dexes.setSprite(owner, Dexes.getDex('mochadex'), 'Voltlet', 'front', png(96, 96));
+		const image = loaded.uploads.get(loaded.entries.get('voltlet').sprites.front);
+		assert.match(image.sha, /^[0-9a-f]{64}$/);
+		assert.equal(image.accountid, OWNER);
+		assert.equal(image.dexname, 'Mocha Dex');
 		const row = await Dexes.database().queryOne(require('../../dist/lib/database').SQL`
-			SELECT width FROM dex_sprites WHERE sha = ${sha}
+			SELECT width FROM dex_sprites WHERE sha = ${image.sha}
 		`);
 		assert.equal(row.width, 96);
-		assert.deepEqual(Dexes.clientData(loaded).sprites.voltlet, { front: sha });
-		await assert.rejects(Dexes.setSprite(loaded, 'Voltlet', 'icon', png(96, 96)), /must be 40x30/);
-		await assert.rejects(Dexes.setSprite(loaded, 'Voltlet', 'front', 'bm90IGEgcG5n'), /PNG/);
+		assert.deepEqual(Dexes.clientData(loaded).sprites.voltlet, { front: image.sha });
+		assert.equal(Dexes.clientData(loaded).credits[image.sha].uploader, 'Dex Owner');
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'icon', png(96, 96)), /must be 40x30/);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'front', 'bm90IGEgcG5n'), /PNG/);
 	});
 
 	it('should make and edit moves, abilities and items, including values in their code', async () => {
@@ -152,6 +157,13 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', replace: [['Grass', 'Fire']] }), /Nothing/);
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', type: null }), /can't be removed/);
 
+		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Choice Scarf', events: { onModifySpe: 'atk' } }));
+		assert.equal(loaded.dex.items.get('Choice Scarf').onModifySpe, undefined);
+		assert(Dexes.effectEditor(loaded, 'Items', 'Choice Scarf').data.shortDesc.startsWith(`Holder's Attack is 1.5×`));
+		await assert.rejects(Dexes.putEffect(loaded, 'Items', { name: 'Choice Scarf', events: { onModifySpe: 'hp' } }), /can become/);
+		({ loaded } = await Dexes.putEffect(loaded, 'Abilities', { name: 'Intimidate', slots: { 'onStart:3': -2 } }));
+		assert(loaded.dex.abilities.get('Intimidate').onStart.toString().includes('atk: (-2)'));
+
 		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltlet', learnset: { voltjab: ['9L1'], scorchsoak: ['9M'] } }));
 		const result = await TeamValidatorAsync.get('mochadexou').validateTeam(Teams.pack([{
 			species: 'Voltlet', ability: 'Static', item: 'Volt Orb', moves: ['voltjab', 'scorchsoak'], evs: { hp: 4 }, nature: 'Adamant',
@@ -161,6 +173,71 @@ describe('Dexes', () => {
 		loaded = await Dexes.deleteEffect(loaded, 'Items', 'Choice Band');
 		assert(Dex.mod(loaded.data.mod).items.get('choiceband').exists);
 		assert.equal(loaded.data.effects.Items.choiceband, undefined);
+	});
+
+	it('should hide private dexes from lists and searches, but not from their exact names', async () => {
+		let loaded = Dexes.getDex('mochadex');
+		assert.deepEqual(Dexes.search('mocha', null).map(dex => dex.row.dexid), ['mochadex']);
+		loaded = await Dexes.setVisibility(loaded, 'private');
+		assert.deepEqual(Dexes.search('mocha', null), []);
+		assert.deepEqual(Dexes.search('mocha', EDITOR).map(dex => dex.row.dexid), ['mochadex']);
+		LoginServer.request = async () => [{ discordid: OWNER }];
+		assert.deepEqual(await Dexes.dexesOf('Dex Owner', null), []);
+		assert.equal((await Dexes.dexesOf('Dex Owner', OWNER)).length, 1);
+		assert.equal(Dexes.getDex('Mocha Dex').row.visibility, 'private');
+		await assert.rejects(Dexes.setVisibility(loaded, 'locked'), /public or private/);
+		await Dexes.setVisibility(loaded, 'public');
+	});
+
+	it('should import entries with what they need, and keep them up to date until they are edited', async () => {
+		let source = Dexes.getDex('mochadex');
+		let copy = await Dexes.createDex(editor, 'Copy Dex', 'gen9');
+		let result = await Dexes.importEntry(copy, source, 'Pokedex', 'Voltlet');
+		copy = result.loaded;
+		assert(result.copied.includes('Pokemon Voltlet'));
+		assert(result.copied.includes('move Volt Jab'));
+		assert(result.copied.includes('move Scorch Soak'));
+		const voltlet = copy.entries.get('voltlet');
+		assert.equal(voltlet.trackdex, 'mochadex');
+		assert.deepEqual([voltlet.origin.dex, voltlet.origin.owner], ['Mocha Dex', 'Dex Owner']);
+		assert.equal(voltlet.sprites.front, source.entries.get('voltlet').sprites.front);
+		assert(copy.dex.moves.get('Volt Jab').exists);
+
+		({ loaded: source } = await Dexes.putEntry(source, { name: 'Voltlet', types: ['Electric', 'Fairy'] }));
+		copy = Dexes.getDex('copydex');
+		assert.deepEqual(copy.data.Pokedex.voltlet.types, ['Electric', 'Fairy']);
+		({ loaded: copy } = await Dexes.putEntry(copy, { name: 'Voltlet', types: ['Electric'] }));
+		assert.equal(copy.entries.get('voltlet').trackdex, null);
+		assert.equal(copy.entries.get('voltlet').origin.dex, 'Mocha Dex');
+		await Dexes.putEntry(source, { name: 'Voltlet', types: ['Electric', 'Dragon'] });
+		assert.deepEqual(Dexes.getDex('copydex').data.Pokedex.voltlet.types, ['Electric']);
+
+		await assert.rejects(Dexes.importEntry(Dexes.getDex('copydex'), Dexes.getDex('mochadex'), 'Pokedex', 'Voltlet'), /overwrite/);
+		await assert.rejects(Dexes.importEntry(Dexes.getDex('mochadex'), Dexes.getDex('copydex'), 'Moves', 'Volt Jab', true),
+			/comes from Mocha Dex already/);
+
+		result = await Dexes.importDex(editor, 'Whole Copy', Dexes.getDex('mochadex'));
+		assert.equal(result.loaded.row.origin.dex, 'Mocha Dex');
+		assert(result.loaded.formats.has('wholecopyou'));
+		assert.equal(result.loaded.entries.get('voltlet').trackdex, 'mochadex');
+		assert.deepEqual(result.loaded.data.Pokedex.voltlet.types, ['Electric', 'Dragon']);
+
+		({ loaded: source } = await Dexes.putEffect(Dexes.getDex('mochadex'), 'Items', { name: 'Volt Orb', spriteFrom: 'Leftovers' }));
+		assert.equal(source.dex.items.get('Volt Orb').spritenum, Dex.items.get('Leftovers').spritenum);
+		assert.equal(Dexes.getDex('wholecopy').dex.items.get('Volt Orb').spritenum, Dex.items.get('Leftovers').spritenum);
+	});
+
+	it('should delete a sprite everywhere it was imported, but only for its uploader', async () => {
+		const uploadid = Dexes.getDex('mochadex').entries.get('voltlet').sprites.front;
+		await assert.rejects(Dexes.deleteSprite(editor, uploadid), /Only Dex Owner/);
+		const { uses } = await Dexes.deleteSprite(owner, uploadid);
+		assert.equal(uses, 3);
+		for (const dexid of ['mochadex', 'copydex', 'wholecopy']) {
+			assert.equal(Dexes.getDex(dexid).entries.get('voltlet').sprites.front, undefined);
+		}
+		const loaded = await Dexes.setSprite(owner, Dexes.getDex('mochadex'), 'Voltlet', 'front', png(96, 96));
+		assert(Dexes.getDex('wholecopy').entries.get('voltlet').sprites.front);
+		assert(loaded.entries.get('voltlet').sprites.front !== uploadid);
 	});
 
 	it('should save a snapshot when a battle starts, which outlives the dex', async () => {
@@ -183,7 +260,7 @@ describe('Dexes', () => {
 		}
 		assert.equal(row.data.dexid, 'mochadex');
 		assert(row.data.Pokedex.voltlet);
-		assert.equal(row.data.sprites.voltlet.front, loaded.entries.get('voltlet').sprites.front);
+		assert.equal(row.data.sprites.voltlet.front, Dexes.spriteShas(loaded, loaded.entries.get('voltlet').sprites).front);
 		const inputLog = (await room.battle.getInputLog()).join('\n');
 		assert(inputLog.includes(`"hash":"${hash}"`));
 		assert(room.battle.room.log.log.some(line => line === `|dex|${hash}`));
@@ -198,5 +275,9 @@ describe('Dexes', () => {
 			SELECT hash FROM dex_snapshots WHERE hash = ${hash}
 		`);
 		assert.equal(kept.hash, hash);
+		assert.equal(Dexes.getDex('wholecopy').entries.get('voltlet').trackdex, null);
+		assert(Dexes.getDex('wholecopy').data.Pokedex.voltlet);
+		await Dexes.deleteDex(Dexes.getDex('wholecopy'));
+		await Dexes.deleteDex(Dexes.getDex('copydex'));
 	});
 });

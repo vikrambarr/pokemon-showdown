@@ -1,6 +1,14 @@
 import type { ModdedDex } from '../../sim/dex';
 import type { LearnsetData, SpeciesData, SpeciesFormatsData } from '../../sim/dex-species';
 
+export interface Origin {
+	dexid: ID;
+	dex: string;
+	owner: string;
+	name: string;
+	from?: Origin;
+}
+
 export interface SpeciesEntry {
 	speciesid: ID;
 	num: number;
@@ -8,6 +16,9 @@ export interface SpeciesEntry {
 	data: AnyObject;
 	learnset: AnyObject;
 	sprites: { [kind: string]: string };
+	origin: Origin | null;
+	trackdex: ID | null;
+	trackid: ID | null;
 }
 
 export const MAX_LEARNSET = 500;
@@ -208,6 +219,7 @@ export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID,
 	const entry: SpeciesEntry = {
 		speciesid, num: old?.num || 0, inheritsfrom, data,
 		learnset: learnset(input.learnset, built, old?.learnset || {}), sprites: old?.sprites || {},
+		origin: old?.origin || null, trackdex: null, trackid: null,
 	};
 	const species = resolveSpecies(dex, entry);
 	for (const field of REQUIRED_FIELDS) {

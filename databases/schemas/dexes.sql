@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS dexes (
 	name TEXT NOT NULL,
 	mod TEXT NOT NULL,
 	species JSONB NOT NULL,
+	visibility TEXT NOT NULL,
+	origin JSONB,
 	created BIGINT NOT NULL,
 	updated BIGINT NOT NULL
 );
@@ -28,9 +30,14 @@ CREATE TABLE IF NOT EXISTS dex_species (
 	data JSONB NOT NULL,
 	learnset JSONB NOT NULL,
 	sprites JSONB NOT NULL,
+	origin JSONB,
+	trackdex TEXT,
+	trackid TEXT,
 	updated BIGINT NOT NULL,
 	PRIMARY KEY (dexid, speciesid)
 );
+
+CREATE INDEX IF NOT EXISTS dex_species_track ON dex_species (trackdex, trackid);
 
 CREATE TABLE IF NOT EXISTS dex_formats (
 	formatid TEXT PRIMARY KEY,
@@ -64,7 +71,27 @@ CREATE TABLE IF NOT EXISTS dex_effects (
 	inheritsfrom TEXT,
 	data JSONB NOT NULL,
 	slots JSONB NOT NULL,
+	events JSONB NOT NULL,
 	sprites JSONB NOT NULL,
+	origin JSONB,
+	trackdex TEXT,
+	trackid TEXT,
 	updated BIGINT NOT NULL,
 	PRIMARY KEY (dexid, effecttable, effectid)
 );
+
+CREATE INDEX IF NOT EXISTS dex_effects_track ON dex_effects (trackdex, effecttable, trackid);
+
+CREATE TABLE IF NOT EXISTS dex_sprite_uploads (
+	uploadid TEXT PRIMARY KEY,
+	sha TEXT NOT NULL,
+	kind TEXT NOT NULL,
+	accountid TEXT NOT NULL,
+	uploadername TEXT NOT NULL,
+	dexid TEXT NOT NULL,
+	dexname TEXT NOT NULL,
+	created BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS dex_sprite_uploads_sha ON dex_sprite_uploads (sha);
+CREATE INDEX IF NOT EXISTS dex_sprite_uploads_accountid ON dex_sprite_uploads (accountid);

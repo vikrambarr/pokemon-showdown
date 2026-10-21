@@ -11,6 +11,17 @@ export const SPRITE_KINDS: { [kind: string]: { width: number, height: number } }
 	'item': { width: 24, height: 24 },
 };
 
+export interface Upload {
+	uploadid: string;
+	sha: string;
+	kind: string;
+	accountid: string;
+	uploadername: string;
+	dexid: ID;
+	dexname: string;
+	created: number;
+}
+
 const MAX_SPRITE_BYTES = 64 * 1024;
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
 
@@ -64,6 +75,34 @@ export async function save(db: PGDatabase, image: ReturnType<typeof decode>) {
 		${image.sha}, ${image.width}, ${image.height}, decode(${image.data.toString('base64')}, 'base64'), ${Date.now()}
 	) ON CONFLICT (sha) DO NOTHING`);
 	await writeFile(image.sha, image.data);
+}
+
+export async function upload(
+	db: PGDatabase, image: ReturnType<typeof decode>, kind: string, accountid: string, name: string,
+	dex: { dexid: ID, name: string }
+) {
+	await save(db, image);
+	const uploadid = crypto.randomBytes(12).toString('hex');
+	await db.query(SQL`INSERT INTO dex_sprite_uploads
+		(uploadid, sha, kind, accountid, uploadername, dexid, dexname, created) VALUES (
+		${uploadid}, ${image.sha}, ${kind}, ${accountid}, ${name}, ${dex.dexid}, ${dex.name}, ${Date.now()}
+	)`);
+	return uploadid;
+}
+
+export async function getUploads(db: PGDatabase, ids: string[]) {
+	if (!ids.length) return new Map<string, Upload>();
+	const rows = await db.query<Upload>(SQL`SELECT * FROM dex_sprite_uploads WHERE uploadid IN (${ids})`);
+	return new Map(rows.map(row => [row.uploadid, { ...row, created: Number(row.created) }]));
+}
+
+export async function remove(db: PGDatabase, image: Upload) {
+	await db.query(SQL`DELETE FROM dex_sprite_uploads WHERE uploadid = ${image.uploadid}`);
+	const others = await db.queryOne<{ count: string }>(SQL`
+		SELECT count(*) FROM dex_sprite_uploads WHERE sha = ${image.sha}`);
+	if (Number(others?.count)) return;
+	await db.query(SQL`DELETE FROM dex_sprites WHERE sha = ${image.sha}`);
+	await FS(spritePath(image.sha)).unlinkIfExists();
 }
 
 export async function rebuild(db: PGDatabase) {

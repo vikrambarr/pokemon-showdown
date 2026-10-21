@@ -1,8 +1,10 @@
 import { FS } from '../../lib';
 import type { ModdedDex } from '../../sim/dex';
 import { baseEffect, effectSlots, type EffectEdit, type EffectTable } from '../../sim/dex-custom';
-import { classify, checkSlot, handlersOf, parseHandler, type Slot } from '../../sim/dex-handlers';
-import { validateName } from './species';
+import {
+	classify, checkSlot, eventTargets, handlersOf, parseHandler, STAT_EVENT, type Slot,
+} from '../../sim/dex-handlers';
+import { validateName, type Origin } from './species';
 
 export interface SlotEdit {
 	from: string | number;
@@ -17,7 +19,11 @@ export interface EffectEntry {
 	inheritsfrom: ID | null;
 	data: AnyObject;
 	slots: { [path: string]: { [index: string]: SlotEdit } };
+	events: { [path: string]: string };
 	sprites: { [kind: string]: string };
+	origin: Origin | null;
+	trackdex: ID | null;
+	trackid: ID | null;
 }
 
 export const EFFECT_NAMES: { [table in EffectTable]: string } = {
@@ -30,7 +36,8 @@ export const EFFECT_PLURALS: { [table in EffectTable]: string } = {
 type Check = (value: unknown, field: string, data: AnyObject, old: unknown) => unknown;
 type Fields = { [field: string]: Check };
 
-const CONTROL = ['name', 'inheritsFrom', 'slots', 'replace'];
+const CONTROL = ['name', 'inheritsFrom', 'slots', 'replace', 'events', 'spriteFrom'];
+const EVENT_STATS: { [stat: string]: string } = { Atk: 'atk', SpA: 'spa', Def: 'def', SpD: 'spd', Spe: 'spe' };
 const STAT_NAMES: { [stat: string]: string } = {
 	hp: 'HP', atk: 'Attack', def: 'Defense', spa: 'Sp. Atk', spd: 'Sp. Def', spe: 'Speed',
 	accuracy: 'accuracy', evasion: 'evasiveness',
@@ -176,7 +183,8 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		flags: record(oneOf(...used('Abilities', entry => Object.keys(entry.flags || {}))), oneOf(1)),
 	},
 	Items: {
-		spritenum: int(0, 9999), fling: object({ basePower: int(0, 250), status, volatileStatus: condition }),
+		spritenum: int(0, Math.max(...Object.values(Dex.data.Items).map(item => item.spritenum || 0))),
+		fling: object({ basePower: int(0, 250), status, volatileStatus: condition }),
 		naturalGift: object({ basePower: int(0, 250), type }), itemUser: list(species, 30), forcedForme: species,
 		megaStone: record(species, species), boosts, zMove: either(oneOf(true), move), zMoveFrom: move, zMoveType: type,
 		onPlate: type, onMemory: type, onDrive: type, isNonstandard: nonstandard,
@@ -246,9 +254,16 @@ function sameValue(a: unknown, b: unknown) {
 	return typeof a === 'string' && typeof b === 'string' ? toID(a) === toID(b) : a === b;
 }
 
-export function editOf(entry: EffectEntry, slots: EffectEdit['slots'] = {}): EffectEdit {
-	return { ...(entry.inheritsfrom ? { inherit: entry.inheritsfrom } : {}), data: entry.data, slots };
+export function editOf(
+	entry: EffectEntry, slots: EffectEdit['slots'] = {}, events: EffectEdit['events'] = {}
+): EffectEdit {
+	return {
+		...(entry.inheritsfrom ? { inherit: entry.inheritsfrom } : {}), data: entry.data, slots,
+		...(Object.keys(events).length ? { events } : {}),
+	};
 }
+
+const lastKey = (path: string) => path.slice(path.lastIndexOf('.') + 1);
 
 export function resolveEdits(dex: ModdedDex, entry: EffectEntry, data: AnyObject, stale: string[]) {
 	const { base } = baseEffect(dex, entry.effecttable, entry.effectid, editOf(entry));
@@ -271,7 +286,16 @@ export function resolveEdits(dex: ModdedDex, entry: EffectEntry, data: AnyObject
 			}
 		}
 	}
-	return editOf(entry, slots);
+	const events: NonNullable<EffectEdit['events']> = {};
+	for (const path in entry.events || {}) {
+		const fn = getPath(base, path);
+		if (typeof fn === 'function' && eventTargets(lastKey(path), fn).includes(entry.events[path])) {
+			events[path] = entry.events[path];
+		} else {
+			stale.push(`${entry.data.name}: ${path} as ${entry.events[path]} (the code changed)`);
+		}
+	}
+	return editOf(entry, slots, events);
 }
 
 export function validateEffect(
@@ -306,8 +330,39 @@ export function validateEffect(
 	const entry: EffectEntry = {
 		effecttable: table, effectid, num: old?.num || 0, inheritsfrom,
 		data: { ...combine(start, checkFields(fields, base, FIELDS[table], '', data)), name: official ? official.name : name },
-		slots: keep ? JSON.parse(JSON.stringify(old!.slots)) : {}, sprites: old?.sprites || {},
+		slots: keep ? JSON.parse(JSON.stringify(old!.slots)) : {}, events: keep ? { ...old!.events } : {},
+		sprites: old?.sprites || {}, origin: old?.origin || null, trackdex: null, trackid: null,
 	};
+	if (input.spriteFrom !== undefined) {
+		const item = table === 'Items' ? dex.items.get(`${input.spriteFrom}`) : null;
+		if (!item?.exists || !dex.data.Items[item.id]) {
+			throw new Chat.ErrorMessage(`"spriteFrom" must be an item in ${dex.currentMod}, whose icon this item uses.`);
+		}
+		entry.data.spritenum = item.spritenum;
+		entry.sprites = { ...entry.sprites };
+		delete entry.sprites.item;
+	}
+	if (input.events !== undefined) {
+		if (!isObject(input.events)) {
+			throw new Chat.ErrorMessage(`"events" must map a handler to a stat, like {"onModifySpe": "atk"}.`);
+		}
+		for (const path in input.events) {
+			const fn = getPath(base, path);
+			const key = lastKey(path);
+			const targets = typeof fn === 'function' ? eventTargets(key, fn) : [];
+			if (!targets.length) throw new Chat.ErrorMessage(`"${path}" isn't a handler that can work on another stat.`);
+			const value = input.events[path];
+			const suffix = Object.keys(EVENT_STATS).find(other => EVENT_STATS[other] === toID(value));
+			const target = suffix ? key.replace(STAT_EVENT, `on$1Modify${suffix}`) : value;
+			if (value === null || target === key) {
+				delete entry.events[path];
+			} else if (targets.includes(target)) {
+				entry.events[path] = target;
+			} else {
+				throw new Chat.ErrorMessage(`"${path}" can become: ${targets.join(', ')}.`);
+			}
+		}
+	}
 
 	const catalogue = effectSlots(dex, table, effectid, editOf(entry), entry.data.name, data);
 	const setSlot = (path: string, index: number, value: unknown) => {
@@ -415,8 +470,10 @@ export function describeEffect(
 	const edit = entry ? resolveEdits(dex, entry, data, []) : { data: {} };
 	const name = entry?.data.name || dex.data[table][effectid]?.name;
 	const { official, baseid, base } = baseEffect(dex, table, effectid, edit);
-	const handlers = effectSlots(dex, table, effectid, edit, name, data).map(({ path, handler, values }) => ({
+	const handlers = effectSlots(dex, table, effectid, edit, name, data).map(({ path, fn, handler, values }) => ({
 		path,
+		event: edit.events?.[path] || lastKey(path),
+		events: eventTargets(lastKey(path), fn),
 		editable: !!handler,
 		code: handler?.src,
 		slots: handler?.slots.map((found, index) => ({
@@ -455,6 +512,10 @@ export function describeText(dex: ModdedDex, table: EffectTable, edit: EffectEdi
 		if (isObject(value) && isObject(old)) for (const key in value) numbers(value[key], old[key]);
 	};
 	numbers(edit.data, base);
+	for (const path in edit.events) {
+		const [from, to] = [lastKey(path), edit.events[path]].map(key => STAT_NAMES[EVENT_STATS[STAT_EVENT.exec(key)![2]]]);
+		pairs.push([from, to]);
+	}
 	const replace = (description: string | undefined) => {
 		if (!description) return description;
 		for (const [from, to] of pairs) {
