@@ -414,6 +414,7 @@ export class User extends Chat.MessageContext {
 	lastReportTime: number;
 	lastNewNameTime = 0;
 	newNames = 0;
+	challengeOnly = false;
 	s1: string;
 	s2: string;
 	s3: string;
@@ -1520,7 +1521,7 @@ export class User extends Chat.MessageContext {
 		const throttleDelay = this.isPublicBot ? THROTTLE_DELAY_PUBLIC_BOT : this.trusted ? THROTTLE_DELAY_TRUSTED :
 			THROTTLE_DELAY;
 
-		if (this.chatQueue.length) {
+		if (this.chatQueue?.length) {
 			this.chatQueueTimeout = setTimeout(() => this.processChatQueue(), throttleDelay);
 		} else {
 			this.chatQueue = null;

@@ -1757,7 +1757,12 @@ export const Punishments = new class {
 		return IPTools.lookup(ip).then(({ dnsbl, host, hostType }) => {
 			user = connection.user || user;
 
-			if (hostType === 'proxy' && !user.trusted && !user.locked) {
+			const discordLinked = Config.discordonly && (user.registered || !!user.s1);
+			if (hostType === 'proxy' && discordLinked && user.locked === '#hostfilter') {
+				user.locked = null;
+				user.updateIdentity();
+			}
+			if (hostType === 'proxy' && !user.trusted && !discordLinked && !user.locked) {
 				user.locked = '#hostfilter';
 			} else if (dnsbl && !user.autoconfirmed) {
 				user.semilocked = '#dnsbl';

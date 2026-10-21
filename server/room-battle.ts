@@ -884,7 +884,15 @@ export class RoomBattle extends RoomGame<RoomBattlePlayer> {
 	async updateLadder(p1score: number, winnerid: ID) {
 		this.room.rated = 0;
 		const winner = Users.get(winnerid);
-		if (winner && !winner.registered) {
+		if (winner?.s1) {
+			void LoginServer.request('discord/addname', {
+				userid: winner.s1,
+				username: winner.name,
+				ip: winner.latestIp,
+			}).then(([res]) => {
+				if (res?.actionsuccess) winner.popup(`The name "${winner.name}" is now linked to your Discord account.`);
+			});
+		} else if (winner && !winner.registered) {
 			this.room.sendUser(winner, '|askreg|' + winner.id);
 		}
 		const p1 = this.p1.name;

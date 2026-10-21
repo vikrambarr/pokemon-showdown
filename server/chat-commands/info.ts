@@ -12,6 +12,7 @@ import * as net from 'net';
 import { YouTube, Twitch } from '../chat-plugins/youtube';
 import { Net, Utils } from '../../lib';
 import { RoomSections } from './room-settings';
+import { discordWhois } from '../chat-plugins/meta';
 
 const ONLINE_SYMBOL = ` \u25C9 `;
 const OFFLINE_SYMBOL = ` \u25CC `;
@@ -113,7 +114,7 @@ export const commands: Chat.ChatCommands = {
 	whoare: 'whois',
 	altsnorecurse: 'whois',
 	profile: 'whois',
-	whois(target, room, user, connection, cmd) {
+	async whois(target, room, user, connection, cmd) {
 		if (room?.roomid === 'staff' && !this.runBroadcast()) return;
 		const targetUser = this.getUserOrSelf(target, { exactName: user.tempGroup === ' ' });
 		const showAll = (cmd === 'ip' || cmd === 'whoare' || cmd === 'alt' || cmd === 'alts' || cmd === 'altsnorecurse');
@@ -217,6 +218,7 @@ export const commands: Chat.ChatCommands = {
 				}).join(", ");
 				if (prevNames) buf += `<br />Previous names: ${prevNames}`;
 			}
+			buf += await discordWhois(targetUser.s1 || targetUser.id, user);
 		}
 		if (canViewPunishments) {
 			if (targetUser.namelocked) {
@@ -362,7 +364,7 @@ export const commands: Chat.ChatCommands = {
 
 	'chp': 'offlinewhois',
 	checkpunishment: 'offlinewhois',
-	offlinewhois(target, room, user) {
+	async offlinewhois(target, room, user) {
 		if (!user.trusted) {
 			throw new Chat.ErrorMessage("/offlinewhois - Access denied.");
 		}
@@ -383,6 +385,7 @@ export const commands: Chat.ChatCommands = {
 		if (Users.globalAuth.sectionLeaders.has(userid)) {
 			buf += `<br />Section Leader (${RoomSections.sectionNames[Users.globalAuth.sectionLeaders.get(userid)!]})`;
 		}
+		if (user.can('alts')) buf += await discordWhois(targetUser?.s1 || userid, user);
 
 		buf += `<br /><br />`;
 		let atLeastOne = false;
