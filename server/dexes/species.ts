@@ -173,7 +173,7 @@ function learnset(input: unknown, dex: ModdedDex, old: AnyObject) {
 	return result;
 }
 
-export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>) {
+export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built = dex) {
 	const name = validateName(input.name, 'Pokemon');
 	const speciesid = toID(name);
 	const official = dex.data.Pokedex[speciesid];
@@ -201,13 +201,13 @@ export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID,
 		if (input[field] === null) {
 			delete data[field];
 		} else {
-			data[field] = check(input[field], dex, names);
+			data[field] = check(input[field], built, names);
 		}
 	}
 
 	const entry: SpeciesEntry = {
 		speciesid, num: old?.num || 0, inheritsfrom, data,
-		learnset: learnset(input.learnset, dex, old?.learnset || {}), sprites: old?.sprites || {},
+		learnset: learnset(input.learnset, built, old?.learnset || {}), sprites: old?.sprites || {},
 	};
 	const species = resolveSpecies(dex, entry);
 	for (const field of REQUIRED_FIELDS) {

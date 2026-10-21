@@ -8,6 +8,7 @@ export const SPRITE_KINDS: { [kind: string]: { width: number, height: number } }
 	'front-shiny': { width: 96, height: 96 },
 	'back-shiny': { width: 96, height: 96 },
 	'icon': { width: 40, height: 30 },
+	'item': { width: 24, height: 24 },
 };
 
 const MAX_SPRITE_BYTES = 64 * 1024;

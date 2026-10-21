@@ -116,6 +116,53 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.setSprite(loaded, 'Voltlet', 'front', 'bm90IGEgcG5n'), /PNG/);
 	});
 
+	it('should make and edit moves, abilities and items, including values in their code', async () => {
+		let loaded = Dexes.getDex('mochadex');
+		({ loaded } = await Dexes.putEffect(loaded, 'Moves', {
+			name: 'Scorch Soak', inheritsFrom: 'Soak', type: 'Fire', replace: [['Water', 'Fire']],
+		}));
+		let editor = Dexes.effectEditor(loaded, 'Moves', 'Scorch Soak');
+		const onHit = editor.handlers.find(handler => handler.path === 'onHit');
+		assert(onHit.slots.length && onHit.slots.every(slot => slot.value === 'Fire' && slot.original === 'Water' && slot.edited));
+		assert.equal(editor.data.shortDesc, `Changes the target's type to Fire.`);
+		assert.equal(Dexes.clientData(loaded).Moves.scorchsoak.type, 'Fire');
+
+		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Choice Band', slots: { 'onModifyAtk:1': 3 } }));
+		assert(Dexes.effectEditor(loaded, 'Items', 'Choice Band').data.shortDesc.startsWith(`Holder's Attack is 3×`));
+		({ loaded } = await Dexes.putEffect(loaded, 'Items', {
+			name: 'Volt Orb', inheritsFrom: 'Light Ball', replace: [['Pikachu', 'Voltlet']],
+		}));
+		assert.equal(Dexes.effectEditor(loaded, 'Items', 'Volt Orb').data.shortDesc,
+			'If held by a Voltlet, its Attack and Sp. Atk are doubled.');
+		({ loaded } = await Dexes.putEffect(loaded, 'Moves', {
+			name: 'Volt Jab', type: 'Electric', category: 'Physical', basePower: 70, flags: { contact: 1 },
+			secondary: { chance: 30, status: 'par' },
+		}));
+		assert.equal(loaded.effects.Moves.get('voltjab').num, -10002);
+		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Shield', inheritsFrom: 'Protect' }));
+		editor = Dexes.effectEditor(loaded, 'Moves', 'Shield');
+		assert.equal(loaded.dex.moves.get('Shield').volatileStatus, 'shield');
+		assert(editor.lost.engine.some(entry => entry.file === 'sim/battle.js'));
+		assert(editor.lost.references.some(entry => entry.effect === `move: King's Shield`));
+
+		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', slots: { 'onHit:0': 'Fyre' } }), /isn't a type/);
+		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', onHit: 1 }), /is code/);
+		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', basePower: 'lots' }), /whole number/);
+		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', speed: 1 }), /isn't something you can set/);
+		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', replace: [['Grass', 'Fire']] }), /Nothing/);
+		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', type: null }), /can't be removed/);
+
+		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltlet', learnset: { voltjab: ['9L1'], scorchsoak: ['9M'] } }));
+		const result = await TeamValidatorAsync.get('mochadexou').validateTeam(Teams.pack([{
+			species: 'Voltlet', ability: 'Static', item: 'Volt Orb', moves: ['voltjab', 'scorchsoak'], evs: { hp: 4 }, nature: 'Adamant',
+		}]));
+		assert.equal(result.charAt(0), '1', result);
+
+		loaded = await Dexes.deleteEffect(loaded, 'Items', 'Choice Band');
+		assert(Dex.mod(loaded.data.mod).items.get('choiceband').exists);
+		assert.equal(loaded.data.effects.Items.choiceband, undefined);
+	});
+
 	it('should save a snapshot when a battle starts, which outlives the dex', async () => {
 		const loaded = Dexes.getDex('mochadex');
 		const p1 = makeUser('Dex Player 1');
