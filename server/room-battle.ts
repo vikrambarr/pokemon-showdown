@@ -21,6 +21,7 @@ import type { RoomSettings } from './rooms';
 import type { BestOfGame } from './room-battle-bestof';
 import type { GameTimerSettings } from '../sim/dex-formats';
 import type { LadderRating } from './ladders';
+import { battleData } from './dexes';
 
 type ChannelIndex = 0 | 1 | 2 | 3 | 4;
 export type PlayerIndex = 1 | 2 | 3 | 4;
@@ -574,6 +575,7 @@ export class RoomBattle extends RoomGame<RoomBattlePlayer> {
 			roomid: this.roomid,
 			rated: ratedMessage,
 			seed: options.seed,
+			dex: battleData(this.format),
 		};
 		if (options.inputLog) {
 			void this.stream.write(options.inputLog);

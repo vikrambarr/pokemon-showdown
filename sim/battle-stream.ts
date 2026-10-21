@@ -12,6 +12,7 @@
 import { Streams, Utils } from '../lib';
 import { Teams } from './teams';
 import { Battle, extractChannelMessages } from './battle';
+import { buildDex, buildFormat, releaseDex } from './dex-custom';
 import type { ChoiceRequest } from './side';
 
 export class BattleStream extends Streams.ObjectReadWriteStream<string> {
@@ -81,6 +82,7 @@ export class BattleStream extends Streams.ObjectReadWriteStream<string> {
 				if (t === 'end' && !this.keepAlive) this.pushEnd();
 			};
 			if (this.debug) options.debug = true;
+			if (options.dex) options.format = buildFormat(buildDex(options.dex), options.dex.format);
 			this.battle = new Battle(options);
 			break;
 		case 'player':
@@ -385,6 +387,7 @@ export class BattleStream extends Streams.ObjectReadWriteStream<string> {
 	}
 
 	override _destroy() {
+		if (this.battle) releaseDex(this.battle.dex);
 		if (this.battle) this.battle.destroy();
 	}
 }
