@@ -1,11 +1,16 @@
 import * as crypto from 'crypto';
 import { FS } from '../../lib';
 import { SQL, PGDatabase } from '../../lib/database';
-import { buildDex, buildFormat, releaseDex, type DexData } from '../../sim/dex-custom';
+import { buildDex, buildFormat, EFFECT_TABLES, releaseDex, type DexData, type EffectTable } from '../../sim/dex-custom';
 import type { ModdedDex } from '../../sim/dex';
 import type { FormatData } from '../../sim/dex-formats';
 import * as sprites from './sprites';
 import { resolveEntries, validateEntry, validateName, type SpeciesEntry } from './species';
+import {
+	describeEffect, describeText, EFFECT_NAMES, lookupTables, resolveEdits, validateEffect, type EffectEntry,
+} from './effects';
+
+export type Effects = { [table in EffectTable]: Map<ID, EffectEntry> };
 
 export interface DexRow {
 	dexid: ID;
@@ -23,6 +28,8 @@ export interface LoadedDex {
 	editors: string[];
 	entries: Map<ID, SpeciesEntry>;
 	formats: Map<ID, FormatData>;
+	effects: Effects;
+	stale: string[];
 	data: DexData;
 	dex: ModdedDex;
 }
@@ -30,6 +37,7 @@ export interface LoadedDex {
 export const MAX_DEXES = 10;
 export const MAX_ENTRIES = 200;
 export const MAX_FORMATS = 20;
+export const MAX_EFFECTS = 300;
 export const MAX_DATA_BYTES = 256 * 1024;
 
 const GAME_TYPES = ['singles', 'doubles', 'triples', 'multi', 'freeforall'];
@@ -98,12 +106,26 @@ function unregister(loaded: LoadedDex) {
 	releaseDex(loaded.dex);
 }
 
-function compile(row: DexRow, entries: Map<ID, SpeciesEntry>): DexData {
+const noEffects = (): Effects => ({ Moves: new Map(), Abilities: new Map(), Items: new Map(), Conditions: new Map() });
+
+function compile(row: DexRow, entries: Map<ID, SpeciesEntry>, effects: Effects, stale: string[] = []): DexData {
 	const base = Dex.mod(row.mod);
 	const custom = [...entries.keys()].filter(id => !base.data.Pokedex[id]);
-	const content = { mod: row.mod, species: [...row.species, ...custom], ...resolveEntries(base, entries.values()) };
+	const resolved = resolveEntries(base, entries.values());
+	const lookup = lookupTables(base, resolved.Pokedex, effects);
+	const edits: NonNullable<DexData['effects']> = {};
+	for (const table of EFFECT_TABLES) {
+		for (const [id, entry] of effects[table]) (edits[table] ||= {})[id] = resolveEdits(base, entry, lookup, stale);
+	}
+	const content = {
+		mod: row.mod, species: [...row.species, ...custom], ...resolved,
+		...(Object.keys(edits).length ? { effects: edits } : {}),
+	};
 	const spriteShas = [...entries.values()].map(entry => [entry.speciesid, entry.sprites]);
-	const hash = crypto.createHash('sha256').update(json([content, spriteShas])).digest('hex').slice(0, 20);
+	const itemSprites = [...effects.Items.values()].filter(entry => entry.sprites.item)
+		.map(entry => [entry.effectid, entry.sprites]);
+	const hashed = itemSprites.length ? [content, spriteShas, itemSprites] : [content, spriteShas];
+	const hash = crypto.createHash('sha256').update(json(hashed)).digest('hex').slice(0, 20);
 	const data = { hash, ...content };
 	if (Buffer.byteLength(json(data)) > MAX_DATA_BYTES) {
 		throw new Chat.ErrorMessage(`That would make the dex bigger than ${MAX_DATA_BYTES / 1024}KB, the limit for one battle.`);
@@ -111,9 +133,20 @@ function compile(row: DexRow, entries: Map<ID, SpeciesEntry>): DexData {
 	return data;
 }
 
-function make(row: DexRow, editors: string[], entries: Map<ID, SpeciesEntry>, formats: Map<ID, FormatData>) {
-	const data = compile(row, entries);
-	return { row, editors, entries, formats, data, dex: buildDex(data, Dex) };
+function check(data: DexData) {
+	try {
+		releaseDex(buildDex(data, Dex));
+	} catch (e: any) {
+		throw new Chat.ErrorMessage(`That doesn't work: ${e.message}`);
+	}
+}
+
+function make(
+	row: DexRow, editors: string[], entries: Map<ID, SpeciesEntry>, formats: Map<ID, FormatData>, effects: Effects
+) {
+	const stale: string[] = [];
+	const data = compile(row, entries, effects, stale);
+	return { row, editors, entries, formats, effects, stale, data, dex: buildDex(data, Dex) };
 }
 
 export function refresh(dexid: ID) {
@@ -123,18 +156,22 @@ export function refresh(dexid: ID) {
 }
 
 async function reload(dexid: ID) {
-	const [[row], editors, entries, formats] = await Promise.all([
+	const [[row], editors, entries, formats, effectRows] = await Promise.all([
 		database().query<DexRow>(SQL`SELECT * FROM dexes WHERE dexid = ${dexid}`),
 		database().query<{ accountid: string }>(SQL`SELECT accountid FROM dex_editors WHERE dexid = ${dexid}`),
 		database().query<SpeciesEntry>(SQL`SELECT * FROM dex_species WHERE dexid = ${dexid}`),
 		database().query<{ formatid: ID, data: FormatData }>(SQL`SELECT * FROM dex_formats WHERE dexid = ${dexid}`),
+		database().query<EffectEntry>(SQL`SELECT * FROM dex_effects WHERE dexid = ${dexid}`),
 	]);
+	const effects = noEffects();
+	for (const entry of effectRows) effects[entry.effecttable]?.set(entry.effectid, entry);
 	if (registeredOn !== Dex) reregister();
 	const loaded = row ? make(
 		{ ...row, created: Number(row.created), updated: Number(row.updated) },
 		editors.map(editor => editor.accountid),
 		new Map(entries.map(entry => [entry.speciesid, entry])),
 		new Map(formats.map(format => [format.formatid, format.data])),
+		effects,
 	) : null;
 	const old = dexes.get(dexid);
 	if (old) unregister(old);
@@ -166,9 +203,19 @@ export function clientData(loaded: LoadedDex) {
 		if (Object.keys(entry.sprites).length) spriteShas[entry.speciesid] = entry.sprites;
 	}
 	const { hash, mod, species, Pokedex, Learnsets, FormatsData } = loaded.data;
+	const effects: { [table: string]: AnyObject } = {};
+	const itemSprites: { [itemid: string]: string } = {};
+	for (const table of EFFECT_TABLES) {
+		for (const [id, entry] of loaded.effects[table]) {
+			const effect = JSON.parse(json(loaded.dex.data[table][id]));
+			const edit = loaded.data.effects![table]![id];
+			(effects[table] ||= {})[id] = { ...effect, ...describeText(Dex.mod(mod), table, edit, effect, id) };
+			if (entry.sprites.item) itemSprites[id] = entry.sprites.item;
+		}
+	}
 	return {
 		hash, dexid: loaded.row.dexid, name: loaded.row.name, mod, species, Pokedex, Learnsets, FormatsData,
-		sprites: spriteShas,
+		sprites: spriteShas, ...effects, ...(Object.keys(itemSprites).length ? { itemSprites } : {}),
 	};
 }
 
@@ -279,20 +326,20 @@ export function findSpecies(loaded: LoadedDex, names: string[]) {
 export async function setSpecies(loaded: LoadedDex, ids: Set<ID>, add: boolean) {
 	const species = add ?
 		[...new Set([...loaded.row.species, ...ids])] : loaded.row.species.filter(id => !ids.has(id));
-	compile({ ...loaded.row, species }, loaded.entries);
+	compile({ ...loaded.row, species }, loaded.entries, loaded.effects);
 	await database().query(SQL`UPDATE dexes SET species = ${json(species)} WHERE dexid = ${loaded.row.dexid}`);
 	return save(loaded);
 }
 
 export async function putEntry(loaded: LoadedDex, input: AnyObject) {
-	const entry = validateEntry(input, Dex.mod(loaded.row.mod), loaded.entries);
+	const entry = validateEntry(input, Dex.mod(loaded.row.mod), loaded.entries, loaded.dex);
 	if (!loaded.entries.has(entry.speciesid) && loaded.entries.size >= MAX_ENTRIES) {
 		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_ENTRIES} custom or edited Pokemon.`);
 	}
 	if (!entry.num && !Dex.mod(loaded.row.mod).data.Pokedex[entry.speciesid]) {
 		entry.num = Math.min(-10000, ...[...loaded.entries.values()].map(other => other.num)) - 1;
 	}
-	compile(loaded.row, new Map([...loaded.entries, [entry.speciesid, entry]]));
+	check(compile(loaded.row, new Map([...loaded.entries, [entry.speciesid, entry]]), loaded.effects));
 	await database().query(SQL`INSERT INTO dex_species
 		(dexid, speciesid, num, inheritsfrom, data, learnset, sprites, updated) VALUES (
 		${loaded.row.dexid}, ${entry.speciesid}, ${entry.num}, ${entry.inheritsfrom}, ${json(entry.data)},
@@ -316,7 +363,7 @@ export async function deleteEntry(loaded: LoadedDex, name: string) {
 }
 
 export async function setSprite(loaded: LoadedDex, name: string, kind: string, image: string | null) {
-	const entry = getEntry(loaded, name);
+	const entry = kind === 'item' ? getEffect(loaded, 'Items', name) : getEntry(loaded, name);
 	const entrySprites = { ...entry.sprites };
 	if (image === null) {
 		if (!entrySprites[kind]) throw new Chat.ErrorMessage(`${entry.data.name} has no ${kind} sprite.`);
@@ -326,9 +373,70 @@ export async function setSprite(loaded: LoadedDex, name: string, kind: string, i
 		await sprites.save(database(), decoded);
 		entrySprites[kind] = decoded.sha;
 	}
-	await database().query(SQL`UPDATE dex_species SET sprites = ${json(entrySprites)}, updated = ${Date.now()}
-		WHERE dexid = ${loaded.row.dexid} AND speciesid = ${entry.speciesid}`);
+	if (kind === 'item') {
+		await database().query(SQL`UPDATE dex_effects SET sprites = ${json(entrySprites)}, updated = ${Date.now()}
+			WHERE dexid = ${loaded.row.dexid} AND effecttable = 'Items' AND effectid = ${toID(name)}`);
+	} else {
+		await database().query(SQL`UPDATE dex_species SET sprites = ${json(entrySprites)}, updated = ${Date.now()}
+			WHERE dexid = ${loaded.row.dexid} AND speciesid = ${toID(name)}`);
+	}
 	return save(loaded);
+}
+
+export async function putEffect(loaded: LoadedDex, table: EffectTable, input: AnyObject) {
+	const base = Dex.mod(loaded.row.mod);
+	const lookup = lookupTables(base, loaded.data.Pokedex, loaded.effects);
+	const entry = validateEffect(input, table, base, loaded.effects[table], lookup);
+	const count = EFFECT_TABLES.reduce((total, other) => total + loaded.effects[other].size, 0);
+	if (!loaded.effects[table].has(entry.effectid) && count >= MAX_EFFECTS) {
+		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_EFFECTS} custom or edited moves, abilities, items and conditions.`);
+	}
+	if (!base.data[table][entry.effectid]) {
+		entry.num ||= Math.min(-10000, ...[...loaded.effects[table].values()].map(other => other.num)) - 1;
+		entry.data.num = entry.num;
+	}
+	const effects = { ...loaded.effects, [table]: new Map([...loaded.effects[table], [entry.effectid, entry]]) };
+	const stale: string[] = [];
+	check(compile(loaded.row, loaded.entries, effects, stale));
+	const broken = stale.filter(problem => !loaded.stale.includes(problem));
+	if (broken.length) throw new Chat.ErrorMessage(`These changes don't work: ${broken.join('; ')}`);
+	await database().query(SQL`INSERT INTO dex_effects
+		(dexid, effecttable, effectid, num, inheritsfrom, data, slots, sprites, updated) VALUES (
+		${loaded.row.dexid}, ${table}, ${entry.effectid}, ${entry.num}, ${entry.inheritsfrom}, ${json(entry.data)},
+		${json(entry.slots)}, ${json(entry.sprites)}, ${Date.now()}
+	) ON CONFLICT (dexid, effecttable, effectid) DO UPDATE SET inheritsfrom = EXCLUDED.inheritsfrom, data = EXCLUDED.data,
+		slots = EXCLUDED.slots, updated = EXCLUDED.updated`);
+	return { loaded: await save(loaded), entry };
+}
+
+export function getEffect(loaded: LoadedDex, table: EffectTable, name: string) {
+	const entry = loaded.effects[table].get(toID(name));
+	if (!entry) {
+		throw new Chat.ErrorMessage(`${loaded.row.name} has no custom or edited ${EFFECT_NAMES[table]} called "${name}".`);
+	}
+	return entry;
+}
+
+export async function deleteEffect(loaded: LoadedDex, table: EffectTable, name: string) {
+	const entry = getEffect(loaded, table, name);
+	await database().query(SQL`DELETE FROM dex_effects
+		WHERE dexid = ${loaded.row.dexid} AND effecttable = ${table} AND effectid = ${entry.effectid}`);
+	return save(loaded);
+}
+
+export function effectEditor(loaded: LoadedDex, table: EffectTable, name: string) {
+	const id = toID(name);
+	const base = Dex.mod(loaded.row.mod);
+	if (!loaded.effects[table].has(id) && !base.data[table][id]) {
+		throw new Chat.ErrorMessage(`There's no ${EFFECT_NAMES[table]} called "${name}" in ${loaded.row.name}.`);
+	}
+	const lookup = lookupTables(base, loaded.data.Pokedex, loaded.effects);
+	const effect = JSON.parse(json(loaded.dex.data[table][id]));
+	const edit = loaded.data.effects?.[table]?.[id] || { data: {} };
+	return {
+		...describeEffect(base, table, id, loaded.effects[table].get(id), lookup),
+		data: { ...effect, ...describeText(base, table, edit, effect, id) },
+	};
 }
 
 function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): FormatData {

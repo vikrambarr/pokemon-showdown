@@ -55,3 +55,16 @@ CREATE TABLE IF NOT EXISTS dex_sprites (
 	data BYTEA NOT NULL,
 	created BIGINT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS dex_effects (
+	dexid TEXT NOT NULL REFERENCES dexes (dexid) ON DELETE CASCADE,
+	effecttable TEXT NOT NULL,
+	effectid TEXT NOT NULL,
+	num INTEGER NOT NULL,
+	inheritsfrom TEXT,
+	data JSONB NOT NULL,
+	slots JSONB NOT NULL,
+	sprites JSONB NOT NULL,
+	updated BIGINT NOT NULL,
+	PRIMARY KEY (dexid, effecttable, effectid)
+);

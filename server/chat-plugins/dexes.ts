@@ -1,5 +1,7 @@
 import { Utils } from '../../lib';
 import * as Dexes from '../dexes';
+import { EFFECT_NAMES, EFFECT_PLURALS } from '../dexes/effects';
+import type { EffectTable } from '../../sim/dex-custom';
 import { SPRITE_KINDS, spriteURL, toKind } from '../dexes/sprites';
 
 void Dexes.load().catch(err => Monitor.crashlog(err, 'Loading dexes'));
@@ -25,6 +27,16 @@ function args(target: string, count: number, usage: string) {
 	const parts = Utils.splitFirst(target, ',', count - 1).map(part => part.trim());
 	if (parts.some(part => !part)) throw new Chat.ErrorMessage(`Usage: ${usage}`);
 	return parts;
+}
+
+const EFFECT_TABLES: { [name: string]: EffectTable } = {
+	move: 'Moves', ability: 'Abilities', item: 'Items', condition: 'Conditions',
+};
+
+function toTable(input: string) {
+	const table = EFFECT_TABLES[toID(input)];
+	if (!table) throw new Chat.ErrorMessage(`"${input}" isn't one of: ${Object.keys(EFFECT_TABLES).join(', ')}.`);
+	return table;
 }
 
 function summary(loaded: Dexes.LoadedDex) {
@@ -73,8 +85,20 @@ export const commands: Chat.ChatCommands = {
 				buf += Utils.html`<br /><strong>${entry.data.name}</strong>${entry.inheritsfrom ? ` (from ${entry.inheritsfrom})` : ''} `;
 				buf += spriteHTML(entry);
 			}
+			for (const table in EFFECT_NAMES) {
+				const effects = [...loaded.effects[table as EffectTable].values()];
+				if (!effects.length) continue;
+				buf += `<br />${EFFECT_PLURALS[table as EffectTable]}: `;
+				buf += effects.map(entry => Utils.html`<strong>${entry.data.name}</strong>` +
+					(entry.inheritsfrom ? Utils.html` (from ${entry.inheritsfrom})` : '') +
+					(entry.sprites.item ? ' ' + spriteHTML({ sprites: { item: entry.sprites.item } }) : '')).join(', ');
+			}
 			buf += `<br />Formats: `;
 			buf += dex.formats.map(format => Utils.html`<code>${format.name}</code>`).join(', ') || '(none)';
+			if (loaded.stale.length) {
+				buf += `<br />These changes stopped working after an update and are being skipped: `;
+				buf += loaded.stale.map(problem => Utils.html`${problem}`).join('; ');
+			}
 			return this.sendReplyBox(buf);
 		},
 		async create(target, room, user) {
@@ -113,15 +137,68 @@ export const commands: Chat.ChatCommands = {
 			const loaded = await Dexes.deleteEntry(await Dexes.editable(user, dexName), name);
 			this.sendReply(`Removed ${name} from ${loaded.row.name}'s custom and edited Pokemon.`);
 		},
+		async move(target, room, user, connection, cmd) {
+			checkEnabled(user);
+			const [dexName, input] = args(target, 2, `/dexes ${cmd} [dex], [JSON]`);
+			const table = toTable(cmd);
+			const { loaded, entry } = await Dexes.putEffect(await Dexes.editable(user, dexName), table, parseJSON(input));
+			this.sendReply(`Saved the ${EFFECT_NAMES[table]} ${entry.data.name} in ${loaded.row.name}.`);
+		},
+		ability: 'move',
+		item: 'move',
+		condition: 'move',
+		async deletemove(target, room, user, connection, cmd) {
+			checkEnabled(user);
+			const [dexName, name] = args(target, 2, `/dexes ${cmd} [dex], [name]`);
+			const table = toTable(cmd.slice(6));
+			const loaded = await Dexes.deleteEffect(await Dexes.editable(user, dexName), table, name);
+			this.sendReply(`Removed ${name} from ${loaded.row.name}'s custom and edited ${EFFECT_PLURALS[table].toLowerCase()}.`);
+		},
+		deleteability: 'deletemove',
+		deleteitem: 'deletemove',
+		deletecondition: 'deletemove',
+		code(target, room, user) {
+			this.runBroadcast();
+			const [dexName, kind, name] = args(target, 3, `/dexes code [dex], [move|ability|item|condition], [name]`);
+			const editor = Dexes.effectEditor(Dexes.getDex(dexName), toTable(kind), name);
+			let buf = Utils.html`<strong>${editor.name}</strong>`;
+			if (editor.base && !editor.official) buf += Utils.html` (from ${editor.base})`;
+			for (const handler of editor.handlers) {
+				buf += Utils.html`<br /><br /><code>${handler.path}</code>`;
+				if (!handler.editable) {
+					buf += ` uses code from outside itself, so its values can't be changed.`;
+					continue;
+				}
+				if (!handler.slots.length) buf += ` has nothing to change.`;
+				for (const slot of handler.slots) {
+					const end = slot.column + slot.length;
+					buf += Utils.html`<br /><code>${handler.path}:${slot.index}</code> ${slot.kind} <strong>${JSON.stringify(slot.value)}</strong>`;
+					if (slot.value !== slot.original) buf += Utils.html` (was ${JSON.stringify(slot.original)})`;
+					buf += Utils.html`: <code>${slot.line.slice(0, slot.column)}<strong>${slot.line.slice(slot.column, end)}</strong>`;
+					buf += Utils.html`${slot.line.slice(end)}</code>`;
+				}
+			}
+			if (editor.lost?.engine.length) {
+				buf += Utils.html`<br /><br />The battle engine treats ${editor.base} specially in `;
+				buf += editor.lost.engine.map(entry => Utils.html`${entry.file} (${entry.count})`).join(', ');
+				buf += `. A copy doesn't get that.`;
+			}
+			if (editor.lost?.references.length) {
+				buf += Utils.html`<br /><br />These check for ${editor.base} by name, and won't affect the copy: `;
+				buf += editor.lost.references.map(entry => Utils.html`${entry.effect}`).join(', ');
+			}
+			return this.sendReplyBox(buf);
+		},
 		async sprite(target, room, user) {
 			checkEnabled(user);
-			const [dexName, name, kind, image] = args(target, 4, `/dexes sprite [dex], [pokemon], [kind], [base64 PNG]`);
+			const [dexName, name, kind, image] = args(target, 4, `/dexes sprite [dex], [pokemon or item], [kind], [base64 PNG]`);
 			const loaded = await Dexes.setSprite(await Dexes.editable(user, dexName), name, toKind(kind), image);
-			this.sendReplyBox(Utils.html`Set the ${toKind(kind)} sprite of ${name}: ` + spriteHTML(Dexes.getEntry(loaded, name)));
+			const entry = toKind(kind) === 'item' ? Dexes.getEffect(loaded, 'Items', name) : Dexes.getEntry(loaded, name);
+			this.sendReplyBox(Utils.html`Set the ${toKind(kind)} sprite of ${name}: ` + spriteHTML(entry));
 		},
 		async clearsprite(target, room, user) {
 			checkEnabled(user);
-			const [dexName, name, kind] = args(target, 3, `/dexes clearsprite [dex], [pokemon], [kind]`);
+			const [dexName, name, kind] = args(target, 3, `/dexes clearsprite [dex], [pokemon or item], [kind]`);
 			await Dexes.setSprite(await Dexes.editable(user, dexName), name, toKind(kind), null);
 			this.sendReply(`Removed the ${toKind(kind)} sprite of ${name}.`);
 		},
@@ -154,8 +231,14 @@ export const commands: Chat.ChatCommands = {
 		`/dexes remove [dex], [pokemon], ... - Takes Pokemon out of a dex, with their formes.`,
 		`/dexes pokemon [dex], [JSON] - Makes or edits a Pokemon. Using an existing Pokemon's name edits it for this dex. Fields: name, inheritsFrom, types, baseStats, abilities, eggGroups, weightkg, heightm, color, gender, genderRatio, prevo, evos, evoType, evoLevel, evoItem, evoMove, evoCondition, tier, doublesTier, natDexTier, tags, learnset. null clears a field.`,
 		`/dexes deletepokemon [dex], [pokemon] - Deletes a custom Pokemon, or undoes edits to an existing one.`,
-		`/dexes sprite [dex], [pokemon], [kind], [base64 PNG] - Sets a sprite. Kinds: front, back, front-shiny, back-shiny (96x96), icon (40x30).`,
-		`/dexes clearsprite [dex], [pokemon], [kind] - Removes a sprite.`,
+		`/dexes move [dex], [JSON] - Makes or edits a move. Using an existing move's name edits it for this dex; "inheritsFrom" copies another move, code and all. Set any attribute, like "basePower" or "secondary"; null clears it. "slots" changes values in the code, like {"onHit:0": "Fire"}, numbered as in /dexes code. "replace" changes every matching value, like [["Water", "Fire"]].`,
+		`/dexes ability [dex], [JSON] - Makes or edits an ability, like /dexes move.`,
+		`/dexes item [dex], [JSON] - Makes or edits an item, like /dexes move.`,
+		`/dexes condition [dex], [JSON] - Makes or edits a condition, like a status or weather, like /dexes move.`,
+		`/dexes deletemove [dex], [name] - Deletes a custom move, or undoes edits to an existing one. Also: deleteability, deleteitem, deletecondition.`,
+		`/dexes code [dex], [move|ability|item|condition], [name] - Shows the values in its code you can change, and what a copy loses.`,
+		`/dexes sprite [dex], [pokemon or item], [kind], [base64 PNG] - Sets a sprite. Kinds: front, back, front-shiny, back-shiny (96x96), icon (40x30), item (24x24, items only).`,
+		`/dexes clearsprite [dex], [pokemon or item], [kind] - Removes a sprite.`,
 		`/dexes format [dex], [JSON] - Makes or edits a format. Fields: name, gameType, ruleset, banlist, unbanlist, restricted, bestOfDefault, teraPreviewDefault.`,
 		`/dexes deleteformat [dex], [format] - Deletes a format.`,
 		`/dexes rebuildfiles - Rewrites missing snapshot and sprite files from the database. Requires: ~`,
@@ -170,6 +253,18 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		const loaded = Dexes.dexes.get(toID(target));
 		if (!loaded) return null;
 		return { ...summary(loaded), ...Dexes.clientData(loaded) };
+	},
+	dexeffect(target) {
+		const [dexid, kind, name] = Utils.splitFirst(target, ',', 2).map(part => part.trim());
+		const loaded = Dexes.dexes.get(toID(dexid));
+		const table = EFFECT_TABLES[toID(kind)];
+		if (!loaded || !table) return null;
+		try {
+			return Dexes.effectEditor(loaded, table, name);
+		} catch (e) {
+			if (e instanceof Chat.ErrorMessage) return null;
+			throw e;
+		}
 	},
 };
 

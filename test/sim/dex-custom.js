@@ -1,8 +1,10 @@
 'use strict';
 
 const assert = require('assert').strict;
+const { Battle } = require('../../dist/sim/battle');
 const { BattleStream } = require('../../dist/sim/battle-stream');
 const { buildDex, buildFormat, releaseDex } = require('../../dist/sim/dex-custom');
+const { parseHandler } = require('../../dist/sim/dex-handlers');
 const { TeamValidator } = require('../../dist/sim/team-validator');
 
 const DATA = {
@@ -20,6 +22,9 @@ const DATA = {
 	FormatsData: { voltlet: { tier: 'OU' } },
 	format: { name: '[Sim Test] OU', ruleset: ['Standard'] },
 };
+
+const changes = (fn, from, to) => Object.fromEntries(parseHandler(fn, Dex.data).slots
+	.flatMap((slot, index) => slot.value === from ? [[index, [from, to]]] : []));
 
 const set = species => ({
 	species, ability: species === 'Voltlet' ? 'Static' : 'Lightning Rod', moves: ['thunderbolt', 'protect'],
@@ -55,5 +60,59 @@ describe('Custom dexes', () => {
 		assert.deepEqual(JSON.parse(start.slice(7)).dex, DATA);
 		void stream.writeEnd();
 		assert.equal(Dex.dexes['dexsimtest'], undefined);
+	});
+
+	it('should copy and edit moves and items, with values in their code changed', () => {
+		const dex = buildDex({
+			...DATA, hash: 'simeffects', species: ['blissey', 'snorlax'], effects: {
+				Moves: {
+					scorchsoak: {
+						inherit: 'soak', data: { name: 'Scorch Soak', num: -1, type: 'Fire' },
+						slots: { onHit: changes(Dex.data.Moves.soak.onHit, 'Water', 'Fire') },
+					},
+				},
+				Items: { choiceband: { data: {}, slots: { onModifyAtk: changes(Dex.data.Items.choiceband.onModifyAtk, 1.5, 3) } } },
+			},
+		});
+		const battle = new Battle({
+			formatid: 'simtestanything', format: buildFormat(dex, { name: '[Sim Test] Anything', ruleset: [] }), seed: [1, 2, 3, 4],
+		});
+		battle.setPlayer('p1', { team: [{ species: 'Blissey', ability: 'Natural Cure', moves: ['scorchsoak'], evs: {} }] });
+		battle.setPlayer('p2', { team: [{ species: 'Snorlax', ability: 'Thick Fat', item: 'choiceband', moves: ['rest'], evs: {} }] });
+		battle.makeChoices('move scorchsoak', 'move rest');
+		const snorlax = battle.p2.active[0];
+		assert.deepEqual(snorlax.getTypes(), ['Fire']);
+		assert(battle.log.includes('|-start|p2a: Snorlax|typechange|Fire'));
+		assert.equal(battle.runEvent('ModifyAtk', snorlax, null, null, 100), 300);
+		assert(Dex.moves.get('Soak').onHit.toString().includes('"Water"'));
+		assert(!Dex.moves.get('Scorch Soak').exists);
+		releaseDex(dex);
+	});
+
+	it('should point copies at themselves, and refuse values that do not fit', () => {
+		const dex = buildDex({ ...DATA, hash: 'simrename', effects: { Moves: { shield: { inherit: 'reflect', data: { name: 'Shield' } } } } });
+		assert.equal(dex.moves.get('Shield').sideCondition, 'shield');
+		assert(dex.conditions.get('shield').onSideStart.toString().includes('"Shield"'));
+		assert.equal(dex.moves.get('Reflect').sideCondition, 'reflect');
+		releaseDex(dex);
+
+		const soak = Dex.data.Moves.soak.onHit;
+		const bad = { Moves: { soak: { data: {}, slots: { onHit: changes(soak, 'Water', 'Fyre') } } } };
+		assert.throws(() => buildDex({ ...DATA, hash: 'simbad', effects: bad }), /isn't a type/);
+		assert.equal(Dex.dexes['dexsimbad'], undefined);
+
+		const data = JSON.parse('{"__proto__": {"basePower": 999}, "onHit": {"evil": 1}, "constructor": 1}');
+		const ignored = buildDex({ ...DATA, hash: 'simignored', effects: { Moves: { soak: { data } } } });
+		const move = ignored.data.Moves.soak;
+		assert.equal(move.onHit, soak);
+		assert.equal(move.basePower, 0);
+		assert.equal({}.basePower, undefined);
+		assert(!Object.hasOwn(move, 'constructor'));
+		const stale = buildDex({
+			...DATA, hash: 'simstale', effects: { Moves: { soak: { data: {}, slots: { onHit: { 0: ['Grass', 'Fire'] } } } } },
+		});
+		assert.equal(stale.data.Moves.soak.onHit, soak);
+		releaseDex(ignored);
+		releaseDex(stale);
 	});
 });
