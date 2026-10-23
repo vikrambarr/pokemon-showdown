@@ -3225,7 +3225,7 @@ export class Battle {
 
 	getTeam(options: PlayerOptions): PokemonSet[] {
 		let team = options.team;
-		if (typeof team === 'string') team = Teams.unpack(team);
+		if (typeof team === 'string') team = Teams.unpack(team, this.dex);
 		if (team) return team;
 
 		if (!options.seed) {

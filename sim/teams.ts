@@ -7,7 +7,7 @@
  * @license MIT
  */
 
-import { Dex, toID } from './dex';
+import { Dex, toID, type ModdedDex } from './dex';
 import type { PRNG, PRNGSeed } from './prng';
 
 interface ExportOptions {
@@ -212,7 +212,7 @@ export const Teams = new class Teams {
 		return buf;
 	}
 
-	unpack(buf: string): PokemonSet[] | null {
+	unpack(buf: string, dex: ModdedDex = Dex): PokemonSet[] | null {
 		if (!buf) return null;
 		if (typeof buf !== 'string') return buf;
 		if (buf.startsWith('[') && buf.endsWith(']')) {
@@ -241,29 +241,29 @@ export const Teams = new class Teams {
 			// species
 			j = buf.indexOf('|', i);
 			if (j < 0) return null;
-			set.species = this.unpackName(buf.substring(i, j), Dex.species) || set.name;
+			set.species = this.unpackName(buf.substring(i, j), dex.species) || set.name;
 			i = j + 1;
 
 			// item
 			j = buf.indexOf('|', i);
 			if (j < 0) return null;
-			set.item = this.unpackName(buf.substring(i, j), Dex.items);
+			set.item = this.unpackName(buf.substring(i, j), dex.items);
 			i = j + 1;
 
 			// ability
 			j = buf.indexOf('|', i);
 			if (j < 0) return null;
 			const ability = buf.substring(i, j);
-			const species = Dex.species.get(set.species);
+			const species = dex.species.get(set.species);
 			set.ability = ['', '0', '1', 'H', 'S'].includes(ability) ?
 				species.abilities[ability as '0' || '0'] || (ability === '' ? '' : '!!!ERROR!!!') :
-				this.unpackName(ability, Dex.abilities);
+				this.unpackName(ability, dex.abilities);
 			i = j + 1;
 
 			// moves
 			j = buf.indexOf('|', i);
 			if (j < 0) return null;
-			set.moves = buf.substring(i, j).split(',', 24).map(name => this.unpackName(name, Dex.moves));
+			set.moves = buf.substring(i, j).split(',', 24).map(name => this.unpackName(name, dex.moves));
 			i = j + 1;
 
 			// nature
@@ -333,7 +333,7 @@ export const Teams = new class Teams {
 			if (misc) {
 				set.happiness = (misc[0] ? Number(misc[0]) : 255);
 				set.hpType = misc[1] || '';
-				set.pokeball = this.unpackName(misc[2] || '', Dex.items);
+				set.pokeball = this.unpackName(misc[2] || '', dex.items);
 				set.gigantamax = !!misc[3];
 				set.dynamaxLevel = (misc[4] ? Number(misc[4]) : 10);
 				set.teraType = misc[5];

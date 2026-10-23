@@ -2,7 +2,7 @@ import { parse } from 'acorn';
 import * as vm from 'vm';
 import { toID } from './dex-data';
 
-export type SlotKind = 'number' | 'type' | 'category' | 'stat' | 'status' | 'ref';
+export type SlotKind = 'number' | 'type' | 'category' | 'stat' | 'status' | 'flag' | 'ref';
 
 export interface Slot {
 	start: number;
@@ -95,7 +95,7 @@ function comparedWith(node: AnyObject, stack: AnyObject[]) {
 }
 
 export function classify(value: string, comparedTo: string, data: AnyObject): Partial<Slot> | null {
-	if (STATUSES.includes(value)) return { kind: 'status' };
+	if (STATUSES.includes(value) || data.Conditions[value]?.effectType === 'Status') return { kind: 'status' };
 	if (STATS.includes(value) || BOOSTS.includes(value)) return { kind: 'stat' };
 	if (['Physical', 'Special'].includes(value) || (value === 'Status' && comparedTo === 'category')) {
 		return { kind: 'category' };
@@ -166,6 +166,11 @@ function find(src: string, data: AnyObject): Handler | null {
 			messages.push({ start: node.start - offset, end: node.end - offset, value: node.value });
 			return;
 		}
+		if (index && parent.object.type === 'MemberExpression' && !parent.object.computed &&
+			parent.object.property.name === 'flags') {
+			slots.push({ start: node.start - offset, end: node.end - offset, kind: 'flag', value: node.value });
+			return;
+		}
 		const comparedTo = comparedWith(node, stack);
 		if (comparedTo === 'effectType') return;
 		const kind = classify(node.value, comparedTo, data);
@@ -212,6 +217,7 @@ export function checkSlot(slot: Slot, value: unknown, data: AnyObject): string |
 		}
 		return value;
 	}
+	if (slot.kind === 'type' && value === '???') return value;
 	const id = toID(value);
 	if (typeof value !== 'string' || !id) throw new Error(`${JSON.stringify(value)} isn't a name.`);
 	if (slot.kind === 'type') {
@@ -230,7 +236,15 @@ export function checkSlot(slot: Slot, value: unknown, data: AnyObject): string |
 		return id;
 	}
 	if (slot.kind === 'status') {
-		if (!STATUSES.includes(id)) throw new Error(`"${value}" isn't a status: use ${STATUSES.join(', ')}.`);
+		const statuses = Object.keys(data.Conditions).filter(status => data.Conditions[status].effectType === 'Status');
+		if (!statuses.includes(id)) throw new Error(`"${value}" isn't a status: use ${statuses.join(', ')}.`);
+		return id;
+	}
+	if (slot.kind === 'flag') {
+		const tables = ['Moves', 'Abilities', 'Items'];
+		if (!tables.some(table => Object.values(data[table]).some((entry: any) => entry.flags?.[id]))) {
+			throw new Error(`"${value}" isn't a flag.`);
+		}
 		return id;
 	}
 	const table = slot.tables!.find(name => data[name][id]);

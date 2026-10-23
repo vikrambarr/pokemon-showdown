@@ -548,6 +548,8 @@ export class TeamValidator {
 				tierSpecies = dex.species.get('Groudon-Primal');
 			} else if (item.id === 'blueorb' && species.id === 'kyogre') {
 				tierSpecies = dex.species.get('Kyogre-Primal');
+			} else if (dex.species.get(`${species.name}-Primal`).requiredItem === item.name) {
+				tierSpecies = dex.species.get(`${species.name}-Primal`);
 			} else if (
 				canMegaEvo && species.id === 'rayquaza' && set.moves.map(toID).includes('dragonascent' as ID) &&
 				!ruleTable.has('megarayquazaclause')
