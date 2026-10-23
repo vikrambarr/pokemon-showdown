@@ -298,6 +298,7 @@ interface ModdedBattlePokemon {
 		this: Pokemon, statName: StatIDExceptHP, boost: number, modifier?: number, statUser?: Pokemon
 	) => number;
 	cureStatus?: (this: Pokemon, silent?: boolean) => boolean;
+	disableMove?: (this: Pokemon, moveid: string, isHidden?: boolean, sourceEffect?: Effect) => void;
 	deductPP?: (
 		this: Pokemon, move: string | Move, amount?: number | null, target?: Pokemon | null | false
 	) => number;
@@ -347,6 +348,7 @@ interface ModdedBattlePokemon {
 	) => boolean;
 	takeItem?: (this: Pokemon, source: Pokemon | undefined) => boolean | Item;
 	transformInto?: (this: Pokemon, pokemon: Pokemon, effect: Effect | null) => boolean;
+	tryTrap?: (this: Pokemon, isHidden?: boolean) => boolean;
 	useItem?: (this: Pokemon, source?: Pokemon, sourceEffect?: Effect) => boolean;
 	ignoringAbility?: (this: Pokemon) => boolean;
 	ignoringItem?: (this: Pokemon) => boolean;

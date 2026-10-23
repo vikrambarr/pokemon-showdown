@@ -16,13 +16,14 @@ export const PM = new QueryProcessManager<{
 	formatid: string, options?: { removeNicknames?: boolean }, team: string, dex?: DexData,
 }>('team-validator', module, message => {
 	const { formatid, options, team, dex } = message;
-	const parsedTeam = Teams.unpack(team);
+	const built = dex ? buildDex(dex) : null;
+	const parsedTeam = Teams.unpack(team, built || Dex);
 
 	if (Config.debugvalidatorprocesses && process.send) {
 		process.send('DEBUG\n' + JSON.stringify(message));
 	}
 
-	const format = dex ? buildFormat(buildDex(dex), dex.format!) : formatid;
+	const format = built ? buildFormat(built, dex!.format!) : formatid;
 	let problems;
 	try {
 		problems = TeamValidator.get(format).validateTeam(parsedTeam, options);

@@ -5,6 +5,9 @@ CREATE TABLE IF NOT EXISTS dexes (
 	name TEXT NOT NULL,
 	mod TEXT NOT NULL,
 	species JSONB NOT NULL,
+	removed JSONB NOT NULL,
+	parents JSONB NOT NULL,
+	official BOOLEAN NOT NULL,
 	visibility TEXT NOT NULL,
 	origin JSONB,
 	created BIGINT NOT NULL,
@@ -16,6 +19,7 @@ CREATE INDEX IF NOT EXISTS dexes_ownerid ON dexes (ownerid);
 CREATE TABLE IF NOT EXISTS dex_editors (
 	dexid TEXT NOT NULL REFERENCES dexes (dexid) ON DELETE CASCADE,
 	accountid TEXT NOT NULL,
+	name TEXT NOT NULL,
 	added BIGINT NOT NULL,
 	PRIMARY KEY (dexid, accountid)
 );
@@ -33,6 +37,7 @@ CREATE TABLE IF NOT EXISTS dex_species (
 	origin JSONB,
 	trackdex TEXT,
 	trackid TEXT,
+	locked BOOLEAN NOT NULL,
 	updated BIGINT NOT NULL,
 	PRIMARY KEY (dexid, speciesid)
 );
@@ -59,6 +64,7 @@ CREATE TABLE IF NOT EXISTS dex_sprites (
 	sha TEXT PRIMARY KEY,
 	width INTEGER NOT NULL,
 	height INTEGER NOT NULL,
+	format TEXT NOT NULL,
 	data BYTEA NOT NULL,
 	created BIGINT NOT NULL
 );
@@ -76,6 +82,7 @@ CREATE TABLE IF NOT EXISTS dex_effects (
 	origin JSONB,
 	trackdex TEXT,
 	trackid TEXT,
+	locked BOOLEAN NOT NULL,
 	updated BIGINT NOT NULL,
 	PRIMARY KEY (dexid, effecttable, effectid)
 );
@@ -90,8 +97,17 @@ CREATE TABLE IF NOT EXISTS dex_sprite_uploads (
 	uploadername TEXT NOT NULL,
 	dexid TEXT NOT NULL,
 	dexname TEXT NOT NULL,
+	artist TEXT,
+	display JSONB NOT NULL,
 	created BIGINT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS dex_sprite_uploads_sha ON dex_sprite_uploads (sha);
 CREATE INDEX IF NOT EXISTS dex_sprite_uploads_accountid ON dex_sprite_uploads (accountid);
+
+CREATE TABLE IF NOT EXISTS dex_layers (
+	hash TEXT PRIMARY KEY,
+	dexid TEXT NOT NULL,
+	data JSONB NOT NULL,
+	created BIGINT NOT NULL
+);

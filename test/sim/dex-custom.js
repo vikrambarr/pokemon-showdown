@@ -138,4 +138,134 @@ describe('Custom dexes', () => {
 		const blaze = { Abilities: { blaze: { data: {}, events: { onModifyAtk: 'onModifySpe' } } } };
 		assert.throws(() => buildDex({ ...DATA, hash: 'simblaze', effects: blaze }), /can't become onModifySpe/);
 	});
+
+	it('should only Mega Evolve the exact species a Mega Stone names, through chained formes', () => {
+		const venusaur = Dex.data.Pokedex.venusaur;
+		const delta = {
+			num: 3, name: 'Venusaur-Delta', baseSpecies: 'Venusaur', forme: 'Delta', types: ['Fairy', 'Psychic'],
+			abilities: { 0: 'Overgrow' }, baseStats: venusaur.baseStats, eggGroups: ['Monster'], weightkg: 100,
+		};
+		const dex = buildDex({
+			...DATA, hash: 'simmegas', species: [...DATA.species, 'venusaur', 'venusaurdelta', 'venusaurdeltamega'],
+			Pokedex: {
+				...DATA.Pokedex, venusaurdelta: delta,
+				venusaurdeltamega: { ...delta, name: 'Venusaur-Delta-Mega', baseSpecies: 'Venusaur-Delta', forme: 'Mega' },
+			},
+			Learnsets: { ...DATA.Learnsets, venusaurdelta: { learnset: { protect: ['9M'] } } },
+			effects: {
+				Items: {
+					deltavenusaurite: {
+						inherit: 'venusaurite',
+						data: { name: 'Delta Venusaurite', num: -10001, megaStone: { 'Venusaur-Delta': 'Venusaur-Delta-Mega' } },
+					},
+				},
+			},
+		});
+		assert.deepEqual(dex.items.get('Delta Venusaurite').megaStone, { 'Venusaur-Delta': 'Venusaur-Delta-Mega' });
+		const format = buildFormat(dex, DATA.format);
+		const megaOf = (species, item, battleFormat = format) => {
+			const battle = new Battle({ format: battleFormat, formatid: battleFormat.id, seed: [1, 2, 3, 4] });
+			const team = Teams.pack([{ species, item, ability: dex.species.get(species).abilities[0], moves: ['protect'] }]);
+			battle.setPlayer('p1', { team });
+			battle.setPlayer('p2', { team });
+			const result = battle.p1.pokemon[0].canMegaEvo;
+			battle.destroy();
+			return result;
+		};
+		assert.equal(megaOf('Venusaur-Delta', 'Delta Venusaurite'), 'Venusaur-Delta-Mega');
+		assert.equal(megaOf('Venusaur-Delta', 'Venusaurite'), null);
+		assert.equal(megaOf('Venusaur', 'Delta Venusaurite'), null);
+		assert.equal(megaOf('Venusaur', 'Venusaurite'), 'Venusaur-Mega');
+		assert.equal(megaOf('Charizard-Mega-X', 'Charizardite Y'), 'Charizard-Mega-Y');
+		assert.equal(megaOf('Charizard-Mega-X', 'Charizardite X'), null);
+		const natdex = Dex.formats.get('gen9nationaldexag');
+		assert.equal(megaOf('Slowbro-Galar', 'Slowbronite', natdex), null);
+		assert.equal(megaOf('Slowbro', 'Slowbronite', natdex), 'Slowbro-Mega');
+		releaseDex(dex);
+	});
+
+	it('should build a dex on another from saved versions, and release both', () => {
+		const fs = require('fs');
+		const folder = `${__dirname}/dex-data-tmp`;
+		const parent = { ...DATA, hash: 'a'.repeat(20) };
+		const child = {
+			hash: 'b'.repeat(20), mod: 'gen9', parent: parent.hash, species: [...DATA.species, 'pichu'],
+			Pokedex: { pichu: { ...Dex.data.Pokedex.pichu, types: ['Electric', 'Fairy'] } }, Learnsets: {}, FormatsData: {},
+		};
+		const previous = Config.dexdatapath;
+		Config.dexdatapath = folder;
+		fs.mkdirSync(folder, { recursive: true });
+		for (const layer of [parent, child]) fs.writeFileSync(`${folder}/${layer.hash}.json`, JSON.stringify(layer));
+		try {
+			const dex = buildDex({ hash: child.hash });
+			assert.deepEqual(dex.species.get('Voltlet').types, ['Electric', 'Steel']);
+			assert.deepEqual(dex.species.get('Pichu').types, ['Electric', 'Fairy']);
+			assert(Dex.dexes[`gen9dex${parent.hash}`]);
+			releaseDex(dex);
+			assert.equal(Dex.dexes[`gen9dex${child.hash}`], undefined);
+			assert.equal(Dex.dexes[`gen9dex${parent.hash}`], undefined);
+			assert.throws(() => buildDex({ hash: '../../config/config' }), /isn't a dex version/);
+		} finally {
+			Config.dexdatapath = previous;
+			fs.rmSync(folder, { recursive: true, force: true });
+		}
+	});
+
+	it('should merge several parents, and run a parent on another engine', () => {
+		const pikachu = Dex.data.Pokedex.pikachu;
+		const first = {
+			...DATA, hash: 'c'.repeat(20),
+			Pokedex: { ...DATA.Pokedex, pikachu: { ...pikachu, types: ['Electric', 'Steel'], evos: ['Raichu', 'Voltlet'] } },
+			Learnsets: { ...DATA.Learnsets, pikachu: { learnset: { ...Dex.data.Learnsets.pikachu.learnset, flashcannon: ['9M'] } } },
+		};
+		const second = {
+			hash: 'd'.repeat(20), mod: 'gen9', species: ['pikachu', 'pichu'],
+			Pokedex: {
+				pikachu: {
+					...pikachu, types: ['Electric', 'Water'], abilities: { ...pikachu.abilities, 1: 'Static' }, evos: ['Raichu-Alola', 'Pichu'],
+				},
+				voltlet: { ...DATA.Pokedex.voltlet, types: ['Water'], weightkg: 99 },
+			},
+			Learnsets: { pikachu: { learnset: { ...Dex.data.Learnsets.pikachu.learnset, surf: ['9M'] } } },
+			FormatsData: {},
+		};
+		const parents = [buildDex(first), buildDex(second)];
+		const dex = buildDex({
+			hash: 'e'.repeat(20), mod: 'gen9', parents: [first.hash, second.hash], species: ['pikachu', 'pichu', 'voltlet'],
+			Pokedex: {}, Learnsets: {}, FormatsData: {},
+		});
+		const merged = dex.species.get('Pikachu');
+		assert.deepEqual(merged.types, ['Electric', 'Steel']);
+		assert.equal(merged.abilities[1], 'Static');
+		assert.deepEqual(merged.evos, ['Raichu', 'Voltlet', 'Raichu-Alola', 'Pichu']);
+		assert.deepEqual(dex.species.get('Voltlet').types, ['Electric', 'Steel']);
+		assert.equal(dex.species.get('Voltlet').weightkg, 10);
+		const learnset = dex.data.Learnsets.pikachu.learnset;
+		assert(learnset.flashcannon && learnset.surf && learnset.thunderbolt);
+
+		const mariomon = buildDex({ hash: 'f'.repeat(20), mod: 'gen9mariomon', parents: [first.hash], species: first.species,
+			Pokedex: {}, Learnsets: {}, FormatsData: {} });
+		assert(mariomon.currentMod.startsWith('gen9mariomondex'));
+		assert(Dex.dexes[`gen9mariomondex${first.hash}`]);
+		assert.deepEqual(mariomon.species.get('Pikachu').types, ['Electric', 'Steel']);
+		assert(mariomon.conditions.get('frb').exists);
+		assert(!parents[0].conditions.get('frb').exists);
+		for (const built of [dex, mariomon, ...parents]) releaseDex(built);
+		assert.equal(Dex.dexes[`gen9mariomondex${first.hash}`], undefined);
+		assert.equal(Dex.dexes[`gen9dex${first.hash}`], undefined);
+	});
+
+	it('should use the dex\'s type chart', () => {
+		const dex = buildDex({
+			...DATA, hash: 'simtypes', TypeChart: {
+				cosmic: { damageTaken: { Dark: 1, sandstorm: 3 } },
+				steel: { ...Dex.data.TypeChart.steel, damageTaken: { ...Dex.data.TypeChart.steel.damageTaken, Cosmic: 2 } },
+			},
+		});
+		assert(dex.types.get('Cosmic').exists);
+		assert.equal(dex.getEffectiveness('Dark', 'Cosmic'), 1);
+		assert.equal(dex.getEffectiveness('Cosmic', 'Steel'), -1);
+		assert(!Dex.types.get('Cosmic').exists);
+		releaseDex(dex);
+	});
 });

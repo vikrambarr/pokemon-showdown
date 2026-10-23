@@ -1,6 +1,6 @@
 import { FS } from '../../lib';
-import type { ModdedDex } from '../../sim/dex';
-import { baseEffect, effectSlots, type EffectEdit, type EffectTable } from '../../sim/dex-custom';
+import { Dex, type ModdedDex } from '../../sim/dex';
+import { baseEffect, effectSlots, REPLACED, type EffectEdit, type EffectTable } from '../../sim/dex-custom';
 import {
 	classify, checkSlot, eventTargets, handlersOf, parseHandler, STAT_EVENT, type Slot,
 } from '../../sim/dex-handlers';
@@ -24,6 +24,7 @@ export interface EffectEntry {
 	origin: Origin | null;
 	trackdex: ID | null;
 	trackid: ID | null;
+	locked: boolean;
 }
 
 export const EFFECT_NAMES: { [table in EffectTable]: string } = {
@@ -153,14 +154,14 @@ const secondaryFields: Fields = {
 const secondary = object({ ...secondaryFields, self: object(secondaryFields) });
 const MOVE_BOOLEANS = [
 	'breaksProtect', 'callsMove', 'forceSwitch', 'hasCrashDamage', 'hasSheerForceBoost', 'ignoreAbility', 'ignoreDefensive',
-	'ignoreEvasion', 'mindBlownRecoil', 'multiaccuracy', 'noPPBoosts', 'sleepUsable', 'smartTarget', 'stallingMove',
-	'stealsBoosts', 'struggleRecoil', 'thawsTarget', 'tracksTarget', 'willCrit',
+	'ignoreEvasion', 'infiltrates', 'mindBlownRecoil', 'multiaccuracy', 'noPPBoosts', 'sleepUsable', 'smartTarget',
+	'stallingMove', 'stealsBoosts', 'struggleRecoil', 'thawsTarget', 'tracksTarget', 'willCrit',
 ];
 const ITEM_BOOLEANS = ['ignoreKlutz', 'isBerry', 'isChoice', 'isGem', 'isPokeball', 'isPrimalOrb'];
 
 const FIELDS: { [table in EffectTable]: Fields } = {
 	Moves: {
-		accuracy: either(oneOf(true), int(1, 100)), basePower: int(0, 1000), category, pp: int(1, 64), priority: int(-7, 7),
+		accuracy: either(oneOf(true), int(0, 100)), basePower: int(0, 1000), category, pp: int(0, 64), priority: int(-7, 7),
 		type, target: oneOf(...used('Moves', entry => entry.target)), critRatio: int(0, 6),
 		flags: record(oneOf(...used('Moves', entry => Object.keys(entry.flags))), oneOf(1)),
 		drain: fraction, recoil: fraction, heal: fraction, secondary, secondaries: list(secondary, 5), self: secondary,
@@ -175,11 +176,11 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 			basePower: int(0, 1000), effect: oneOf(...used('Moves', entry => entry.zMove?.effect)), boost: boosts,
 		}),
 		maxMove: object({ basePower: int(0, 1000) }),
-		contestType: oneOf(...used('Moves', entry => entry.contestType)), isNonstandard: nonstandard,
+		contestType: oneOf(...used('Moves', entry => entry.contestType)), isNonstandard: nonstandard, gen: int(1, 9),
 		...Object.fromEntries(MOVE_BOOLEANS.map(field => [field, bool])), ...desc,
 	},
 	Abilities: {
-		rating: num(-1, 5), suppressWeather: bool, isNonstandard: nonstandard, ...desc,
+		rating: num(-1, 5), suppressWeather: bool, isNonstandard: nonstandard, gen: int(1, 9), ...desc,
 		flags: record(oneOf(...used('Abilities', entry => Object.keys(entry.flags || {}))), oneOf(1)),
 	},
 	Items: {
@@ -187,7 +188,7 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		fling: object({ basePower: int(0, 250), status, volatileStatus: condition }),
 		naturalGift: object({ basePower: int(0, 250), type }), itemUser: list(species, 30), forcedForme: species,
 		megaStone: record(species, species), boosts, zMove: either(oneOf(true), move), zMoveFrom: move, zMoveType: type,
-		onPlate: type, onMemory: type, onDrive: type, isNonstandard: nonstandard,
+		onPlate: type, onMemory: type, onDrive: type, isNonstandard: nonstandard, gen: int(1, 9),
 		...Object.fromEntries(ITEM_BOOLEANS.map(field => [field, bool])), ...desc,
 	},
 	Conditions: {
@@ -231,16 +232,17 @@ function checkFields(
 function combine(old: AnyObject, input: AnyObject) {
 	const result = { ...old };
 	for (const key of Object.keys(input)) {
-		result[key] = isObject(old[key]) && isObject(input[key]) ? combine(old[key], input[key]) : input[key];
+		result[key] = isObject(old[key]) && isObject(input[key]) && !REPLACED.includes(key) ?
+			combine(old[key], input[key]) : input[key];
 	}
 	return result;
 }
 
-export function lookupTables(dex: ModdedDex, Pokedex: AnyObject, effects: { [table: string]: Map<ID, EffectEntry> }) {
+export function lookupTables(dex: ModdedDex, Pokedex: AnyObject, effects: { [table: string]: Map<ID, AnyObject> }) {
 	const data: AnyObject = { ...dex.data, Pokedex: { ...dex.data.Pokedex, ...Pokedex } };
 	for (const table in effects) {
 		data[table] = { ...dex.data[table as EffectTable] };
-		for (const [id, entry] of effects[table]) data[table][id] = { name: entry.data.name };
+		for (const [id, entry] of effects[table]) data[table][id] = { ...dex.data[table as EffectTable][id], ...entry.data };
 	}
 	return data;
 }
@@ -332,6 +334,7 @@ export function validateEffect(
 		data: { ...combine(start, checkFields(fields, base, FIELDS[table], '', data)), name: official ? official.name : name },
 		slots: keep ? JSON.parse(JSON.stringify(old!.slots)) : {}, events: keep ? { ...old!.events } : {},
 		sprites: old?.sprites || {}, origin: old?.origin || null, trackdex: null, trackid: null,
+		locked: old?.locked || false,
 	};
 	if (input.spriteFrom !== undefined) {
 		const item = table === 'Items' ? dex.items.get(`${input.spriteFrom}`) : null;
@@ -504,7 +507,7 @@ export function describeText(dex: ModdedDex, table: EffectTable, edit: EffectEdi
 		for (const index in edit.slots[path]) {
 			const found = handler?.slots[Number(index)];
 			const [from, to] = edit.slots[path][index];
-			if (found && found.kind !== 'status') pairs.push([display(from, found), display(to, found)]);
+			if (found && !['status', 'flag'].includes(found.kind)) pairs.push([display(from, found), display(to, found)]);
 		}
 	}
 	const numbers = (value: unknown, old: unknown) => {
