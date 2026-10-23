@@ -2,7 +2,7 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 	luckypunch: {
 		inherit: true,
 		onModifyCritRatio(critRatio, user) {
-			if (user.baseSpecies.name.includes('Chansey')) {
+			if (user.baseSpecies.name.includes('Chansey') || user.m.fusion?.includes('Chansey')) {
 				return critRatio + 2;
 			}
 		},
@@ -15,7 +15,7 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			basePower: 150,
 		},
 		onModifyCritRatio(critRatio, user) {
-			if (user.baseSpecies.baseSpecies === 'Terathwack') {
+			if (user.baseSpecies.baseSpecies === 'Terathwack' || user.m.fusion === 'Terathwack') {
 				return critRatio + 2;
 			}
 		},

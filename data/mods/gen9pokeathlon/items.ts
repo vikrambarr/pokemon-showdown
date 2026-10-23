@@ -174,7 +174,7 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		onModifyAtkPriority: 1,
 		onModifyAtk(atk, pokemon) {
-			if (pokemon.baseSpecies.baseSpecies === 'Dhelmise') {
+			if (pokemon.baseSpecies.baseSpecies === 'Dhelmise' || pokemon.m.fusion === 'Dhelmise') {
 				return this.chainModify(1.5);
 			}
 		},

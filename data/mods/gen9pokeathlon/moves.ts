@@ -1148,10 +1148,13 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 			if (pokemon.status) pokemon.cureStatus();
 		},
 		onAfterMoveSecondarySelf(pokemon) {
-			if (pokemon.baseSpecies.baseSpecies === 'Manacra' && !pokemon.transformed) {
+			if ((pokemon.baseSpecies.baseSpecies === 'Manacra' || pokemon.m.fusion?.includes('Manacra')) && !pokemon.transformed) {
 				if (pokemon.species.baseSpecies === 'Manacra') {
 					const manacraForme = pokemon.species.id === 'manacraplated' ? '' : '-Plated';
 					pokemon.formeChange('Manacra' + manacraForme, this.effect, true);
+				} else if (pokemon.m.fusion?.includes('Manacra')) {
+					const manacraForme = pokemon.m.fusion === 'Manacra-Plated' ? '' : '-Plated';
+					pokemon.fusionChange('Manacra' + manacraForme, this.effect);
 				}
 			}
 		},

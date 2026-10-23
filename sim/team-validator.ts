@@ -1632,7 +1632,7 @@ export class TeamValidator {
 		const item = dex.items.get(set.item);
 		const species = dex.species.get(set.species);
 
-		if (species.name === 'Necrozma-Ultra') {
+		if (species.name === 'Necrozma-Ultra' && species.battleOnly) {
 			const whichMoves = (set.moves.map(toID).includes('sunsteelstrike' as ID) ? 1 : 0) +
 				(set.moves.map(toID).includes('moongeistbeam' as ID) ? 2 : 0);
 			if (item.name !== 'Ultranecrozium Z') {
@@ -2621,7 +2621,7 @@ export class TeamValidator {
 			if (moveid === 'sketch') {
 				sketch = true;
 			} else if (learnset['sketch']) {
-				if (move.flags['nosketch'] || move.isZ || move.isMax) {
+				if (move.flags['nosketch'] || move.isZ || move.isMax || ruleTable.has('sketchclause')) {
 					cantLearnReason = `can't be Sketched.`;
 				} else if (move.gen > 7 && !canSketchPostGen7Moves &&
 					(dex.gen === 8 ||

@@ -11,12 +11,17 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 					if (pokemon.species.name.startsWith(name)) {
 						pokemon.formeChange(name + formeOrder[targetForme], this.effect, true);
 					}
+					if (pokemon.m.fusion?.startsWith(name)) {
+						pokemon.fusionChange(name + formeOrder[targetForme], this.effect);
+					}
 				}
 			}
 		},
 		onModifyMove(move, pokemon, target) {
-			if (!['Hydreigon-Mega', 'Hydroupa'].some(item => pokemon.species.name.includes(item)) ||
-				move.category === "Status" || !move.basePower) return;
+			if (
+				!['Hydreigon-Mega', 'Hydroupa'].some(item => pokemon.species.name.includes(item) || pokemon.m.fusion?.includes(item)) ||
+				move.category === "Status" || !move.basePower
+			) return;
 
 			this.effectState.move = { ...move };
 
@@ -29,7 +34,8 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 			for (const name of ['Hydreigon-Mega', 'Hydroupa']) {
 				const formes = [name + '', name + '-Six', name + '-Seven', name + '-Eight', name + '-Nine'];
 
-				const index = formes.indexOf(pokemon.species.name);
+				let index = formes.indexOf(pokemon.species.name);
+				if (index === -1) index = formes.indexOf(pokemon.m.fusion);
 				if (index >= 0) {
 					move.multihit = 5 + index;
 					break;
@@ -37,7 +43,9 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 			}
 		},
 		onBasePower(basePower, pokemon, target, move) {
-			if (!['Hydreigon-Mega', 'Hydroupa'].some(item => pokemon.species.name.includes(item))) return;
+			if (
+				!['Hydreigon-Mega', 'Hydroupa'].some(item => pokemon.species.name.includes(item) || pokemon.m.fusion?.includes(item))
+			) return;
 			for (const name of ['Hydreigon-Mega', 'Hydroupa']) {
 				const formes = [name + '', name + '-Six', name + '-Seven', name + '-Eight', name + '-Nine'];
 
@@ -49,7 +57,9 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 			}
 		},
 		onSourceDamagingHit(damage, target, pokemon, move) {
-			if (['Hydreigon-Mega', 'Hydroupa'].some(item => pokemon.species.name.includes(item))) {
+			if (
+				['Hydreigon-Mega', 'Hydroupa'].some(item => pokemon.species.name.includes(item) || pokemon.m.fusion?.includes(item))
+			) {
 				if (move.multihit && typeof (move.multihit) === 'number' && Math.floor(move.multihit - 1) === move.hit) {
 					move = { ...this.effectState.move };
 				}
@@ -542,9 +552,11 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		onAfterUseItem(item, pokemon) {
 			if (pokemon !== this.effectState.target || !item.isBerry) return;
 			if (pokemon.species.id === 'caramitti') pokemon.formeChange('Caramitti-Crazed', this.effect, true);
+			if (this.dex.toID(pokemon.m.fusion) === 'caramitti') pokemon.fusionChange('Caramitti-Crazed', this.effect);
 		},
 		onEatItem(item, pokemon) {
 			if (pokemon.species.id === 'caramitti') pokemon.formeChange('Caramitti-Crazed', this.effect, true);
+			if (this.dex.toID(pokemon.m.fusion) === 'caramitti') pokemon.fusionChange('Caramitti-Crazed', this.effect);
 		},
 		flags: {},
 		name: "Sweet Tooth",

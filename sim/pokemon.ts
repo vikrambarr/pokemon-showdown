@@ -354,6 +354,7 @@ export class Pokemon {
 
 		this.name = set.name.substr(0, 20);
 		this.fullname = `${this.side.id}: ${this.name}`;
+		this.m.fusion = this.battle.ruleTable.has('infinitefusionmod') ? this.set.fusion : undefined;
 
 		set.level = this.battle.clampIntRange(set.adjustLevel || set.level || 100, 1, 9999);
 		this.level = set.level;
@@ -559,7 +560,8 @@ export class Pokemon {
 		if (['Greninja-Bond', 'Rockruff-Dusk'].includes(name)) name = this.species.baseSpecies;
 		if (!level) level = this.level;
 		return name + (level === 100 ? '' : `, L${level}`) +
-			(this.gender === '' ? '' : `, ${this.gender}`) + (this.set.shiny ? ', shiny' : '');
+			(this.gender === '' ? '' : `, ${this.gender}`) + (this.set.shiny ? ', shiny' : '') +
+			(this.m.fusion ? `, fusion: ${this.m.fusion}${this.set.altsprite ? `, alt: ${this.set.altsprite}` : ''}` : '');
 	}
 
 	getFullDetails = () => {
@@ -1438,6 +1440,30 @@ export class Pokemon {
 		}
 		this.speed = this.storedStats.spe;
 		return species;
+	}
+
+	fusionChange(
+		speciesId: string | Species, source: Effect = this.battle.effect
+	) {
+		const rawSpecies = this.battle.dex.species.get(speciesId);
+		if (this.m.fusion === rawSpecies.name) return true;
+
+		this.m.fusion = rawSpecies.name;
+		this.set.fusion = rawSpecies.name;
+
+		this.details = this.getUpdatedDetails();
+
+		let details = (this.illusion || this).details;
+		if (this.terastallized) details += `, tera:${this.terastallized}`;
+
+		if (source.effectType === 'Ability') {
+			this.battle.add('-activate', this, `ability: ${source.name}`);
+		}
+
+		this.setSpecies(this.battle.dex.species.get(this.species.name), source);
+		this.battle.add('detailschange', this, details);
+
+		return true;
 	}
 
 	/**

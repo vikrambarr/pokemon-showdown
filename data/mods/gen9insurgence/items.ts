@@ -2,7 +2,7 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 	dragonfang: {
 		inherit: true,
 		onModifyAtk(atk, pokemon) {
-			if (pokemon.species.name === 'Clamperl-Delta') {
+			if (pokemon.species.name === 'Clamperl-Delta' || pokemon.m.fusion === 'Clamperl-Delta') {
 				return this.chainModify(2);
 			}
 		},
@@ -11,7 +11,7 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 	dragonscale: {
 		inherit: true,
 		onModifyDef(def, pokemon) {
-			if (pokemon.species.name === 'Clamperl-Delta') {
+			if (pokemon.species.name === 'Clamperl-Delta' || pokemon.m.fusion === 'Clamperl-Delta') {
 				return this.chainModify(2);
 			}
 		},

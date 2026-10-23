@@ -28,8 +28,11 @@ export const Scripts: ModdedBattleScriptsData = {
 					!pokemon.transformed && !pokemon.abilityState.ending && !this.volatiles['commanding']) {
 					return true;
 				}
-				if (pokemon.ability === ('chaosemeralds' as ID) && pokemon.species.id === 'supersonic' &&
-					!pokemon.volatiles['gastroacid'] && !pokemon.transformed && !pokemon.abilityState.ending) {
+				if (
+					pokemon.ability === ('chaosemeralds' as ID) &&
+					(pokemon.species.id === 'supersonic' || pokemon.m.fusion === 'Super Sonic') &&
+					!pokemon.volatiles['gastroacid'] && !pokemon.transformed && !pokemon.abilityState.ending
+				) {
 					return true;
 				}
 			}
