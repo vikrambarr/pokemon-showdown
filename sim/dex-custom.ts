@@ -3,6 +3,7 @@ import { Dex, toID, type DexTable, type ModdedDex } from './dex';
 import type { TypeData } from './dex-data';
 import type { Format, FormatData } from './dex-formats';
 import type { LearnsetData, SpeciesData, SpeciesFormatsData } from './dex-species';
+import { Rulesets as PokeathlonRulesets } from '../data/pokeathlon-rulesets';
 import {
 	checkSlot, compileHandler, eventTargets, EVENT_SUFFIXES, handlersOf, parseHandler, render,
 } from './dex-handlers';
@@ -289,6 +290,7 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 		FormatsData: { ...parent.data.FormatsData, ...data.FormatsData },
 		TypeChart: { ...parent.data.TypeChart, ...data.TypeChart },
 		Rulesets: {
+			...PokeathlonRulesets,
 			...parent.data.Rulesets,
 			dexpokemon: {
 				effectType: 'ValidatorRule',
@@ -296,7 +298,8 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 				desc: "Only Pok&eacute;mon in this dex can be used",
 				onValidateSet(set) {
 					const { outOfBattleSpecies, tierSpecies } = this.getValidationSpecies(set);
-					for (const forme of [outOfBattleSpecies, tierSpecies]) {
+					const fusion = this.ruleTable.has('infinitefusionmod') && set.fusion ? [this.dex.species.get(set.fusion)] : [];
+					for (const forme of [outOfBattleSpecies, tierSpecies, ...fusion]) {
 						if (!species.has(forme.isCosmeticForme ? toID(forme.baseSpecies) : forme.id)) {
 							return [`${forme.name} isn't in this dex.`];
 						}

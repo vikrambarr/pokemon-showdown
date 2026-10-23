@@ -3250,6 +3250,7 @@ export class Battle {
 				const newSet: PokemonSet = {
 					name: '',
 					species: set.species,
+					fusion: set.fusion,
 					item: set.item,
 					ability: set.ability,
 					moves: set.moves,

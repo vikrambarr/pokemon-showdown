@@ -5,6 +5,7 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 			if (!target.hp) return;
 			if (move?.effectType === 'Move' && target.getMoveHitData(move).crit) {
 				if (target.species.id === 'wiggler') target.formeChange('Wiggler-Angry');
+				if (target.m.fusion === 'Wiggler') target.fusionChange('Wiggler-Angry');
 				this.boost({ atk: 12 }, target, target);
 			}
 		},
@@ -14,24 +15,33 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		onUpdate(pokemon) {
 			if (pokemon.hp <= pokemon.maxhp / 2) {
 				if (pokemon.species.id === 'rex') pokemon.formeChange('Rex-Squished', this.effect, true);
+				if (pokemon.m.fusion === 'Rex') pokemon.fusionChange('Rex-Squished', this.effect);
 			} else {
 				if (pokemon.species.id === 'rexsquished') pokemon.formeChange('Rex', this.effect, true);
+				if (pokemon.m.fusion === 'Rex-Squished') pokemon.fusionChange('Rex', this.effect);
 			}
 		},
 	},
 	chaosemeralds: {
 		onDamagePriority: -40,
 		onDamage(damage, target, source, effect) {
-			if (target.species.id === 'sonic' && !target.transformed && damage >= target.hp && effect?.effectType === 'Move') {
+			if (
+				(target.species.id === 'sonic' || target.m.fusion === 'Sonic') && !target.transformed &&
+				damage >= target.hp && effect?.effectType === 'Move'
+			) {
 				return target.hp - 1;
 			}
 		},
 		onResidualOrder: 1,
 		onResidual(pokemon) {
-			if (pokemon.baseSpecies.baseSpecies !== 'Sonic' || pokemon.transformed || !pokemon.hp) return;
-			if (pokemon.species.id === 'supersonic' || pokemon.hp !== 1) return;
+			if (
+				!(pokemon.baseSpecies.baseSpecies === 'Sonic' || pokemon.m.fusion?.includes('Sonic')) ||
+				pokemon.transformed || !pokemon.hp
+			) return;
+			if (pokemon.species.id === 'supersonic' || pokemon.m.fusion === 'Super Sonic' || pokemon.hp !== 1) return;
 			this.add('-activate', pokemon, 'ability: Chaos Emeralds');
 			if (pokemon.species.id === 'sonic') pokemon.formeChange('Super Sonic', this.effect, true);
+			if (pokemon.m.fusion === 'Sonic') pokemon.fusionChange('Super Sonic', this.effect);
 			this.heal(pokemon.baseMaxhp);
 		},
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, cantsuppress: 1 },
