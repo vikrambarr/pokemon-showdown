@@ -23,7 +23,7 @@ export interface SpeciesEntry {
 	locked: boolean;
 }
 
-export const MAX_LEARNSET = 500;
+export const MAX_LEARNSET = 128;
 
 const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
 const COLORS = ['Green', 'Red', 'Blue', 'White', 'Brown', 'Yellow', 'Purple', 'Pink', 'Gray', 'Black'];
@@ -71,9 +71,11 @@ function number(value: unknown, field: string, min: number, max: number, integer
 	return integer ? value : Math.round(value * 1000) / 1000;
 }
 
+let unlimited = false;
+
 function text(value: unknown, field: string, maxLength: number) {
 	if (typeof value !== 'string' || !value.trim()) throw new Chat.ErrorMessage(`"${field}" must be some text.`);
-	if (value.trim().length > maxLength) {
+	if (!unlimited && value.trim().length > maxLength) {
 		throw new Chat.ErrorMessage(`"${field}" can be at most ${maxLength} characters.`);
 	}
 	return value.trim();
@@ -85,7 +87,7 @@ function bool(value: unknown, field: string) {
 }
 
 function list<T>(value: unknown, field: string, maxLength: number, each: (entry: unknown) => T) {
-	if (!Array.isArray(value) || !value.length || value.length > maxLength) {
+	if (!Array.isArray(value) || !value.length || (!unlimited && value.length > maxLength)) {
 		throw new Chat.ErrorMessage(`"${field}" must be a list of 1 to ${maxLength} entries.`);
 	}
 	return value.map(each);
@@ -129,7 +131,7 @@ const EVENT_FIELDS = new Map<string, (value: unknown, dex: ModdedDex) => any>([
 ]);
 const FIELDS = new Map<string, Field>([
 	['types', (value, dex) => {
-		const types = list(value, 'types', 4, type => (type === '???' ? type : fromDex(dex.types, type, 'type')));
+		const types = list(value, 'types', 3, type => (type === '???' ? type : fromDex(dex.types, type, 'type')));
 		if (new Set(types).size < types.length) throw new Chat.ErrorMessage(`A Pokemon can't have the same type twice.`);
 		return types;
 	}],
@@ -171,32 +173,32 @@ const FIELDS = new Map<string, Field>([
 		return { M, F };
 	}],
 	['prevo', (value, dex, names) => relative(value, 'prevo', dex, names)],
-	['evos', (value, dex, names) => list(value, 'evos', 30, evo => relative(evo, 'evos', dex, names))],
+	['evos', (value, dex, names) => list(value, 'evos', 32, evo => relative(evo, 'evos', dex, names))],
 	['evoType', value => fromList(value, EVO_TYPES, 'evoType')],
 	['evoLevel', value => number(value, 'evoLevel', 1, 100, true)],
 	['evoItem', (value, dex) => fromDex(dex.items, value, 'item')],
 	['evoMove', (value, dex) => fromDex(dex.moves, value, 'move')],
-	['evoCondition', value => text(value, 'evoCondition', 100)],
+	['evoCondition', value => text(value, 'evoCondition', 128)],
 	['baseSpecies', (value, dex, names) => relative(value, 'baseSpecies', dex, names)],
 	['forme', value => text(value, 'forme', 30)],
 	['baseForme', value => text(value, 'baseForme', 30)],
-	['cosmeticFormes', value => list(value, 'cosmeticFormes', 30, forme => validateName(forme, 'forme'))],
+	['cosmeticFormes', value => list(value, 'cosmeticFormes', 32, forme => validateName(forme, 'forme'))],
 	['requiredItem', (value, dex) => fromDex(dex.items, value, 'item')],
 	['requiredAbility', (value, dex) => fromDex(dex.abilities, value, 'ability')],
 	['requiredMove', (value, dex) => fromDex(dex.moves, value, 'move')],
 	['battleOnly', (value, dex, names) => (Array.isArray(value) ?
-		list(value, 'battleOnly', 10, entry => relative(entry, 'battleOnly', dex, names)) :
+		list(value, 'battleOnly', 8, entry => relative(entry, 'battleOnly', dex, names)) :
 		relative(value, 'battleOnly', dex, names))],
 	['changesFrom', (value, dex, names) => relative(value, 'changesFrom', dex, names)],
 	['sameNumberAs', (value, dex, names) => relative(value, 'sameNumberAs', dex, names)],
 	['tier', value => fromList(value, TIERS, 'tier')],
 	['natDexTier', value => fromList(value, TIERS, 'tier')],
 	['doublesTier', value => fromList(value, DOUBLES_TIERS, 'doubles tier')],
-	['tags', value => list(value, 'tags', 10, tag => text(tag, 'tag', 40))],
+	['tags', value => list(value, 'tags', 8, tag => text(tag, 'tag', 40))],
 	['maxHP', value => number(value, 'maxHP', 1, 999, true)],
 	['isNonstandard', value => fromList(value, NONSTANDARD, 'isNonstandard')],
 	['eventOnly', value => bool(value, 'eventOnly')],
-	['eventData', (value, dex) => list(value, 'eventData', 60, event => {
+	['eventData', (value, dex) => list(value, 'eventData', 64, event => {
 		if (!event || typeof event !== 'object' || Array.isArray(event)) {
 			throw new Chat.ErrorMessage(`Each event must be an object like {"generation": 9, "level": 50, "moves": ["tackle"]}.`);
 		}
@@ -249,13 +251,24 @@ function learnset(input: unknown, dex: ModdedDex, old: AnyObject) {
 		});
 		if (!result[move.id].length) throw new Chat.ErrorMessage(`${move.name} needs at least one source.`);
 	}
-	if (Object.values(result).filter(Boolean).length > MAX_LEARNSET) {
+	if (!unlimited && Object.values(result).filter(Boolean).length > MAX_LEARNSET) {
 		throw new Chat.ErrorMessage(`A learnset can have at most ${MAX_LEARNSET} moves.`);
 	}
 	return result;
 }
 
-export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built = dex) {
+export function validateEntry(
+	input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built = dex, official = false
+) {
+	unlimited = official;
+	try {
+		return checkEntry(input, dex, entries, built);
+	} finally {
+		unlimited = false;
+	}
+}
+
+function checkEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built: ModdedDex) {
 	const name = validateName(input.name, 'Pokemon');
 	const speciesid = toID(name);
 	const official: AnyObject | undefined = dex.data.Pokedex[speciesid];
@@ -269,7 +282,7 @@ export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID,
 		if (official) throw new Chat.ErrorMessage(`${official.name} already exists, so it can't inherit from anything.`);
 		const base = input.inheritsFrom === null ? null : dex.species.get(input.inheritsFrom);
 		if (base && (!base.exists || !dex.data.Pokedex[base.id]?.baseStats)) {
-			throw new Chat.ErrorMessage(`"${input.inheritsFrom}" isn't a Pokemon in the base dex.`);
+			throw new Chat.ErrorMessage(`"${input.inheritsFrom}" isn't a Pokemon in the dex's world.`);
 		}
 		inheritsfrom = base ? base.id : null;
 	}

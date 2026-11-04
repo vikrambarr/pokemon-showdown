@@ -17,7 +17,7 @@ export interface TypeEntry {
 	locked: boolean;
 }
 
-export const MAX_TYPES = 40;
+export const MAX_TYPES = 32;
 
 const CODES: { [multiplier: string]: number } = { 1: 0, 2: 1, 0.5: 2, 0: 3 };
 
@@ -58,8 +58,8 @@ export function validateType(input: AnyObject, dex: ModdedDex, entries: Map<ID, 
 		throw new Chat.ErrorMessage(`Type names are one word starting with a capital letter, like "${typeName(id)}".`);
 	}
 	for (const key in input) {
-		if (!['name', 'damageTaken', 'attacks'].includes(key)) {
-			throw new Chat.ErrorMessage(`"${key}" isn't something you can set. You can set: name, damageTaken, attacks.`);
+		if (!['name', 'damageTaken', 'attacks', 'color', 'label'].includes(key)) {
+			throw new Chat.ErrorMessage(`"${key}" isn't something you can set. You can set: name, damageTaken, attacks, color, label.`);
 		}
 	}
 	const old = entries.get(id);
@@ -74,6 +74,20 @@ export function validateType(input: AnyObject, dex: ModdedDex, entries: Map<ID, 
 				data[field][key] = value;
 			}
 		}
+	}
+	const color = input.color === undefined ? old?.data.color : input.color;
+	if (color !== undefined && color !== null) {
+		if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color)) {
+			throw new Chat.ErrorMessage(`"color" must be a hex color, like "#7a5cc9".`);
+		}
+		data.color = color.toLowerCase();
+	}
+	const label = input.label === undefined ? old?.data.label : input.label;
+	if (label !== undefined && label !== null) {
+		if (typeof label !== 'string' || !/^[a-z0-9?-]{1,6}$/i.test(label)) {
+			throw new Chat.ErrorMessage(`"label" must be 1 to 6 letters, numbers, - or ?, like "COSMIC". It's what the type's icon says.`);
+		}
+		data.label = label.toUpperCase();
 	}
 	return {
 		effecttable: 'TypeChart', effectid: id, num: 0, inheritsfrom: null, data, slots: {}, events: {}, sprites: {},
@@ -99,6 +113,8 @@ export function resolveTypes(dex: ModdedDex, entries: Iterable<TypeEntry>) {
 		for (const [source, multiplier] of Object.entries(entry.data.damageTaken as AnyObject)) {
 			(get(entry.effectid).damageTaken as AnyObject)[source] = CODES[multiplier];
 		}
+		if (entry.data.color) (get(entry.effectid) as AnyObject).color = entry.data.color;
+		if (entry.data.label) (get(entry.effectid) as AnyObject).label = entry.data.label;
 	}
 	return TypeChart;
 }

@@ -9,10 +9,12 @@ CREATE TABLE IF NOT EXISTS dexes (
 	parents JSONB NOT NULL,
 	official BOOLEAN NOT NULL,
 	visibility TEXT NOT NULL,
-	origin JSONB,
+	description TEXT NOT NULL DEFAULT '',
 	created BIGINT NOT NULL,
 	updated BIGINT NOT NULL
 );
+
+ALTER TABLE dexes ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS dexes_ownerid ON dexes (ownerid);
 

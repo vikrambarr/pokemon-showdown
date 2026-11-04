@@ -95,8 +95,10 @@ const oneOf = (...options: unknown[]): Check => (value, field) => {
 	}
 	return value;
 };
+let unlimited = false;
+
 const text = (max: number): Check => (value, field) => {
-	if (typeof value !== 'string' || !value.trim() || value.length > max) {
+	if (typeof value !== 'string' || !value.trim() || (!unlimited && value.length > max)) {
 		fail(field, `must be text, at most ${max} characters.`);
 	}
 	return value.trim();
@@ -146,7 +148,7 @@ const move = slot('ref', { tables: ['Moves'], form: 'name' });
 const species = slot('ref', { tables: ['Pokedex'], form: 'name' });
 const boosts = record(slot('stat', { value: 'atk', key: true }), int(-6, 6));
 const fraction = list(int(1, 100), 2);
-const desc = { desc: text(1000), shortDesc: text(300) };
+const desc = { desc: text(1024), shortDesc: text(256) };
 const nonstandard = oneOf(...used('Moves', entry => entry.isNonstandard), 'Custom');
 const secondaryFields: Fields = {
 	chance: int(1, 100), boosts, status, volatileStatus: condition, sideCondition: condition, pseudoWeather: condition,
@@ -301,6 +303,18 @@ export function resolveEdits(dex: ModdedDex, entry: EffectEntry, data: AnyObject
 }
 
 export function validateEffect(
+	input: AnyObject, table: EffectTable, dex: ModdedDex, entries: Map<ID, EffectEntry>, data: AnyObject,
+	official = false
+) {
+	unlimited = official;
+	try {
+		return checkEffect(input, table, dex, entries, data);
+	} finally {
+		unlimited = false;
+	}
+}
+
+function checkEffect(
 	input: AnyObject, table: EffectTable, dex: ModdedDex, entries: Map<ID, EffectEntry>, data: AnyObject
 ) {
 	const what = EFFECT_NAMES[table];
