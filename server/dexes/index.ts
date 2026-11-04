@@ -1,11 +1,14 @@
 import * as crypto from 'crypto';
-import { FS } from '../../lib';
+import { FS, Utils } from '../../lib';
 import { SQL, PGDatabase } from '../../lib/database';
 import {
 	buildBase, buildDex, buildFormat, EFFECT_TABLES, isBuiltDex, releaseDex, type DexLayer, type EffectTable,
 } from '../../sim/dex-custom';
 import type { ModdedDex } from '../../sim/dex';
 import type { Format, FormatData } from '../../sim/dex-formats';
+import { TeamValidator } from '../../sim/team-validator';
+import type { PokemonSet } from '../../sim/teams';
+import { Tags } from '../../data/tags';
 import * as sprites from './sprites';
 import { resolveEntries, validateEntry, validateName, type Origin, type SpeciesEntry } from './species';
 import {
@@ -29,7 +32,7 @@ export interface DexRow {
 	parents: ID[];
 	official: boolean;
 	visibility: Visibility;
-	origin: Origin | null;
+	description: string;
 	created: number;
 	updated: number;
 }
@@ -46,15 +49,16 @@ export interface LoadedDex {
 	dex: ModdedDex;
 }
 
-export const MAX_DEXES = 10;
-export const MAX_ENTRIES = 200;
-export const MAX_FORMATS = 20;
-export const MAX_EFFECTS = 300;
+export const MAX_DEXES = 3;
+export const MAX_ENTRIES = 512;
+export const MAX_FORMATS = 16;
+export const MAX_EFFECTS = 512;
 export const MAX_DATA_BYTES = 256 * 1024;
 export const MAX_ORIGINS = 5;
-export const MAX_DEPTH = 5;
+export const MAX_DEPTH = 8;
 export const MAX_PARENTS = 8;
-export const MAX_EDITORS = 20;
+export const MAX_EDITORS = 8;
+export const MAX_DESCRIPTION = 512;
 export const VISIBILITIES = ['public', 'private'];
 
 const GAME_TYPES = ['singles', 'doubles', 'triples', 'multi', 'freeforall'];
@@ -84,6 +88,12 @@ export function database() {
 
 const json = (value: unknown) => JSON.stringify(value);
 const isObject = (value: unknown): value is AnyObject => !!value && typeof value === 'object' && !Array.isArray(value);
+const newID = (prefix: string, taken: (id: ID) => boolean) => {
+	for (;;) {
+		const id = `${prefix}${crypto.randomBytes(5).toString('hex')}` as ID;
+		if (!taken(id)) return id;
+	}
+};
 const tableName = (table: Table) => (
 	table === 'Pokedex' ? 'Pokemon' : table === 'TypeChart' ? 'type' : EFFECT_NAMES[table]
 );
@@ -101,6 +111,10 @@ export function parentsOf(loaded: LoadedDex) {
 	return loaded.row.parents.map(dexid => dexes.get(dexid)).filter(parent => parent) as LoadedDex[];
 }
 
+function childrenOf(loaded: LoadedDex) {
+	return [...dexes.values()].filter(other => other.row.parents.includes(loaded.row.dexid));
+}
+
 export function ancestorsOf(loaded: LoadedDex) {
 	const found = [loaded];
 	for (const dex of found) {
@@ -114,7 +128,7 @@ export function ancestorsOf(loaded: LoadedDex) {
 function parentLayers(row: DexRow) {
 	return row.parents.map(dexid => {
 		const parent = dexes.get(dexid);
-		if (!parent) throw new Chat.ErrorMessage(`${row.name} is based on a dex that isn't loaded.`);
+		if (!parent) throw new Chat.ErrorMessage(`${row.name}'s world has a dex that isn't loaded.`);
 		return parent;
 	});
 }
@@ -123,7 +137,7 @@ function baseKey(row: DexRow) {
 	return `${row.mod}:${row.parents.map(dexid => dexes.get(dexid)?.data.hash).join(',')}`;
 }
 
-function baseOf(row: DexRow): ModdedDex {
+export function baseOf(row: DexRow): ModdedDex {
 	const parents = parentLayers(row);
 	if (!parents.length) return Dex.mod(row.mod);
 	if (parents.length === 1 && parents[0].row.mod === row.mod) return parents[0].dex;
@@ -152,6 +166,10 @@ function depthOf(loaded: LoadedDex): number {
 	return Math.max(0, ...parentsOf(loaded).map(parent => depthOf(parent) + 1));
 }
 
+function heightOf(loaded: LoadedDex): number {
+	return Math.max(0, ...childrenOf(loaded).map(child => heightOf(child) + 1));
+}
+
 function lockedAbove(loaded: LoadedDex, table: Table, id: ID) {
 	const checked = new Set<LoadedDex>();
 	for (let level = parentsOf(loaded); level.length; level = level.flatMap(parentsOf)) {
@@ -163,6 +181,25 @@ function lockedAbove(loaded: LoadedDex, table: Table, id: ID) {
 		}
 	}
 	return null;
+}
+
+const ownCount = (maps: Map<ID, Entry>[]) => maps.reduce(
+	(total, map) => total + [...map.values()].filter(entry => !entry.trackdex).length, 0
+);
+
+function checkLimits(loaded: LoadedDex, entries: Map<ID, SpeciesEntry>, effects: Effects) {
+	if (loaded.row.official) return;
+	const over = (limit: number, before: Map<ID, Entry>[], after: Map<ID, Entry>[]) =>
+		ownCount(after) > limit && ownCount(after) > ownCount(before);
+	if (over(MAX_ENTRIES, [loaded.entries], [entries])) {
+		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_ENTRIES} custom or edited Pokemon, not counting forks that follow their originals.`);
+	}
+	if (over(MAX_EFFECTS, EFFECT_TABLES.map(table => loaded.effects[table]), EFFECT_TABLES.map(table => effects[table]))) {
+		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_EFFECTS} custom or edited moves, abilities, items and conditions, not counting forks that follow their originals.`);
+	}
+	if (over(MAX_TYPES, [loaded.effects.TypeChart], [effects.TypeChart])) {
+		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_TYPES} custom or edited types, not counting forks that follow their originals.`);
+	}
 }
 
 function checkUnlocked(loaded: LoadedDex, table: Table, ids: (ID | null)[]) {
@@ -360,6 +397,7 @@ async function reload(dexid: ID) {
 	if (loaded) {
 		dexes.set(dexid, loaded);
 		register(loaded);
+		if (loaded.row.official) void saveSnapshots(loaded).catch(err => Monitor.crashlog(err, 'A dex snapshot'));
 	} else {
 		dexes.delete(dexid);
 	}
@@ -367,10 +405,135 @@ async function reload(dexid: ID) {
 	return loaded;
 }
 
+export function findDex(name: string) {
+	const id = toID(name);
+	return dexes.get(id) || [...dexes.values()].find(loaded => toID(loaded.row.name) === id);
+}
+
 export function getDex(name: string) {
-	const loaded = dexes.get(toID(name));
+	const loaded = findDex(name);
 	if (!loaded) throw new Chat.ErrorMessage(`There's no dex called "${name}".`);
 	return loaded;
+}
+
+const formatDetailsCache = new Map<string, AnyObject>();
+
+function unbuildableForme(species: Species) {
+	if (species.forme.includes('Totem')) return true;
+	if (species.baseSpecies === 'Ogerpon' && species.forme.includes('Tera')) return true;
+	return !!species.battleOnly && !species.requiredItem && !species.requiredItems;
+}
+
+export function formatDetails(formatid: string) {
+	const id = toID(formatid);
+	const loaded = dexes.get(formatDexes.get(id)!);
+	const data = loaded?.formats.get(id);
+	if (!loaded || !data) return null;
+	const key = `${loaded.data.hash}:${loaded.row.name}:${json(data)}`;
+	if (formatDetailsCache.get(id)?.key === key) return formatDetailsCache.get(id)!.details;
+	const validator = new TeamValidator(Dex.formats.get(id));
+	const { dex, ruleTable } = validator;
+	const inDex = new Set(loaded.data.species);
+	const legal: { [kind: string]: ID[] } = { pokemon: [], move: [], ability: [], item: [] };
+	const banned: { [kind: string]: ID[] } = { pokemon: [], move: [], ability: [], item: [] };
+	const outright: ID[] = [];
+	const existence = ['past', 'future', 'lgpe', 'legends', 'unobtainable', 'cap', 'custom', 'nonexistent'];
+	const tagBanned = (species: Species) => {
+		for (const [type, match] of ruleTable.tagRules) {
+			if (type === '*' || !ruleTable.matchesTagRule(match, species)) continue;
+			if (type === '-') return !existence.includes(match as string);
+			break;
+		}
+		return ruleTable.has('-tag:allpokemon');
+	};
+	const isBanned = (kind: string, effect: { id: ID, isNonstandard?: string | null }) =>
+		!effect.isNonstandard || ruleTable.has(`-${kind}:${effect.id}`);
+	const set = {
+		name: 'Set', species: 'Pikachu', moves: [], ability: '', item: '', evs: {}, ivs: {}, level: 100, nature: '',
+	} as unknown as PokemonSet;
+	for (const species of dex.species.all()) {
+		if (!species.exists || species.isCosmeticForme || unbuildableForme(species)) continue;
+		if (!inDex.has(species.id)) continue;
+		set.name = set.species = species.name;
+		if (!validator.checkSpecies(set, species, species, {})) {
+			legal.pokemon.push(species.id);
+			continue;
+		}
+		banned.pokemon.push(species.id);
+		if (ruleTable.has(`-pokemon:${species.id}`) || ruleTable.has(`-basepokemon:${toID(species.baseSpecies)}`) ||
+			!tagBanned(species)) {
+			outright.push(species.id);
+		}
+	}
+	set.name = 'Set';
+	set.species = 'Pikachu';
+	for (const move of dex.moves.all()) {
+		if (!move.exists || legal.move.includes(move.id) || banned.move.includes(move.id)) continue;
+		if (!validator.checkMove(set, move, {})) legal.move.push(move.id);
+		else if (isBanned('move', move)) banned.move.push(move.id);
+	}
+	for (const ability of dex.abilities.all()) {
+		if (!ability.exists) continue;
+		if (!validator.checkAbility(set, ability, {})) legal.ability.push(ability.id);
+		else if (isBanned('ability', ability)) banned.ability.push(ability.id);
+	}
+	for (const item of dex.items.all()) {
+		if (!item.exists || !item.id) continue;
+		if (!validator.checkItem(set, item, {})) legal.item.push(item.id);
+		else if (isBanned('item', item)) banned.item.push(item.id);
+	}
+	const bans: {
+		tags: { [tagid: string]: { state: string, source?: string } },
+		other: { name: string, state: string, desc?: string, source?: string }[],
+	} = { tags: {}, other: [] };
+	const titleCase = (text: string) => text.replace(/(?:^|[\s-])[a-z]/g, match => match.toUpperCase());
+	for (const [rule, source] of ruleTable) {
+		if (!/^[-+*]/.test(rule)) continue;
+		const body = rule.slice(1);
+		if (/^(?:base)?(?:pokemon|move|ability|item):/.test(body)) continue;
+		const state = rule.startsWith('-') ? 'banned' : rule.startsWith('*') ? 'restricted' : 'unbanned';
+		if (body.startsWith('tag:') || body === 'nonexistent') {
+			bans.tags[body.startsWith('tag:') ? body.slice(4) : body] = { state, ...source ? { source } : {} };
+		} else {
+			const [kind, name] = body.includes(':') ? Utils.splitFirst(body, ':') : ['', body];
+			const rule = kind ? null : dex.formats.get(name);
+			const label = kind ? `${titleCase(kind)}: ${titleCase(name)}` : rule?.exists ? rule.name : titleCase(name);
+			bans.other.push({ name: label, state, ...rule?.desc ? { desc: rule.desc } : {}, ...source ? { source } : {} });
+		}
+	}
+	const rulesets = [];
+	for (const ruleid in dex.data.Rulesets) {
+		if (['dexpokemon', 'dexsnapshot'].includes(ruleid)) continue;
+		const rule = dex.formats.get(ruleid);
+		if (!rule.exists || rule.effectType === 'Format' || rule.hasValue) continue;
+		const children = (rule.ruleset || []).filter(spec => !/^[-+*!^]/.test(spec) && !spec.includes('='))
+			.map(spec => toID(spec)).filter(id => id !== rule.id);
+		rulesets.push({
+			id: rule.id, name: rule.name, ...rule.desc ? { desc: rule.desc } : {}, ...children.length ? { children } : {},
+		});
+	}
+	const tags = [];
+	const tagText = Dex.loadTextData().Tags;
+	for (const tagid in Tags) {
+		if (!Dex.formats.validTag(tagid as ID)) continue;
+		const tag = Tags[tagid as Lowercase<string>];
+		const filter = `${tag.speciesFilter || ''}`;
+		const tier = /natDexTier/.test(filter) ? `National Dex ${tag.name.replace(/^ND /, '')}` :
+			/(?:doublesTier|\.tier)\b/.test(filter) ? tag.name : '';
+		const desc = tagText[tagid]?.desc || (tier ? `Pok&eacute;mon in the ${tier} tier.` : '');
+		tags.push({
+			id: tagid, name: tag.name, kind: tag.speciesFilter ? 'pokemon' : tag.moveFilter ? 'move' : 'other', ...desc ? { desc } : {},
+		});
+	}
+	const details = {
+		id, name: data.name, dex: loaded.row.name, dexid: loaded.row.dexid, mod: loaded.row.mod,
+		gameType: data.gameType || 'singles', ruleset: data.ruleset || [],
+		rules: [...ruleTable.keys()].filter(rule => !/^[-+*!]/.test(rule) && !rule.includes(':')),
+		sources: Object.fromEntries([...ruleTable].filter(([rule, source]) => source && !/^[-+*!]/.test(rule) && !rule.includes(':'))),
+		bans, legal, banned, outright, rulesets: Utils.sortBy(rulesets, rule => rule.name), tags: Utils.sortBy(tags, tag => [tag.kind, tag.name]),
+	};
+	formatDetailsCache.set(id, { key, details });
+	return details;
 }
 
 export function battleData(formatid: string) {
@@ -399,6 +562,20 @@ export function usedSprites(loaded: LoadedDex, entrySprites: { [kind: string]: s
 	return Object.fromEntries(Object.entries(entrySprites).filter(([, uploadid]) => loaded.uploads.has(uploadid)));
 }
 
+function engineData(mod: string) {
+	const engine = Dex.mod(mod).includeData();
+	let official = engine;
+	while (!/^(gen\d|base)$/.test(official.currentMod)) official = Dex.mod(official.parentMod);
+	const tables: { [table: string]: AnyObject } = {};
+	for (const table of ['Moves', 'Abilities', 'Items', 'TypeChart'] as const) {
+		for (const [id, entry] of Object.entries(engine.data[table])) {
+			const effect = json(entry);
+			if (effect !== json(official.data[table][id])) (tables[table] ||= {})[id] = JSON.parse(effect);
+		}
+	}
+	return tables;
+}
+
 export function clientData(loaded: LoadedDex) {
 	const speciesSprites: { [speciesid: string]: { [kind: string]: string } } = {};
 	const images: { [uploadid: string]: AnyObject } = {};
@@ -414,8 +591,9 @@ export function clientData(loaded: LoadedDex) {
 			(speciesSprites[speciesid] ||= {})[kind] = uploadid;
 		}
 	}
-	const { hash, mod, parents, species, Pokedex, Learnsets, FormatsData, TypeChart } = loaded.data;
-	const effects: { [table: string]: AnyObject } = {};
+	const { hash, mod, parents, species, Pokedex, Learnsets, FormatsData } = loaded.data;
+	const { TypeChart: engineTypes, ...effects } = engineData(mod);
+	const TypeChart = engineTypes || loaded.data.TypeChart ? { ...engineTypes, ...loaded.data.TypeChart } : undefined;
 	const itemSprites: { [itemid: string]: string } = {};
 	for (const table of EFFECT_TABLES) {
 		for (const [id, entry] of loaded.effects[table]) {
@@ -435,8 +613,11 @@ export function clientData(loaded: LoadedDex) {
 	};
 }
 
-export async function saveSnapshot(formatid: string) {
-	const used = dexes.get(formatDexes.get(toID(formatid))!);
+export function saveSnapshot(formatid: string) {
+	return saveSnapshots(dexes.get(formatDexes.get(toID(formatid))!));
+}
+
+async function saveSnapshots(used?: LoadedDex) {
 	for (const loaded of used ? ancestorsOf(used) : []) {
 		if (savedSnapshots.has(loaded.data.hash)) continue;
 		const data = clientData(loaded);
@@ -498,7 +679,7 @@ export function listed(loaded: LoadedDex, account: string | null) {
 
 export function search(text: string, account: string | null) {
 	const query = toID(text);
-	return [...dexes.values()].filter(loaded => listed(loaded, account) && loaded.row.dexid.includes(query));
+	return [...dexes.values()].filter(loaded => listed(loaded, account) && toID(loaded.row.name).includes(query));
 }
 
 export async function dexesOf(name: string, account: string | null) {
@@ -525,45 +706,54 @@ export async function editable(user: User, name: string) {
 	return loaded;
 }
 
-export async function createDex(user: User, name: string, on: string, from?: LoadedDex, engine?: string) {
-	name = validateName(name, 'dex');
-	const dexid = toID(name);
-	if (dexid.length > 20) throw new Chat.ErrorMessage(`Dex names can be at most 20 letters and numbers long.`);
-	if (dexes.has(dexid)) throw new Chat.ErrorMessage(`There's already a dex called ${dexes.get(dexid)!.row.name}.`);
-	if (Dex.dexes[dexid]) throw new Chat.ErrorMessage(`"${name}" is the name of a mod, so a dex can't use it.`);
+function checkName(input: string, loaded?: LoadedDex) {
+	const name = validateName(input, 'dex');
+	if (toID(name).length > 20) throw new Chat.ErrorMessage(`Dex names can be at most 20 letters and numbers long.`);
+	const other = findDex(name);
+	if (other && other !== loaded) throw new Chat.ErrorMessage(`There's already a dex called ${other.row.name}.`);
+	if (Dex.dexes[toID(name)]) throw new Chat.ErrorMessage(`"${name}" is the name of a mod, so a dex can't use it.`);
+	return name;
+}
+
+function resolveBase(on: string, engine?: string, height = 0) {
 	const parts = on.split('+').map(part => part.trim());
-	const parents = parts.length > 1 || dexes.has(toID(on)) ? parts.map(getDex) : [];
+	const parents = parts.length > 1 || findDex(on) ? parts.map(getDex) : [];
 	const modid = toID(engine) || (parents.length ? parents[0].row.mod : toID(on));
 	const base = Dex.dexes[modid];
 	if (!base || isBuiltDex(modid)) {
 		throw new Chat.ErrorMessage(engine ? `"${engine}" isn't a mod a dex can run on.` :
-			`"${on}" isn't a dex or mod you can build on. Try gen9, another mod's id, or a dex's name.`);
+			`"${on}" isn't a world. Try gen9, another mod's id, a dex's name, or dex names joined with +.`);
 	}
 	const otherGen = parents.find(parent => parent.dex.gen !== base.includeData().gen);
 	if (otherGen) throw new Chat.ErrorMessage(`${otherGen.row.name} is a different generation from ${modid}.`);
 	if (new Set(parents).size < parents.length) throw new Chat.ErrorMessage(`That has the same dex twice.`);
-	if (parents.length > MAX_PARENTS) throw new Chat.ErrorMessage(`A dex can be built on at most ${MAX_PARENTS} dexes.`);
-	if (parents.some(parent => depthOf(parent) + 1 >= MAX_DEPTH)) {
-		throw new Chat.ErrorMessage(`Dexes can only be built on each other ${MAX_DEPTH} deep.`);
+	if (parents.length > MAX_PARENTS) throw new Chat.ErrorMessage(`A world can join at most ${MAX_PARENTS} dexes.`);
+	if (parents.some(parent => depthOf(parent) + 1 + height >= MAX_DEPTH)) {
+		throw new Chat.ErrorMessage(`Dexes can only be each other's worlds ${MAX_DEPTH} deep.`);
 	}
+	const species = parents.length ? [] : base.includeData().species.all()
+		.filter(entry => entry.exists && !entry.isNonstandard).map(entry => entry.id);
+	return { parents, modid, base, species };
+}
+
+export async function createDex(user: User, name: string, on: string, engine?: string) {
+	name = checkName(name);
+	const { parents, modid, species } = resolveBase(on, engine);
 	const account = await accountOf(user);
 	const owned = [...dexes.values()].filter(loaded => loaded.row.ownerid === account).length;
 	if (owned >= MAX_DEXES && !user.can('bypassall')) {
 		throw new Chat.ErrorMessage(`You can own at most ${MAX_DEXES} dexes.`);
 	}
-	const species = from ? from.row.species : parents.length ? [] : base.includeData().species.all()
-		.filter(entry => entry.exists && !entry.isNonstandard).map(entry => entry.id);
-	const origin: Origin | null = from ?
-		{ dexid: from.row.dexid, dex: from.row.name, owner: from.row.ownername, name: from.row.name } : null;
+	const dexid = newID('d', id => !!findDex(id) || !!Dex.dexes[id]);
 	const now = Date.now();
 	await database().query(SQL`INSERT INTO dexes
-		(dexid, ownerid, ownername, name, mod, species, removed, parents, official, visibility, origin, created, updated)
+		(dexid, ownerid, ownername, name, mod, species, removed, parents, official, visibility, created, updated)
 		VALUES (
-		${dexid}, ${account}, ${user.name}, ${name}, ${modid}, ${json(species)}, ${json(from ? from.row.removed : [])},
-		${json(parents.map(parent => parent.row.dexid))}, 'false', 'public', ${json(origin)}, ${now}, ${now}
+		${dexid}, ${account}, ${user.name}, ${name}, ${modid}, ${json(species)},
+		'[]', ${json(parents.map(parent => parent.row.dexid))}, 'false', 'public', ${now}, ${now}
 	)`);
 	let loaded = (await refresh(dexid))!;
-	if (parents.length === 1 && !from) {
+	if (parents.length === 1) {
 		for (const data of parents[0].formats.values()) {
 			try {
 				({ loaded } = await putFormat(loaded, data));
@@ -571,6 +761,37 @@ export async function createDex(user: User, name: string, on: string, from?: Loa
 		}
 	}
 	return loaded;
+}
+
+export async function setName(loaded: LoadedDex, name: string) {
+	name = checkName(name, loaded);
+	await database().query(SQL`UPDATE dexes SET name = ${name} WHERE dexid = ${loaded.row.dexid}`);
+	return save(loaded);
+}
+
+export async function setBase(loaded: LoadedDex, on: string, engine?: string) {
+	const { parents, modid, base, species } = resolveBase(on, engine, heightOf(loaded));
+	if (parents.some(parent => ancestorsOf(parent).includes(loaded))) {
+		throw new Chat.ErrorMessage(`A dex can't be in its own world, or in the world of a dex in its world.`);
+	}
+	const children = childrenOf(loaded);
+	if (children.length && base.includeData().gen !== loaded.dex.gen) {
+		throw new Chat.ErrorMessage(`${Chat.count(children, 'dexes are', 'dex is')} set in ${loaded.row.name}, so it has to stay Gen ${loaded.dex.gen}.`);
+	}
+	const row = { ...loaded.row, mod: modid, parents: parents.map(parent => parent.row.dexid), species, removed: [] };
+	const stale: string[] = [];
+	check(compile(row, loaded.entries, loaded.effects, stale));
+	await database().query(SQL`UPDATE dexes SET mod = ${modid}, parents = ${json(row.parents)}, species = ${json(species)},
+		removed = '[]' WHERE dexid = ${loaded.row.dexid}`);
+	return { loaded: await save(loaded), stale };
+}
+
+export async function setDescription(loaded: LoadedDex, description: string) {
+	if (description.length > MAX_DESCRIPTION) {
+		throw new Chat.ErrorMessage(`A description can be at most ${MAX_DESCRIPTION} characters.`);
+	}
+	await database().query(SQL`UPDATE dexes SET description = ${description.trim()} WHERE dexid = ${loaded.row.dexid}`);
+	return save(loaded);
 }
 
 export async function setEditor(loaded: LoadedDex, name: string, add: boolean) {
@@ -601,10 +822,26 @@ export async function deleteDex(loaded: LoadedDex) {
 	const dexid = loaded.row.dexid;
 	const children = [...dexes.values()].filter(other => other.row.parents.includes(dexid));
 	if (children.length) {
-		throw new Chat.ErrorMessage(`${Chat.count(children, 'dexes are', 'dex is')} built on ${loaded.row.name}, so it can't be deleted.`);
+		throw new Chat.ErrorMessage(`${Chat.count(children, 'dexes are', 'dex is')} set in ${loaded.row.name}, so it can't be deleted.`);
 	}
 	await database().query(SQL`DELETE FROM dexes WHERE dexid = ${dexid}`);
 	await refresh(dexid);
+	await unfollow(dexid);
+}
+
+export async function clearDex(loaded: LoadedDex) {
+	const dexid = loaded.row.dexid;
+	const species = parentsOf(loaded).length ? [] : Dex.mod(loaded.row.mod).includeData().species.all()
+		.filter(entry => entry.exists && !entry.isNonstandard).map(entry => entry.id);
+	await database().query(SQL`DELETE FROM dex_species WHERE dexid = ${dexid}`);
+	await database().query(SQL`DELETE FROM dex_effects WHERE dexid = ${dexid}`);
+	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = '[]' WHERE dexid = ${dexid}`);
+	const updated = await save(loaded);
+	await unfollow(dexid);
+	return updated;
+}
+
+async function unfollow(dexid: ID) {
 	const frozen = [
 		...await database().query<{ dexid: ID }>(SQL`UPDATE dex_species SET trackdex = NULL, trackid = NULL
 			WHERE trackdex = ${dexid} RETURNING dexid`),
@@ -692,7 +929,7 @@ export async function putEntries(loaded: LoadedDex, inputs: unknown[]) {
 	const changed = new Map<ID, SpeciesEntry>();
 	for (const input of inputs) {
 		if (!isObject(input)) throw new Chat.ErrorMessage(`Each Pokemon needs to be a JSON object, like {"name": "Pikachu"}.`);
-		const entry = validateEntry(input, base, entries, loaded.dex);
+		const entry = validateEntry(input, base, entries, loaded.dex, loaded.row.official);
 		checkUnlocked(loaded, 'Pokedex', [entry.speciesid, entry.inheritsfrom]);
 		if (!entry.num && !base.data.Pokedex[entry.speciesid]) {
 			entry.num = Math.min(
@@ -703,9 +940,7 @@ export async function putEntries(loaded: LoadedDex, inputs: unknown[]) {
 		entries.set(entry.speciesid, entry);
 		changed.set(entry.speciesid, entry);
 	}
-	if (!loaded.row.official && entries.size > MAX_ENTRIES && entries.size > loaded.entries.size) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_ENTRIES} custom or edited Pokemon.`);
-	}
+	checkLimits(loaded, entries, loaded.effects);
 	check(compile(loaded.row, entries, loaded.effects));
 	for (const entry of changed.values()) await writeEntry(loaded.row.dexid, 'Pokedex', entry);
 	const updated = await save(loaded);
@@ -772,7 +1007,13 @@ export async function setSprite(
 			database(), decoded, kind, await accountOf(user), user.name, loaded.row, options
 		);
 	}
-	await writeEntry(loaded.row.dexid, slot.table, { ...entry, sprites: entrySprites, trackdex: null, trackid: null });
+	const detached = { ...entry, sprites: entrySprites, trackdex: null, trackid: null };
+	if (slot.table === 'Items') {
+		checkLimits(loaded, loaded.entries, { ...loaded.effects, Items: new Map([...loaded.effects.Items, [id, detached as EffectEntry]]) });
+	} else {
+		checkLimits(loaded, new Map([...loaded.entries, [id, detached as SpeciesEntry]]), loaded.effects);
+	}
+	await writeEntry(loaded.row.dexid, slot.table, detached);
 	return saved(loaded, slot.table, id);
 }
 
@@ -808,12 +1049,8 @@ export async function deleteSprite(user: User, uploadid: string) {
 export async function putEffect(loaded: LoadedDex, table: EffectTable, input: AnyObject) {
 	const base = baseOf(loaded.row);
 	const lookup = lookupTables(base, loaded.data.Pokedex, loaded.effects);
-	const entry = validateEffect(input, table, base, loaded.effects[table], lookup);
+	const entry = validateEffect(input, table, base, loaded.effects[table], lookup, loaded.row.official);
 	checkUnlocked(loaded, table, [entry.effectid, entry.inheritsfrom]);
-	const count = EFFECT_TABLES.reduce((total, other) => total + loaded.effects[other].size, 0);
-	if (!loaded.row.official && !loaded.effects[table].has(entry.effectid) && count >= MAX_EFFECTS) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_EFFECTS} custom or edited moves, abilities, items and conditions.`);
-	}
 	if (!base.data[table][entry.effectid]) {
 		entry.num ||= Math.min(
 			-10000, ...[...dexes.values()].flatMap(other => [...other.effects[table].values()].map(each => each.num))
@@ -821,6 +1058,7 @@ export async function putEffect(loaded: LoadedDex, table: EffectTable, input: An
 		entry.data.num = entry.num;
 	}
 	const effects = { ...loaded.effects, [table]: new Map([...loaded.effects[table], [entry.effectid, entry]]) };
+	checkLimits(loaded, loaded.entries, effects);
 	const stale: string[] = [];
 	check(compile(loaded.row, loaded.entries, effects, stale));
 	const broken = stale.filter(problem => !loaded.stale.includes(problem));
@@ -840,11 +1078,8 @@ export function getEffect<T extends EffectTable | 'TypeChart'>(loaded: LoadedDex
 export async function putType(loaded: LoadedDex, input: AnyObject) {
 	const entry = validateType(input, baseOf(loaded.row), loaded.effects.TypeChart, loaded.dex);
 	checkUnlocked(loaded, 'TypeChart', [entry.effectid]);
-	const types = loaded.effects.TypeChart;
-	if (!loaded.row.official && !types.has(entry.effectid) && types.size >= MAX_TYPES) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_TYPES} custom or edited types.`);
-	}
 	const effects = { ...loaded.effects, TypeChart: new Map([...loaded.effects.TypeChart, [entry.effectid, entry]]) };
+	checkLimits(loaded, loaded.entries, effects);
 	check(compile(loaded.row, loaded.entries, effects));
 	await writeEntry(loaded.row.dexid, 'TypeChart', entry);
 	return { loaded: await saved(loaded, 'TypeChart', entry.effectid), entry };
@@ -870,22 +1105,33 @@ function originOf(source: LoadedDex, entry: Entry): Origin {
 	};
 }
 
-export function dependencies(source: LoadedDex, table: Table, id: ID, found = new Map<string, [Table, ID]>()) {
-	const entry = entriesOf(source, table).get(id);
-	if (!entry) {
+export function dependencies(
+	source: LoadedDex, table: Table, id: ID, target: LoadedDex,
+	found = new Map<string, [Table, ID, LoadedDex]>(), missing: string[] = []
+) {
+	const layers = ancestorsOf(source);
+	const owner = layers.find(layer => entriesOf(layer, table).has(id));
+	if (!owner) {
 		throw new Chat.ErrorMessage(`${source.row.name} has no custom or edited ${tableName(table)} called "${id}".`);
 	}
 	if (found.has(`${table}:${id}`)) return found;
-	found.set(`${table}:${id}`, [table, id]);
-	const base = baseOf(source.row);
+	found.set(`${table}:${id}`, [table, id, owner]);
+	const entry = entriesOf(owner, table).get(id)!;
+	const world = baseOf(target.row);
 	const visit = (value: unknown) => {
 		if (Array.isArray(value)) return value.forEach(visit);
 		if (isObject(value)) return Object.values(value).forEach(visit);
 		const ref = toID(value);
 		if (typeof value !== 'string' || !ref) return;
 		for (const other of TABLES) {
-			if ((other !== table || ref !== id) && !isBase(base, other, ref) && entriesOf(source, other).has(ref)) {
-				dependencies(source, other, ref, found);
+			if ((other === table && ref === id) || isBase(world, other, ref) || found.has(`${other}:${ref}`)) continue;
+			const layer: LoadedDex | undefined = layers.find(each => entriesOf(each, other).has(ref));
+			const dep = layer && entriesOf(layer, other).get(ref)!;
+			if (dep && !isBase(baseOf(layer.row), other, ref) && (!dep.inheritsfrom || isBase(world, other, dep.inheritsfrom))) {
+				dependencies(source, other, ref, target, found, missing);
+			} else if ((dep || isBase(source.dex, other, ref)) && !isBase(target.dex, other, ref)) {
+				const what = `the ${tableName(other)} ${dep?.data.name || (source.dex.data[other][ref] as AnyObject).name || ref}`;
+				if (!missing.includes(what)) missing.push(what);
 			}
 		}
 	};
@@ -902,17 +1148,17 @@ export function dependencies(source: LoadedDex, table: Table, id: ID, found = ne
 }
 
 async function copyInto(
-	target: LoadedDex, source: LoadedDex, keys: [Table, ID][],
+	target: LoadedDex, keys: [Table, ID, LoadedDex][],
 	options: { overwrite?: boolean, update?: boolean, seen?: Set<string> } = {}
 ) {
-	if (target.row.dexid === source.row.dexid) throw new Chat.ErrorMessage(`That's the same dex.`);
 	const base = baseOf(target.row);
-	const sourceBase = baseOf(source.row);
 	const entries = new Map(target.entries);
 	const effects = Object.fromEntries(TABLES.slice(1).map(table => [table, new Map(entriesOf(target, table))])) as Effects;
 	const species = new Set(target.row.species);
 	const copied: [Table, Entry][] = [];
-	for (const [table, id] of keys) {
+	for (const [table, id, source] of keys) {
+		if (target.row.dexid === source.row.dexid) throw new Chat.ErrorMessage(`That's the same dex.`);
+		const sourceBase = baseOf(source.row);
 		const entry = entriesOf(source, table).get(id)!;
 		const into: Map<ID, Entry> = table === 'Pokedex' ? entries : effects[table];
 		const existing = into.get(id);
@@ -957,17 +1203,7 @@ async function copyInto(
 		if (table === 'Pokedex' && official) species.add(id);
 		copied.push([table, copy]);
 	}
-	const count = (all: Effects) => EFFECT_TABLES.reduce((total, table) => total + all[table].size, 0);
-	const limited = !target.row.official;
-	if (limited && entries.size > MAX_ENTRIES && entries.size > target.entries.size) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_ENTRIES} custom or edited Pokemon.`);
-	}
-	if (limited && count(effects) > MAX_EFFECTS && count(effects) > count(target.effects)) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_EFFECTS} custom or edited moves, abilities, items and conditions.`);
-	}
-	if (limited && effects.TypeChart.size > MAX_TYPES && effects.TypeChart.size > target.effects.TypeChart.size) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_TYPES} custom or edited types.`);
-	}
+	checkLimits(target, entries, effects);
 	const stale: string[] = [];
 	check(compile({ ...target.row, species: [...species] }, entries, effects, stale));
 	const warnings = stale.filter(problem => !target.stale.includes(problem));
@@ -1000,7 +1236,7 @@ async function propagate(dexid: ID, table: Table, id: ID, seen = new Set<string>
 		if (!target) continue;
 		try {
 			if (!source || !entriesOf(source, table).has(id)) throw new Error(`The original is gone.`);
-			await copyInto(target, source, [...dependencies(source, table, id).values()], { update: true, seen });
+			await copyInto(target, [...dependencies(source, table, id, target).values()], { update: true, seen });
 		} catch {
 			await detach(dexes.get(row.dexid) || target, table, id);
 		}
@@ -1027,38 +1263,69 @@ export async function setLocked(loaded: LoadedDex, table: Table, name: string, l
 	return saved(loaded, table, toID(name));
 }
 
-export function forkEntry(target: LoadedDex, source: LoadedDex, table: Table, name: string, overwrite = false) {
-	return copyInto(target, source, [...dependencies(source, table, toID(name)).values()], { overwrite });
+export async function forkEntry(target: LoadedDex, source: LoadedDex, table: Table, name: string, overwrite = false) {
+	const missing: string[] = [];
+	const found = dependencies(source, table, toID(name), target, undefined, missing);
+	return { ...await copyInto(target, [...found.values()], { overwrite }), missing };
 }
 
-export async function forkDex(user: User, name: string, source: LoadedDex) {
-	let loaded = await createDex(user, name, source.row.parents.join('+') || source.row.mod, source, source.row.mod);
-	try {
-		const skipped: string[] = [];
-		const own = source.row.ownerid === loaded.row.ownerid;
-		const keys = TABLES
-			.flatMap(table => [...entriesOf(source, table).keys()].map(id => [table, id] as [Table, ID]))
-			.filter(([table, id]) => {
-				if (own || ![...dependencies(source, table, id).values()]
-					.some(([other, dep]) => entriesOf(source, other).get(dep)!.locked)) return true;
-				skipped.push(`the ${tableName(table)} ${entriesOf(source, table).get(id)!.data.name} is locked or needs something locked`);
-				return false;
-			});
-		const result = keys.length ? await copyInto(loaded, source, keys) : { loaded, copied: [], warnings: [] };
-		result.warnings.unshift(...skipped);
-		loaded = result.loaded;
-		for (const data of source.formats.values()) {
-			try {
-				({ loaded } = await putFormat(loaded, data));
-			} catch (e: any) {
-				result.warnings.push(`the format ${data.name}: ${e.message}`);
+export function evoLine(loaded: LoadedDex, name: string) {
+	const inDex = new Set(loaded.data.species);
+	const get = (speciesName: string) => {
+		const species = loaded.dex.species.get(speciesName);
+		return species.exists && inDex.has(species.id) ? species : null;
+	};
+	const parentOf = (species: Species) => {
+		const prevo = get(species.prevo);
+		if (prevo) return prevo;
+		const parents = [...inDex].map(get).filter(other => other?.evos.includes(species.name));
+		return parents.length === 1 ? parents[0] : null;
+	};
+	const descend = (from: Species) => {
+		const line = [from];
+		for (const species of line) {
+			for (const evo of species.evos) {
+				const next = get(evo);
+				if (next && !line.some(other => other.id === next.id)) line.push(next);
 			}
 		}
-		return { ...result, loaded };
-	} catch (e) {
-		await deleteDex(dexes.get(loaded.row.dexid) || loaded);
-		throw e;
+		return line;
+	};
+	const start = get(name);
+	if (!start) throw new Chat.ErrorMessage(`${loaded.row.name} has no Pokemon called "${name}".`);
+	const ancestors: Species[] = [];
+	for (let parent = parentOf(start); parent && ancestors.length < MAX_DEPTH; parent = parentOf(parent)) {
+		if (parent.id === start.id || ancestors.some(other => other.id === parent!.id)) break;
+		ancestors.unshift(parent);
 	}
+	const family = descend(ancestors[0] || start);
+	if (family.length <= 6) return family;
+	return [...ancestors, ...descend(start).filter(species => !ancestors.some(other => other.id === species.id))];
+}
+
+export async function forkLine(target: LoadedDex, source: LoadedDex, name: string, overwrite = false) {
+	const line = evoLine(source, name);
+	const custom = (id: ID) => ancestorsOf(source).some(layer => layer.entries.has(id));
+	const found = new Map<string, [Table, ID, LoadedDex]>();
+	const missing: string[] = [];
+	for (const species of line) {
+		if (custom(species.id)) dependencies(source, 'Pokedex', species.id, target, found, missing);
+	}
+	const result = found.size ?
+		await copyInto(target, [...found.values()], { overwrite }) :
+		{ loaded: target, copied: [] as string[], warnings: [] as string[] };
+	const base = baseOf(result.loaded.row);
+	const added: string[] = [];
+	for (const species of line) {
+		if (custom(species.id) || result.loaded.data.species.includes(species.id)) continue;
+		if (base.data.Pokedex[species.id]) {
+			added.push(species.name);
+		} else {
+			result.warnings.push(`${species.name} isn't in ${baseName(result.loaded.row)}`);
+		}
+	}
+	if (added.length) result.loaded = await setSpecies(result.loaded, new Set(added.map(toID)), true);
+	return { ...result, added, missing };
 }
 
 export function effectEditor(loaded: LoadedDex, table: EffectTable, name: string) {
@@ -1092,14 +1359,14 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 	}
 	for (const field in input) {
 		const value = input[field];
-		if (field === 'name' || field === 'from') continue;
+		if (field === 'name' || field === 'from' || field === 'id') continue;
 		if (field === 'gameType') {
 			if (!GAME_TYPES.includes(value)) throw new Chat.ErrorMessage(`"gameType" must be one of: ${GAME_TYPES.join(', ')}.`);
 			if (old && (old.gameType || 'singles') !== value) {
 				throw new Chat.ErrorMessage(`A format's game type can't change; make a new format instead.`);
 			}
 		} else if (FORMAT_LISTS.includes(field)) {
-			if (!Array.isArray(value) || value.length > 500 || value.some(rule => typeof rule !== 'string' || rule.length > 100)) {
+			if (!Array.isArray(value) || value.length > 512 || value.some(rule => typeof rule !== 'string' || rule.length > 100)) {
 				throw new Chat.ErrorMessage(`"${field}" must be a list of rule names.`);
 			}
 		} else if (FORMAT_FLAGS.includes(field)) {
@@ -1120,15 +1387,15 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 
 export async function putFormat(loaded: LoadedDex, input: AnyObject) {
 	if (typeof input.name !== 'string') throw new Chat.ErrorMessage(`A format needs a name.`);
-	const formatid = toID(`${loaded.row.name}${input.name}`) as ID;
+	const named = [...loaded.formats].find(([, data]) => toID(data.name) === toID(input.name))?.[0];
+	const formatid = typeof input.id === 'string' && loaded.formats.has(toID(input.id)) ? toID(input.id) :
+		named || newID('f', id => formatDexes.has(id) || Dex.formats.get(id).exists);
+	if (named && named !== formatid) throw new Chat.ErrorMessage(`${loaded.row.name} already has a format called ${input.name}.`);
 	const old = loaded.formats.get(formatid);
-	if (!old && Dex.formats.get(formatid).exists) {
-		throw new Chat.ErrorMessage(`There's already a format called ${Dex.formats.get(formatid).name}.`);
-	}
 	if (!old && loaded.formats.size >= MAX_FORMATS) {
 		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_FORMATS} formats.`);
 	}
-	if (formatid.length > 40) {
+	if (toID(`${loaded.row.name}${input.name}`).length > 40) {
 		throw new Chat.ErrorMessage(`The dex and format names together can be at most 40 letters and numbers.`);
 	}
 	const data = validateFormat(loaded, input, old);
@@ -1141,7 +1408,8 @@ export async function putFormat(loaded: LoadedDex, input: AnyObject) {
 }
 
 export async function deleteFormat(loaded: LoadedDex, name: string) {
-	const formatid = loaded.formats.has(toID(name)) ? toID(name) : toID(`${loaded.row.name}${name}`);
+	const formatid = loaded.formats.has(toID(name)) ? toID(name) :
+		[...loaded.formats].find(([, data]) => toID(data.name) === toID(name))?.[0] || toID(name);
 	if (!loaded.formats.has(formatid)) throw new Chat.ErrorMessage(`${loaded.row.name} has no format called "${name}".`);
 	await database().query(SQL`DELETE FROM dex_formats WHERE formatid = ${formatid}`);
 	return save(loaded);
