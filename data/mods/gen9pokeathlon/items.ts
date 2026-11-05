@@ -10,7 +10,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		spritenum: -3,
-		num: 0,
 	},
 	paddedhelmet: {
 		name: "Padded Helmet",
@@ -19,7 +18,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onModifyMove(move) {
 			if (move.recoil) move.recoil[1] *= 2;
 		},
-		num: 0,
 		spritenum: -3,
 	},
 	ejectbandage: {
@@ -32,7 +30,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				source.useItem();
 			}
 		},
-		num: 0,
 	},
 	energydrink: {
 		name: "Energy Drink",
@@ -58,7 +55,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return null;
 			}
 		},
-		num: 0,
 	},
 	managel: {
 		name: "Mana Gel",
@@ -70,7 +66,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onTryHit(pokemon, target, move) {
 			if (move.id === 'psychup') return false;
 		},
-		num: 0,
 	},
 	buddylantern: {
 		name: "Buddy Lantern",
@@ -82,7 +77,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.125);
 			}
 		},
-		num: 0,
 	},
 	doubledip: {
 		name: "Double Dip",
@@ -111,7 +105,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				})[0] as MoveAction);
 			},
 		},
-		num: 0,
 	},
 	brokenhourglass: {
 		name: "Broken Hourglass",
@@ -160,7 +153,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				}
 			},
 		},
-		num: 0,
 	},
 	anchor: {
 		name: "Anchor",
@@ -181,7 +173,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onModifySpe(spe) {
 			return this.chainModify(0.5);
 		},
-		num: 0,
 		itemUser: ['Dhelmise'],
 	},
 	bubbleclef: {
@@ -200,6 +191,5 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			return true;
 		},
 		forcedForme: "Odinalto-Coda",
-		num: 0,
 	},
 };

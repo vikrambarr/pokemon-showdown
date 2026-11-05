@@ -1,3 +1,11 @@
+import { Pokemon } from '../sim/pokemon';
+
+declare module '../sim/pokemon' {
+	interface Pokemon {
+		fusionChange(speciesId: string | Species, source?: Effect): boolean;
+	}
+}
+
 export const Rulesets: import('../sim/dex-formats').ModdedFormatDataTable = {
 	noeventmoves: {
 		effectType: 'ValidatorRule',
@@ -860,4 +868,28 @@ export const PoAfusionMoves: { [key: string]: { [key: string]: string[] }[] } = 
 	"ceaselessedge": [{ "fusion": ["cloudinyte"] }],
 	"skypierce": [{ "learns": ["sacredsword"], "type": ["Flying"] }],
 	"wringout": [{ "fusion": ["sauphozoa"], "learns": ["coil"] }],
+};
+
+Pokemon.prototype.fusionChange = function (
+	this: Pokemon, speciesId: string | Species, source: Effect = this.battle.effect
+) {
+	const rawSpecies = this.battle.dex.species.get(speciesId);
+	if (this.m.fusion === rawSpecies.name) return true;
+
+	this.m.fusion = rawSpecies.name;
+	this.set.fusion = rawSpecies.name;
+
+	this.details = this.getUpdatedDetails();
+
+	let details = (this.illusion || this).details;
+	if (this.terastallized) details += `, tera:${this.terastallized}`;
+
+	if (source.effectType === 'Ability') {
+		this.battle.add('-activate', this, `ability: ${source.name}`);
+	}
+
+	this.setSpecies(this.battle.dex.species.get(this.species.name), source);
+	this.battle.add('detailschange', this, details);
+
+	return true;
 };

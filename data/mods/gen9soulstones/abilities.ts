@@ -129,9 +129,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 	},
 	sandveil: {
 		inherit: true,
-		onImmunity(type, pokemon) {
-			if (type === 'sandstorm') return false;
-		},
 		onModifyAccuracyPriority: undefined,
 		onModifyAccuracy(accuracy) {},
 		onModifySpDPriority: -1,
@@ -146,9 +143,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 	},
 	snowcloak: {
 		inherit: true,
-		onImmunity(type, pokemon) {
-			if (type === 'hail') return false;
-		},
 		onModifyAccuracyPriority: undefined,
 		onModifyAccuracy(accuracy) {},
 		onModifyDefPriority: -1,
@@ -267,12 +261,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 	},
 	waterveil: {
 		inherit: true,
-		onUpdate(pokemon) {
-			if (pokemon.status === 'brn') {
-				this.add('-activate', pokemon, 'ability: Water Veil');
-				pokemon.cureStatus();
-			}
-		},
 		onAllySetStatus(status, target, source, effect) {
 			if (status.id !== 'brn') return;
 			if ((effect as Move)?.status) {
@@ -304,16 +292,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 	},
 	serenegrace: {
 		inherit: true,
-		onModifyMovePriority: -2,
-		onModifyMove(move) {
-			if (move.secondaries) {
-				this.debug('doubling secondary chance');
-				for (const secondary of move.secondaries) {
-					if (secondary.chance) secondary.chance *= 2;
-				}
-			}
-			if (move.self?.chance) move.self.chance *= 2;
-		},
 		onBasePowerPriority: 23,
 		onBasePower(basePower, pokemon, target, move) {
 			if (move.secondaries) {
@@ -637,7 +615,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Affection",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Fairy-type attack.",
 	},
 	antigravity: {
@@ -652,7 +629,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Anti-Gravity",
 		rating: 3,
-		num: 0,
 		shortDesc: "Sound, Ground moves hit Cosmic.",
 	},
 	arsonist: {
@@ -673,7 +649,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Arsonist",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Fire-type attack.",
 	},
 	astralmajesty: {
@@ -694,7 +669,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Astral Majesty",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "Light-/Dragon-type moves against this Pokemon deal damage with a halved offensive stat.",
 	},
 	attunement: {
@@ -707,7 +681,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Attunement",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "If this Pokemon is statused, its Sp. Atk is 1.5x.",
 	},
 	blacklight: {
@@ -729,7 +702,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Black Light",
 		rating: 4,
-		num: 0,
 		shortDesc: "This Pokemon's Light-type moves become Dark-type and have 1.2x power.",
 	},
 	bonecollector: {
@@ -750,7 +722,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Bone Collector",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Ground-type attack.",
 	},
 	virtuoso: {
@@ -771,7 +742,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Virtuoso",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Sound-type attack.",
 	},
 	charisma: {
@@ -785,7 +755,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Charisma",
 		rating: 3,
-		num: 0,
 		shortDesc: "+1 Sp. Atk on KO. Once per switch-in.",
 	},
 	clayform: {
@@ -798,7 +767,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Clay Form",
 		rating: 1.5,
-		num: 0,
 		shortDesc: "If Sandstorm is active, this Pokemon heals 1/8 of its max HP each turn.",
 	},
 	cometstorm: {
@@ -813,7 +781,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Comet Storm",
 		rating: 3,
-		num: 0,
 		shortDesc: "When hit by a Rock-type move, +1 Speed and Sp. Atk. Rock-type immunity.",
 	},
 	conductor: {
@@ -833,7 +800,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Conductor",
 		shortDesc: "Electric-type moves hit Ground. Electric-type attacks are neutral on Ground and Electric-types.",
 		rating: 5,
-		num: 0,
 	},
 	darkmatter: {
 		onModifyTypePriority: -1,
@@ -854,7 +820,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Dark Matter",
 		rating: 4,
-		num: 0,
 		shortDesc: "This Pokemon's Normal-type moves become Cosmic-type and have 1.2x power.",
 	},
 	destructivecore: {
@@ -900,7 +865,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, cantsuppress: 1 },
 		name: "Destructive Core",
 		rating: 3,
-		num: 0,
 		shortDesc: "If Togedemaru-Orion, switch-in/end of turn it changes to Reactive at 1/2 max HP or less.",
 	},
 	disarray: {
@@ -911,7 +875,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Disarray",
 		shortDesc: "This Pokemon summons Trick Room on switch-in.",
 		rating: 4.5,
-		num: 0,
 	},
 	dishearten: {
 		onStart(pokemon) {
@@ -931,7 +894,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Dishearten",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "On switch-in, this Pokemon lowers the Sp. Atk of opponents by 1 stage.",
 	},
 	ethereal: {
@@ -949,7 +911,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, failskillswap: 1, breakable: 1 },
 		name: "Ethereal",
 		rating: 5,
-		num: 0,
 		shortDesc: "User is immune to one contact move per switch-in.",
 	},
 	fortification: {
@@ -981,7 +942,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Fortification",
 		rating: 2,
-		num: 0,
 		shortDesc: "This Pokemon's Def and Sp.Def is raised by 1 when it reaches 1/2 or less of its max HP.",
 	},
 	genius: {
@@ -993,7 +953,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Genius",
 		shortDesc: "Doubles the user's Special Attack stat.",
 		rating: 5,
-		num: 0,
 	},
 	haunted: {
 		onModifyAtkPriority: 5,
@@ -1013,7 +972,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Haunted",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Ghost-type attack.",
 	},
 	hivebody: {
@@ -1028,7 +986,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Hive Body",
 		rating: 2.5,
-		num: 0,
 		shortDesc: "30% to inflict Infestation when hit by a contact move.",
 	},
 	icyveins: {
@@ -1045,7 +1002,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Icy Veins",
 		rating: 2,
-		num: 0,
 		shortDesc: "This Pokemon's attacks do 1.3x in Hail or Snow; Hail immunity.",
 	},
 	impenetrable: {
@@ -1067,7 +1023,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Impenetrable",
 		rating: 0.5,
-		num: 0,
 		shortDesc: "Prevents other Pokemon from lowering this Pokemon's Def and Sp. Def stat stage.",
 	},
 	intuition: {
@@ -1083,7 +1038,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Intuition",
 		rating: 0.5,
-		num: 0,
 		shortDesc: "Prevents other Pokemon from lowering this Pokemon's  Sp. Atk stat stage.",
 	},
 	irradiate: {
@@ -1104,7 +1058,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Irradiate",
 		rating: 2,
-		num: 0,
 		shortDesc: "At 1/3 or less of its max HP, this Pokemon's offensive stat is 1.5x with Light attacks.",
 	},
 	irredeemable: {
@@ -1125,7 +1078,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Irredeemable",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "Light-/Fairy-type moves against this Pokemon deal damage with a halved offensive stat.",
 	},
 	leadership: {
@@ -1136,7 +1088,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Leadership",
 		shortDesc: "+1 priority on first turn out.",
 		rating: 4.5,
-		num: 0,
 	},
 	leechingfangs: {
 		onAfterMoveSecondarySelf(pokemon, target, move) {
@@ -1148,7 +1099,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Leeching Fangs",
 		shortDesc: "After making contact with a biting move, holder gains 1/8 of the max HP.",
 		rating: 3.5,
-		num: 0,
 	},
 	lightbulb: {
 		onSourceModifyAtkPriority: 6,
@@ -1182,7 +1132,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Light Bulb",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's Light power is 2x; Dark power against it is halved.",
 	},
 	maelstrom: {
@@ -1210,7 +1159,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Maelstrom",
 		rating: 5,
-		num: 0,
 		shortDesc: "Prevents grounded foes from switching out. 30% to Whirlpool when hit by a contact move.",
 	},
 	maestro: {
@@ -1231,7 +1179,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Maestro",
 		rating: 2,
-		num: 0,
 		shortDesc: "At 1/3 or less of its max HP, this Pokemon's offensive stat is 1.5x with Sound attacks.",
 	},
 	nebulacloud: {
@@ -1271,7 +1218,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Nebula Cloud",
 		rating: 0,
-		num: 0,
 		shortDesc: "This side's Cosmic types can't have stats lowered or status inflicted by other Pokemon.",
 	},
 	opaqueness: {
@@ -1284,7 +1230,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Opaqueness",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "Light immunity.",
 	},
 	hivemind: {
@@ -1305,7 +1250,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Hive Mind",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Bug-type attack.",
 	},
 	packedsnow: {
@@ -1321,7 +1265,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Packed Snow",
 		rating: 3,
-		num: 0,
 		shortDesc: "This Pokemon receives 1/2 damage from supereffective attacks during snow or hail. Hail immunity.",
 	},
 	pounce: {
@@ -1332,7 +1275,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Pounce",
 		shortDesc: "+1 priority on first turn out.",
 		rating: 4.5,
-		num: 0,
 	},
 	precision: {
 		onSourceModifyAccuracyPriority: -1,
@@ -1344,7 +1286,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Precision",
 		rating: 3,
-		num: 0,
 		shortDesc: "This Pokemon's moves have their accuracy multiplied by 1.3.",
 	},
 	pureheart: {
@@ -1355,7 +1296,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Pure Heart",
 		shortDesc: "Heals 1/16 HP every turn.",
 		rating: 1.5,
-		num: 0,
 	},
 	realism: {
 		onSourceModifyAtkPriority: 6,
@@ -1375,7 +1315,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Realism",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "Ghost-/Fairy-type moves against this Pokemon deal damage with a halved offensive stat.",
 	},
 	reaper: {
@@ -1387,7 +1326,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Reaper",
 		rating: 3,
-		num: 0,
 		shortDesc: "This Pokemon is healed by 1/5 max HP if it attacks and KOes another Pokemon.",
 	},
 	regrowth: {
@@ -1406,7 +1344,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Regrowth",
 		shortDesc: "Raises negative stat boosts on self by 1 stage. Otherwise, heals 1/16 HP every turn.",
 		rating: 1.5,
-		num: 0,
 	},
 	requiem: {
 		onModifyAtkPriority: 5,
@@ -1426,7 +1363,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Requiem",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Dark-type attack.",
 	},
 	scorchscale: {
@@ -1438,7 +1374,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Scorch Scale",
 		rating: 2.5,
-		num: 0,
 		shortDesc: "Burns any foe that uses priority attacks on it.",
 	},
 	sharpshooter: {
@@ -1451,7 +1386,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Sharp Shooter",
 		rating: 4,
-		num: 0,
 		shortDesc: "Non-contact moves used by this Pokemon will always hit.",
 	},
 	spellcaster: {
@@ -1472,7 +1406,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Spellcaster",
 		rating: 2,
-		num: 0,
 		shortDesc: "At 1/3 or less of its max HP, this Pokemon's offensive stat is 1.5x with Psychic attacks.",
 	},
 	starstruck: {
@@ -1493,7 +1426,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Starstruck",
 		rating: 2,
-		num: 0,
 		shortDesc: "At 1/3 or less of its max HP, this Pokemon's offensive stat is 1.5x with Cosmic attacks.",
 	},
 	synthesize: {
@@ -1506,7 +1438,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Synthesize",
 		shortDesc: "Heals 1/8 HP every turn in sun.",
 		rating: 1.5,
-		num: 0,
 	},
 	tvface: {
 		onSwitchInPriority: -2,
@@ -1562,7 +1493,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		},
 		name: "TV Face",
 		rating: 3,
-		num: 0,
 		shortDesc: "If Eiscue-Orion, the first physical hit it takes deals 0 damage. Effect is restored in Electric Terrain.",
 	},
 	terminator: {
@@ -1594,7 +1524,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Terminator",
 		rating: 2,
-		num: 0,
 		shortDesc: "This Pokemon's Atk is raised by 1 when it reaches 1/2 or less of its max HP.",
 	},
 	terrorize: {
@@ -1629,7 +1558,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Terrorize",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's Psychic power is 2x; Bug power against it is halved.",
 	},
 	tormented: {
@@ -1646,7 +1574,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Tormented",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's Sp. Atk is 1.5x and accuracy of its special attacks is 0.8x.",
 	},
 	tropicalhide: {
@@ -1667,7 +1594,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Tropical Hide",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "Grass-/Water-type moves against this Pokemon deal damage with a halved offensive stat.",
 	},
 	unbreakable: {
@@ -1683,7 +1609,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Unbreakable",
 		rating: 0.5,
-		num: 0,
 		shortDesc: "Prevents other Pokemon from lowering this Pokemon's Defense stat stage.",
 	},
 	vengeful: {
@@ -1715,7 +1640,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Vengeful",
 		rating: 2,
-		num: 0,
 		shortDesc: "This Pokemon's Atk and Speed is raised by 1 when it reaches 1/2 or less of its max HP.",
 	},
 	vitality: {
@@ -1725,7 +1649,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Vitality",
 		rating: 4,
-		num: 0,
 		shortDesc: "This Pokemon's Sp. Def is raised by 1 stage after it is damaged by a move.",
 	},
 	whiteout: {
@@ -1747,7 +1670,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Whiteout",
 		rating: 4,
-		num: 0,
 		shortDesc: "This Pokemon's Dark-type moves become Light-type and have 1.2x power.",
 	},
 	windfury: {
@@ -1767,7 +1689,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Wind Fury",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon receives 1/2 damage from wind moves. Its own have 1.3x power.",
 	},
 	wintergift: {
@@ -1805,7 +1726,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, breakable: 1 },
 		name: "Winter Gift",
 		rating: 1,
-		num: 0,
 		shortDesc: "If user is Cherrim-Orion and Hail or Snow is active, it and allies' Sp. Atk and Sp. Def are 1.5x.",
 	},
 	cartographer: {
@@ -1840,7 +1760,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1 },
 		name: "Cartographer",
 		rating: 2,
-		num: 0,
 		shortDesc: "Castform-Orion's type and stats change respective to the current terrain's type.",
 	},
 	deepchill: {
@@ -1854,7 +1773,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Deep Chill",
 		rating: 2,
-		num: 0,
 		shortDesc: "30% to frostbite pokemon using Special moves against it.",
 	},
 	superconductive: {
@@ -1872,7 +1790,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Superconductive",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "If this Pokemon is frostbit, its Atk. is 1.5x; half damage from frostbite.",
 	},
 	forestking: {
@@ -1894,7 +1811,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Forest King",
 		rating: 4,
-		num: 0,
 		shortDesc: "Sets Grassy Terrain on start. 1.33x Atk and SpA in Grassy Terrain.",
 	},
 	orbit: {
@@ -1907,7 +1823,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Orbit",
 		rating: 4.5,
-		num: 0,
 		shortDesc: "On Switch-in, this Pokemon summons Gravity.",
 	},
 	flexible: {
@@ -1920,7 +1835,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Flexible",
 		rating: 4.5,
-		num: 0,
 		shortDesc: "1.3x Power on non-STAB moves.",
 	},
 	rebellious: {
@@ -1952,7 +1866,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Rebellious",
 		rating: 3,
-		num: 0,
 		shortDesc: "If stats lowered by a foe, 1.3x damage until switch-out.",
 	},
 	gorging: {
@@ -1965,7 +1878,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Gorging",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's draining attacks have 1.3x power.",
 	},
 	impulsive: {
@@ -1980,7 +1892,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Impulsive",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "1.4x power to attacks. -1 Atk/SpA after using a Physical/Special move.",
 	},
 	vandal: {
@@ -1993,7 +1904,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Vandal",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "1.3x power against foes holding an item.",
 	},
 	feedback: {
@@ -2006,7 +1916,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Feedback",
 		rating: 4,
-		num: 0,
 		shortDesc: "Pokemon using a Special move against this Pokemon lose 1/8 of their max HP.",
 	},
 	retribution: {
@@ -2019,7 +1928,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Retribution",
 		rating: 4,
-		num: 0,
 		shortDesc: "Pokemon using a Special move against this Pokemon lose 1/8 of their max HP.",
 	},
 	forcefield: {
@@ -2032,7 +1940,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Forcefield",
 		rating: 4,
-		num: 0,
 		shortDesc: "Pokemon using a Special move against this Pokemon lose 1/8 of their max HP.",
 	},
 	funeralpyre: {
@@ -2043,7 +1950,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Funeral Pyre",
 		rating: 5,
-		num: 0,
 		shortDesc: "Fire and Ghost moves have 2x power.",
 	},
 };

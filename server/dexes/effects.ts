@@ -1,6 +1,8 @@
 import { FS } from '../../lib';
 import { Dex, type ModdedDex } from '../../sim/dex';
-import { baseEffect, effectSlots, REPLACED, type EffectEdit, type EffectTable } from '../../sim/dex-custom';
+import {
+	baseEffect, effectSlots, isObject, REPLACED, UNSAFE, type EffectEdit, type EffectTable,
+} from '../../sim/dex-custom';
 import {
 	classify, checkSlot, eventTargets, handlersOf, parseHandler, STAT_EVENT, type Slot,
 } from '../../sim/dex-handlers';
@@ -43,7 +45,6 @@ const STAT_NAMES: { [stat: string]: string } = {
 	hp: 'HP', atk: 'Attack', def: 'Defense', spa: 'Sp. Atk', spd: 'Sp. Def', spe: 'Speed',
 	accuracy: 'accuracy', evasion: 'evasiveness',
 };
-const UNSAFE = ['__proto__', 'constructor', 'prototype'];
 const MAX_NUMBER = 1e6;
 const REQUIRED: { [table in EffectTable]: string[] } = {
 	Moves: ['accuracy', 'basePower', 'category', 'flags', 'pp', 'priority', 'target', 'type'],
@@ -61,7 +62,6 @@ const BLANK: { [table in EffectTable]: AnyObject } = {
 	Conditions: {},
 };
 
-const isObject = (value: unknown): value is AnyObject => !!value && typeof value === 'object' && !Array.isArray(value);
 const used = (table: EffectTable, get: (entry: AnyObject) => unknown) => [...new Set(
 	Object.values(Dex.data[table] as AnyObject).flatMap(entry => {
 		const value = get(entry);

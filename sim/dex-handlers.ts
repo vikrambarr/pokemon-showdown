@@ -33,7 +33,7 @@ export const EVENT_SUFFIXES = ['Priority', 'Order', 'SubOrder'];
 const PROTOCOL = ['add', 'addMove', 'addSplit', 'attrLastMove', 'debug', 'hint', 'retargetLastMove'];
 const parsed = new WeakMap<AnyObject, WeakMap<Function, Handler | null>>();
 
-const typeName = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+export const typeName = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
 
 function walk(node: AnyObject, stack: AnyObject[], visit: (node: AnyObject, stack: AnyObject[]) => boolean | void) {
 	if (visit(node, stack) === false) return;

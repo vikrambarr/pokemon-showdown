@@ -93,7 +93,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		},
 	},
 	ambush: {
-		num: 0,
 		accuracy: 100,
 		basePower: 40,
 		category: "Physical",
@@ -117,7 +116,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Dark",
 	},
 	bigbang: {
-		num: 0,
 		accuracy: 100,
 		basePower: 105,
 		category: "Physical",
@@ -144,7 +142,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Cosmic",
 	},
 	dinokick: {
-		num: 0,
 		accuracy: 100,
 		basePower: 70,
 		category: "Physical",
@@ -174,7 +171,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Fighting",
 	},
 	omniblast: {
-		num: 0,
 		accuracy: 100,
 		basePower: 100,
 		category: "Special",
@@ -201,7 +197,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Electric",
 	},
 	pagefault: {
-		num: 0,
 		accuracy: 100,
 		basePower: 120,
 		category: "Physical",
@@ -223,7 +218,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Poison",
 	},
 	transcendentsword: {
-		num: 0,
 		accuracy: 100,
 		basePower: 240,
 		category: "Physical",
@@ -264,7 +258,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Steel",
 	},
 	kablow: {
-		num: 0,
 		accuracy: 100,
 		basePower: 170,
 		category: "Physical",
@@ -286,7 +279,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Steel",
 	},
 	granite: {
-		num: 0,
 		accuracy: 0,
 		basePower: 0,
 		category: "Status",
@@ -306,7 +298,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Rock",
 	},
 	tonic: {
-		num: 0,
 		accuracy: 100,
 		basePower: 0,
 		damage: 'level',
@@ -331,7 +322,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Water",
 	},
 	gale: {
-		num: 0,
 		accuracy: 100,
 		basePower: 60,
 		category: "Physical",

@@ -419,7 +419,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				}
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Holder's Def is 1.5x, but it can only select damaging moves.",
 	},
@@ -430,7 +429,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onModifyMove(move) {
 			if (move.recoil) move.recoil = undefined;
 		},
-		num: 0,
 		desc: "Holder does not take recoil damage.",
 	},
 	arcanespellbook: {
@@ -446,7 +444,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		itemUser: ["Omanyte-Orion", "Omastar-Orion"],
-		num: 0,
 		gen: 9,
 		shortDesc: "If held by a Omanyte-Orion or Omastar-Orion, its Sp. Atk is doubled.",
 	},
@@ -469,7 +466,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		itemUser: ["Clamperl-Orion"],
-		num: 0,
 		gen: 9,
 		shortDesc: "If held by a Clamperl-Orion, its Def and Sp. Def is doubled.",
 	},
@@ -492,7 +488,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		itemUser: ["Volbeat-Orion"],
-		num: 0,
 		gen: 9,
 		shortDesc: "If held by a Volbeat-Orion, its Atk and Def are 1.5x.",
 	},
@@ -515,7 +510,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		itemUser: ["Illumise-Orion"],
-		num: 0,
 		gen: 9,
 		shortDesc: "If held by a Illumise-Orion, its Sp. Atk and Sp. Def are 1.5x.",
 	},
@@ -545,7 +539,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				this.runEvent('AfterUseItem', target, null, null, this.dex.items.get('headphones'));
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Holder is immune to Sound-type attacks. Pops when holder is hit.",
 	},
@@ -566,7 +559,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			return true;
 		},
 		forcedForme: "Arceus-Cosmic",
-		num: 0,
 		gen: 9,
 		shortDesc: "Holder's Cosmic-type attacks have 1.2x power. Judgment is Cosmic type.",
 	},
@@ -587,7 +579,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			return true;
 		},
 		forcedForme: "Arceus-Sound",
-		num: 0,
 		gen: 9,
 		shortDesc: "Holder's Sound-type attacks have 1.2x power. Judgment is Sound type.",
 	},
@@ -608,7 +599,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			return true;
 		},
 		forcedForme: "Arceus-Light",
-		num: 0,
 		gen: 9,
 		shortDesc: "Holder's Light-type attacks have 1.2x power. Judgment is Light type.",
 	},
@@ -638,7 +628,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		itemUser: ["Delcatty-Temporal"],
-		num: 0,
 		gen: 9,
 		shortDesc: "If held by a Delcatty-Temporal, 1.25x Def. and Sp.Def, 15% increased healing from draining.",
 	},
@@ -652,7 +641,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onModifySpD(spd) {
 			return this.chainModify(1.1);
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Holder's Sp. Def is 1.1x.",
 	},
@@ -666,7 +654,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onModifyDef(def) {
 			return this.chainModify(1.1);
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Holder's Def is 1.1x.",
 	},
@@ -679,7 +666,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Normal-type attack.",
 	},
@@ -692,7 +678,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Fire-type attack.",
 	},
@@ -705,7 +690,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Water-type attack.",
 	},
@@ -718,7 +702,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Grass-type attack.",
 	},
@@ -731,7 +714,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Electric-type attack.",
 	},
@@ -744,7 +726,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Ice-type attack.",
 	},
@@ -757,7 +738,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Poison-type attack.",
 	},
@@ -770,7 +750,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Fighting-type attack.",
 	},
@@ -783,7 +762,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Ground-type attack.",
 	},
@@ -796,7 +774,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Flying-type attack.",
 	},
@@ -809,7 +786,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Psychic-type attack.",
 	},
@@ -822,7 +798,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Bug-type attack.",
 	},
@@ -835,7 +810,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Rock-type attack.",
 	},
@@ -848,7 +822,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Ghost-type attack.",
 	},
@@ -861,7 +834,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Dragon-type attack.",
 	},
@@ -874,7 +846,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Steel-type attack.",
 	},
@@ -887,7 +858,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Dark-type attack.",
 	},
@@ -900,7 +870,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Fairy-type attack.",
 	},
@@ -913,7 +882,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Cosmic-type attack.",
 	},
@@ -928,7 +896,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Light-type attack.",
 	},
@@ -943,7 +910,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify(0.5);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Sound-type attack.",
 	},
@@ -959,7 +925,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				this.damage(source.baseMaxhp / 8, source, target);
 			}
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "If holder is hit by a Special move, the attacker loses 1/8 of its max HP.",
 	},
@@ -972,7 +937,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Normal' && type === 'Dragon') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Normal-type moves hit Dragon for supereffective.",
 	},
@@ -985,7 +949,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Fire' && type === 'Dark') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Fire-type moves hit Dark for supereffective.",
 	},
@@ -998,7 +961,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Water' && type === 'Cosmic') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Water-type moves hit Cosmic for supereffective.",
 	},
@@ -1011,7 +973,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Grass' && type === 'Fairy') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Grass-type moves hit Fairy for supereffective.",
 	},
@@ -1024,7 +985,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Electric' && type === 'Psychic') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Electric-type moves hit Psychic for supereffective.",
 	},
@@ -1037,7 +997,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Ice' && type === 'Bug') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Ice-type moves hit Bug for supereffective.",
 	},
@@ -1050,7 +1009,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Poison' && type === 'Fighting') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Poison-type moves hit Fighting for supereffective.",
 	},
@@ -1063,7 +1021,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Fighting' && type === 'Fire') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Fighting-type moves hit Fire for supereffective.",
 	},
@@ -1076,7 +1033,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Ground' && type === 'Sound') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Ground-type moves hit Sound for supereffective.",
 	},
@@ -1089,7 +1045,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Flying' && type === 'Ghost') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Flying-type moves hit Ghost for supereffective.",
 	},
@@ -1102,7 +1057,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Psychic' && type === 'Normal') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Psychic-type moves hit Normal for supereffective.",
 	},
@@ -1115,7 +1069,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Bug' && type === 'Electric') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Bug-type moves hit Electric for supereffective.",
 	},
@@ -1128,7 +1081,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Rock' && type === 'Light') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Rock-type moves hit Light for supereffective.",
 	},
@@ -1141,7 +1093,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Ghost' && type === 'Steel') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Ghost-type moves hit Steel for supereffective.",
 	},
@@ -1154,7 +1105,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Dragon' && type === 'Flying') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Dragon-type moves hit Flying for supereffective.",
 	},
@@ -1167,7 +1117,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Steel' && type === 'Poison') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Steel-type moves hit Poison for supereffective.",
 	},
@@ -1180,7 +1129,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Dark' && type === 'Grass') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Dark-type moves hit Grass for supereffective.",
 	},
@@ -1193,7 +1141,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Fairy' && type === 'Water') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Fairy-type moves hit Water for supereffective.",
 	},
@@ -1206,7 +1153,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Cosmic' && type === 'Ground') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Cosmic-type moves hit Ground for supereffective.",
 	},
@@ -1219,7 +1165,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Light' && type === 'Ice') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Light-type moves hit Ice for supereffective.",
 	},
@@ -1232,7 +1177,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onFoeEffectiveness(typeMod, target, type, move) {
 			if (move.type === 'Sound' && type === 'Rock') return 1;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "User's Sound-type moves hit Rock for supereffective.",
 	},
@@ -1253,7 +1197,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Liquid Ooze.",
 	},
@@ -1274,7 +1217,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Aftermath.",
 	},
@@ -1295,7 +1237,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Sand Veil.",
 	},
@@ -1316,7 +1257,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Snow Cloak.",
 	},
@@ -1337,7 +1277,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Vital Spirit.",
 	},
@@ -1358,7 +1297,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Synchronize.",
 	},
@@ -1379,7 +1317,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Unnerve.",
 	},
@@ -1400,7 +1337,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Poison Point.",
 	},
@@ -1421,7 +1357,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Natural Cure.",
 	},
@@ -1442,7 +1377,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Ice Body.",
 	},
@@ -1463,7 +1397,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Clay Form.",
 	},
@@ -1484,7 +1417,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Synthesize.",
 	},
@@ -1505,7 +1437,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Rain Dish.",
 	},
@@ -1526,7 +1457,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Battle Armor.",
 	},
@@ -1547,7 +1477,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Healer.",
 	},
@@ -1568,7 +1497,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Flame Body.",
 	},
@@ -1589,7 +1517,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Mold Breaker.",
 	},
@@ -1610,7 +1537,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Shield Dust.",
 	},
@@ -1631,7 +1557,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Infiltrator.",
 	},
@@ -1652,7 +1577,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Analytic.",
 	},
@@ -1673,7 +1597,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Static.",
 	},
@@ -1694,7 +1617,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Compound Eyes.",
 	},
@@ -1715,7 +1637,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Tough Claws.",
 	},
@@ -1736,7 +1657,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Rivalry.",
 	},
@@ -1757,7 +1677,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Sniper.",
 	},
@@ -1778,7 +1697,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Impenetrable.",
 	},
@@ -1799,7 +1717,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Telepathy.",
 	},
@@ -1820,7 +1737,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Gooey.",
 	},
@@ -1841,7 +1757,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Inner Focus.",
 	},
@@ -1862,7 +1777,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Prism Armor.",
 	},
@@ -1883,7 +1797,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Arena Trap.",
 	},
@@ -1904,7 +1817,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Clear Body.",
 	},
@@ -1925,7 +1837,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		shortDesc: "Changes user's ability to Pastel Veil.",
 	},
@@ -1950,7 +1861,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			if (['knockoff', 'thief', 'covet', 'turbulence', 'spoil', 'powerwash', 'quakeslam', 'disturb', 'mindmeld']
 				.includes(this.activeMove.id)) return false;
 		},
-		num: 0,
 		gen: 9,
 		itemUser: ["Castform-Orion"],
 		shortDesc: "Castform-Orion only: On start uses the first terrain move it knows.",
@@ -1976,7 +1886,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		onEat() { },
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Cosmic-type attack. Single use.",
 	},
@@ -2001,7 +1910,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		onEat() { },
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Sound-type attack. Single use.",
 	},
@@ -2026,7 +1934,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		onEat() { },
-		num: 0,
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Light-type attack. Single use.",
 	},

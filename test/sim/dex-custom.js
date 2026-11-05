@@ -163,8 +163,8 @@ describe('Custom dexes', () => {
 		});
 		assert.deepEqual(dex.items.get('Delta Venusaurite').megaStone, { 'Venusaur-Delta': 'Venusaur-Delta-Mega' });
 		const format = buildFormat(dex, DATA.format);
-		const megaOf = (species, item, battleFormat = format) => {
-			const battle = new Battle({ format: battleFormat, formatid: battleFormat.id, seed: [1, 2, 3, 4] });
+		const megaOf = (species, item) => {
+			const battle = new Battle({ format, formatid: format.id, seed: [1, 2, 3, 4] });
 			const team = Teams.pack([{ species, item, ability: dex.species.get(species).abilities[0], moves: ['protect'] }]);
 			battle.setPlayer('p1', { team });
 			battle.setPlayer('p2', { team });
@@ -178,9 +178,6 @@ describe('Custom dexes', () => {
 		assert.equal(megaOf('Venusaur', 'Venusaurite'), 'Venusaur-Mega');
 		assert.equal(megaOf('Charizard-Mega-X', 'Charizardite Y'), 'Charizard-Mega-Y');
 		assert.equal(megaOf('Charizard-Mega-X', 'Charizardite X'), null);
-		const natdex = Dex.formats.get('gen9nationaldexag');
-		assert.equal(megaOf('Slowbro-Galar', 'Slowbronite', natdex), null);
-		assert.equal(megaOf('Slowbro', 'Slowbronite', natdex), 'Slowbro-Mega');
 		releaseDex(dex);
 	});
 

@@ -734,7 +734,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		},
 	},
 	runtimeexception: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -755,7 +754,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Cute",
 	},
 	deserttempest: {
-		num: 0,
 		accuracy: 90,
 		basePower: 80,
 		category: "Special",
@@ -775,7 +773,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	subzerostorm: {
-		num: 0,
 		accuracy: 90,
 		basePower: 80,
 		category: "Physical",
@@ -795,7 +792,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	fierymaelstrom: {
-		num: 0,
 		accuracy: 90,
 		basePower: 80,
 		category: "Special",
@@ -815,7 +811,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	bulwark: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -834,7 +829,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Clever",
 	},
 	pixietrick: {
-		num: 0,
 		accuracy: 100,
 		basePower: 90,
 		category: "Physical",
@@ -881,7 +875,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	packin: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -903,7 +896,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Clever",
 	},
 	heal: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -928,7 +920,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	hyperheal: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -953,7 +944,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	fullheal: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -978,7 +968,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	sirensong: {
-		num: 0,
 		accuracy: 100,
 		basePower: 95,
 		category: "Special",
@@ -1026,7 +1015,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Cool",
 	},
 	mindwipe: {
-		num: 0,
 		accuracy: 100,
 		basePower: 80,
 		category: "Special",
@@ -1045,7 +1033,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Clever",
 	},
 	currencyflow: {
-		num: 0,
 		accuracy: 100,
 		basePower: 85,
 		category: "Physical",
@@ -1068,7 +1055,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	rocketgrab: {
-		num: 0,
 		accuracy: 95,
 		basePower: 60,
 		category: "Physical",
@@ -1133,7 +1119,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Clever",
 	},
 	jumpship: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -1164,7 +1149,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	psychobarrage: {
-		num: 0,
 		accuracy: 100,
 		basePower: 120,
 		category: "Physical",
@@ -1187,7 +1171,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Cool",
 	},
 	mindtrap: {
-		num: 0,
 		accuracy: 100,
 		basePower: 40,
 		basePowerCallback(pokemon, target, move) {
@@ -1251,7 +1234,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Clever",
 	},
 	lycanpounce: {
-		num: 0,
 		accuracy: 100,
 		basePower: 100,
 		category: "Physical",
@@ -1276,7 +1258,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Fighting",
 	},
 	spudmortar: {
-		num: 0,
 		accuracy: 100,
 		basePower: 120,
 		category: "Special",
@@ -1319,7 +1300,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	quakingthrust: {
-		num: 0,
 		accuracy: 100,
 		basePower: 75,
 		basePowerCallback(pokemon, target, move) {
@@ -1341,7 +1321,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Ground",
 	},
 	riftjump: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		slotCondition: 'riftjump',
@@ -1370,7 +1349,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		zMove: { effect: 'healreplacement' },
 	},
 	groundingstomp: {
-		num: 0,
 		accuracy: 100,
 		basePower: 85,
 		category: "Physical",
@@ -1420,7 +1398,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	flameaxe: {
-		num: 0,
 		accuracy: 100,
 		basePower: 80,
 		category: "Physical",
@@ -1459,7 +1436,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Changes foe's Rock-type moves to Fire-type for 2 turns.",
 	},
 	bitethedust: {
-		num: 0,
 		accuracy: 100,
 		basePower: 95,
 		category: "Physical",
@@ -1478,7 +1454,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	pumpup: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -1498,7 +1473,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	mistbarrage: {
-		num: 0,
 		accuracy: 95,
 		basePower: 80,
 		category: "Physical",
@@ -1522,7 +1496,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	vengefulpulse: {
-		num: 0,
 		accuracy: 100,
 		basePower: 70,
 		basePowerCallback(pokemon, target, move) {
@@ -1554,7 +1527,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "1.5x power if user is burn/poison/paralyzed. Transfers status.",
 	},
 	meltdown: {
-		num: 0,
 		accuracy: 100,
 		basePower: 180,
 		category: "Special",
@@ -1575,7 +1547,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "User faints. 1.5x power during Fallout.",
 	},
 	rebootandretry: {
-		num: 0,
 		accuracy: 80,
 		basePower: 70,
 		category: "Special",
@@ -1596,7 +1567,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Power doubles if the user's last move failed.",
 	},
 	rampartsmight: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Physical",
@@ -1648,7 +1618,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "The foes' moves target the user. Returns last damage taken at 1.5x power.",
 	},
 	severedsidearm: {
-		num: 0,
 		accuracy: 100,
 		basePower: 55,
 		category: "Special",
@@ -1667,7 +1636,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "User's HP is 50% or less: +1 priority.",
 	},
 	pressureburst: {
-		num: 0,
 		accuracy: 100,
 		basePower: 70,
 		category: "Physical",
@@ -1693,7 +1661,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Sets Aqua Ring for every Pokemon on user's side.",
 	},
 	deadsilence: {
-		num: 0,
 		accuracy: 100,
 		basePower: 80,
 		category: "Special",
@@ -1732,7 +1699,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Sets Perish Song.",
 	},
 	brutalcalamity: {
-		num: 0,
 		accuracy: 100,
 		basePower: 75,
 		category: "Special",
@@ -1759,7 +1725,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "2x BP in Trick Room, Wonder Room and Magic Room. Clears Rooms.",
 	},
 	misersmaul: {
-		num: 0,
 		accuracy: 100,
 		basePower: 90,
 		category: "Physical",
@@ -1776,7 +1741,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Scatters coins if this KOes the target.",
 	},
 	starlightcalling: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -1797,7 +1761,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Heals 33%, transform into Tenkibo-Magical-Hero. If Tenkibo-Magical-Hero, 100BP Special move.",
 	},
 	foolsgambit: {
-		num: 0,
 		accuracy: 100,
 		basePower: 120,
 		category: "Physical",
@@ -1827,7 +1790,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Lowers the user's Def by 2. Uses Def. if it would be stronger.",
 	},
 	chitinsnare: {
-		num: 0,
 		accuracy: 100,
 		basePower: 70,
 		category: "Special",
@@ -1863,7 +1825,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "If succesful, hits again 2 turns later.",
 	},
 	smolderdash: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -1897,7 +1858,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Clears grounded hazards, burns if succesful.",
 	},
 	lunarianforce: {
-		num: 0,
 		accuracy: 100,
 		basePower: 80,
 		category: "Special",
@@ -1914,7 +1874,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "If Misty Terrain; nullifies the target's Ability.",
 	},
 	bloominggrace: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -1951,7 +1910,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Swaps user's Poison-type to Grass, then raises all stats by 1 turn 2.",
 	},
 	espressoshot: {
-		num: 0,
 		accuracy: 100,
 		basePower: 65,
 		category: "Special",
@@ -1968,7 +1926,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "100% crit chance if the target is burned.",
 	},
 	ringtrue: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -2000,7 +1957,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Ignores and removes some volatiles. 255 happiness Kinette: transforms into Kinette-Unwound.",
 	},
 	flashbomb: {
-		num: 0,
 		accuracy: 100,
 		basePower: 40,
 		category: "Special",
@@ -2024,7 +1980,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits first. First turn out only. 100% flinch chance.",
 	},
 	swirlingsands: {
-		num: 0,
 		accuracy: 100,
 		basePower: 50,
 		category: "Special",
@@ -2081,7 +2036,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Free user from hazards/bind/Leech Seed. Foe: -1 Spe.",
 	},
 	flockshock: {
-		num: 0,
 		accuracy: 100,
 		basePower: 70,
 		category: "Special",
@@ -2115,7 +2069,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Electric version hits again two turns after being used.",
 	},
 	ashenpirouette: {
-		num: 0,
 		accuracy: 100,
 		basePower: 70,
 		category: "Special",
@@ -2135,7 +2088,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits adjacent Pokemon. Destroys the foe(s) item.",
 	},
 	crescendo: {
-		num: 0,
 		accuracy: 100,
 		basePower: 80,
 		category: "Special",
@@ -2160,7 +2112,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "1.5x power if last move was sound move.",
 	},
 	rhythmicrattle: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -2198,7 +2149,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Heals 50% Max HP if any adjacent pokemon has lowere stat stage. Restores all lowered stats to 0.",
 	},
 	relentlesssting: {
-		num: 0,
 		accuracy: 100,
 		basePower: 25,
 		category: "Physical",
@@ -2221,7 +2171,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits 3 times. 20% to poison. Crits poisoned foes.",
 	},
 	ancientvisage: {
-		num: 0,
 		accuracy: 100,
 		basePower: 80,
 		category: "Physical",
@@ -2252,7 +2201,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Deals 1/8 Max HP on contact with the user before it moves.",
 	},
 	dropin: {
-		num: 0,
 		accuracy: 100,
 		basePower: 50,
 		category: "Physical",

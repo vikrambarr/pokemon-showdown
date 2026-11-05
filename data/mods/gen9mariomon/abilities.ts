@@ -48,6 +48,5 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Chaos Emeralds",
 		shortDesc: "When Sonic reaches 1 HP, fully heal and transform into Super Sonic.",
 		rating: 5,
-		num: 0,
 	},
 };

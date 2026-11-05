@@ -16,7 +16,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		},
 	},
 	expunge: {
-		num: 0,
 		accuracy: 70,
 		basePower: 110,
 		category: "Special",
@@ -37,7 +36,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	goldenfist: {
-		num: 0,
 		accuracy: 100,
 		basePower: 70,
 		category: "Physical",
@@ -54,7 +52,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Cool",
 	},
 	infernalblade: {
-		num: 0,
 		accuracy: 95,
 		basePower: 90,
 		category: "Physical",
@@ -79,7 +76,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	laserpulse: {
-		num: 0,
 		accuracy: 100,
 		basePower: 80,
 		category: "Special",
@@ -103,7 +99,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	nuclearwind: {
-		num: 0,
 		accuracy: 95,
 		basePower: 65,
 		category: "Special",
@@ -120,7 +115,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	oceanswrath: {
-		num: 0,
 		accuracy: 75,
 		basePower: 100,
 		category: "Special",
@@ -148,7 +142,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	stickyterrain: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -202,7 +195,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Clever",
 	},
 	subduction: {
-		num: 0,
 		accuracy: 90,
 		basePower: 140,
 		category: "Physical",
@@ -224,7 +216,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	vaporize: {
-		num: 0,
 		accuracy: 95,
 		basePower: 100,
 		category: "Special",
@@ -254,7 +245,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Beautiful",
 	},
 	glacialspear: {
-		num: 0,
 		accuracy: 95,
 		basePower: 100,
 		category: "Physical",
@@ -286,7 +276,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Cool",
 	},
 	engulf: {
-		num: 0,
 		accuracy: 95,
 		basePower: 100,
 		category: "Physical",

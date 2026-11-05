@@ -3,6 +3,8 @@ import { Dex, toID, type DexTable, type ModdedDex } from './dex';
 import type { TypeData } from './dex-data';
 import type { Format, FormatData } from './dex-formats';
 import type { LearnsetData, SpeciesData, SpeciesFormatsData } from './dex-species';
+import type { BattleActions } from './battle-actions';
+import type { Pokemon } from './pokemon';
 import { Rulesets as PokeathlonRulesets } from '../data/pokeathlon-rulesets';
 import {
 	checkSlot, compileHandler, eventTargets, EVENT_SUFFIXES, handlersOf, parseHandler, render,
@@ -36,10 +38,12 @@ export type DexData = DexLayer | { hash: string, format?: FormatData };
 
 const NOT_INHERITED = ['num', 'name', 'gen', 'isNonstandard'];
 const MERGED_TABLES = ['Pokedex', 'Learnsets', 'FormatsData', 'TypeChart', ...EFFECT_TABLES] as const;
-const UNSAFE = ['__proto__', 'constructor', 'prototype'];
+export const UNSAFE = ['__proto__', 'constructor', 'prototype'];
 export const REPLACED = ['megaStone', 'boosts', 'boost'];
 
-const isObject = (value: unknown): value is AnyObject => !!value && typeof value === 'object' && !Array.isArray(value);
+export const isObject = (value: unknown): value is AnyObject => (
+	!!value && typeof value === 'object' && !Array.isArray(value)
+);
 
 function clone(value: any): any {
 	if (Array.isArray(value)) return value.map(clone);
@@ -270,6 +274,22 @@ export function buildBase(
 	return dex;
 }
 
+function canMegaEvo(this: BattleActions, pokemon: Pokemon) {
+	const species = pokemon.baseSpecies;
+	const altForme = species.otherFormes && this.dex.species.get(species.otherFormes[0]);
+	const item = pokemon.getItem();
+	if ((this.battle.gen <= 7 || this.battle.ruleTable.has('+tag:past') ||
+		this.battle.ruleTable.has('+tag:future')) &&
+		altForme?.isMega && altForme?.requiredMove &&
+		pokemon.baseMoves.includes(toID(altForme.requiredMove)) && !item.zMove) {
+		return altForme.name;
+	}
+	if (!item.megaStone) return null;
+	if (item.megaStone[species.name]) return item.megaStone[species.name];
+	const megaEvolution = typeof species.battleOnly === 'string' && item.megaStone[species.battleOnly];
+	return megaEvolution && megaEvolution !== species.name ? megaEvolution : null;
+}
+
 export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex {
 	const data = 'mod' in input ? input : loadLayer(input.hash);
 	const id = `${engine || data.mod}dex${input.hash}`;
@@ -289,6 +309,13 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 		Learnsets: { ...parent.data.Learnsets, ...data.Learnsets },
 		FormatsData: { ...parent.data.FormatsData, ...data.FormatsData },
 		TypeChart: { ...parent.data.TypeChart, ...data.TypeChart },
+		Scripts: {
+			...parent.data.Scripts,
+			actions: {
+				canMegaEvo,
+				...parent.data.Scripts.actions,
+			},
+		},
 		Rulesets: {
 			...PokeathlonRulesets,
 			...parent.data.Rulesets,

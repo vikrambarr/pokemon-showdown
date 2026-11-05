@@ -119,14 +119,12 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 	},
 	flowergift: {
 		inherit: true,
-		onAllyModifyAtkPriority: 3,
 		onAllyModifyAtk(atk, pokemon) {
 			if (!['Noivern-Delta', 'Cherrim'].includes(this.effectState.target.baseSpecies.baseSpecies)) return;
 			if (['sunnyday', 'desolateland'].includes(pokemon.effectiveWeather())) {
 				return this.chainModify(1.5);
 			}
 		},
-		onAllyModifySpDPriority: 4,
 		onAllyModifySpD(spd, pokemon) {
 			if (!['Noivern-Delta', 'Cherrim'].includes(this.effectState.target.baseSpecies.baseSpecies)) return;
 			if (['sunnyday', 'desolateland'].includes(pokemon.effectiveWeather())) {
@@ -184,7 +182,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "If New Moon is active, this Pokemon's Special Attack is multiplied by 1.5 and it loses 1/8 of its maximum HP, rounded down, at the end of each turn.",
 		shortDesc: "If New Moon is active, this Pokemon's Sp. Atk is 1.5x; loses 1/8 max HP per turn.",
 		rating: 2,
-		num: 0,
 	},
 	amplifier: {
 		onBasePowerPriority: 7,
@@ -198,7 +195,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Amplifier",
 		shortDesc: "Sound-based moves are boosted by 1.25x.",
 		rating: 3.5,
-		num: 0,
 	},
 	ancientpresence: {
 		onModifyMove(move, pokemon, target) {
@@ -215,7 +211,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Ancient Presence",
 		shortDesc: "User's moves are STAB and become neutral.",
 		rating: 2,
-		num: 0,
 	},
 	athenian: {
 		onModifySpAPriority: 5,
@@ -226,7 +221,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Athenian",
 		shortDesc: "Doubles the user's Special Attack stat.",
 		rating: 5,
-		num: 0,
 	},
 	blazeboost: {
 		onModifyTypePriority: -5,
@@ -250,7 +244,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "Fire moves boost user's stats. May burn on contact.",
 		desc: "If a Fire-type move is selected, the user will receive a +1 attack, sp. attack, and speed boost. If user is Emolga-Delta, using a Fire-type move transforms it into Emolga-Delta-Fired and adds a 10% chance to burn opponents on contact.",
 		rating: 4,
-		num: 0,
 	},
 	chlorofury: {
 		onStart(pokemon) {
@@ -273,7 +266,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Chlorofury",
 		shortDesc: "User's stats are boosted to avenge its allies.",
 		rating: 3.5,
-		num: 0,
 	},
 	etherealshroud: {
 		onTryHit(target, source, move) {
@@ -292,7 +284,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Ethereal Shroud",
 		shortDesc: "Grants the user Ghost-type immunities and resistances.",
 		rating: 3,
-		num: 0,
 	},
 	eventhorizon: {
 		onDamagingHit(damage, target, source, move) {
@@ -304,7 +295,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Event Horizon",
 		shortDesc: "Any Pokemon that makes contact with the user can't escape.",
 		rating: 5,
-		num: 0,
 	},
 	foundry: {
 		onTryMovePriority: -2,
@@ -334,7 +324,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "This Pokemon's Rock-type moves become Fire-type moves and have their power multiplied by 1.2. This effect comes after other effects that change a move's type. Stealth Rock sets a Fire-type variant instead.",
 		shortDesc: "This Pokemon's Rock-type moves become Fire type and have 1.2x power.",
 		rating: 4,
-		num: 0,
 	},
 	heliophobia: {
 		onWeather(target, source, effect) {
@@ -349,7 +338,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "At the end of each turn, this Pokemon restores 1/8 of its maximum HP, rounded down, if the weather is Darkness, and loses 1/8 of its maximum HP, rounded down, if the weather is Sunny Day. The weather effects are prevented if this Pokemon is holding a Utility Umbrella.",
 		shortDesc: "This Pokemon is healed 1/8 by Darkness; damaged 1/8 by Sun.",
 		rating: 3,
-		num: 0,
 	},
 	hubris: {
 		onSourceAfterFaint(length, target, source, effect) {
@@ -362,7 +350,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "This Pokemon's Sp. Atk is raised by 1 stage if it attacks and knocks out another Pokemon.",
 		shortDesc: "This Pokemon's Sp. Atk is raised by 1 stage if it attacks and KOes another Pokemon.",
 		rating: 3,
-		num: 0,
 	},
 	intoxicate: {
 		onModifyTypePriority: -1,
@@ -385,7 +372,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "This Pokemon's Normal-type moves become Poison-type moves and have their power multiplied by 1.2. This effect comes after other effects that change a move's type.",
 		shortDesc: "This Pokemon's Normal-type moves become Poison type and have 1.2x power.",
 		rating: 4,
-		num: 0,
 	},
 	irrelephant: {
 		onModifyMove(move, pokemon, target) {
@@ -404,7 +390,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Irrelephant",
 		shortDesc: "User ignores all type-based immunities.",
 		rating: 4,
-		num: 0,
 	},
 	lernean: {
 		onUpdate(pokemon) {
@@ -475,7 +460,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Lernean",
 		shortDesc: "Grows heads when it loses HP. Moves become multihit.",
 		rating: 4.5,
-		num: 0,
 	},
 	omnitype: {
 		onStart(target) {
@@ -497,7 +481,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Omnitype",
 		shortDesc: "When defending, the user has every type.",
 		rating: 4,
-		num: 0,
 	},
 	pendulum: {
 		onStart(pokemon) {
@@ -539,7 +522,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Pendulum",
 		shortDesc: "Damage of moves used on consecutive turns is increased. Max 2x after 5 turns.",
 		rating: 4,
-		num: 0,
 	},
 	phototroph: {
 		onResidual(target, source, effect) {
@@ -555,7 +537,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Phototroph",
 		shortDesc: "Heals 1/16 HP every turn. 1/8 in sun.",
 		rating: 1.5,
-		num: 0,
 	},
 	prismguard: {
 		onDamagingHitOrder: 1,
@@ -569,7 +550,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "Pokemon not making contact with this Pokemon lose 1/8 of their maximum HP, rounded down.",
 		shortDesc: "Pokemon not making contact with this Pokemon lose 1/8 max HP.",
 		rating: 2.5,
-		num: 0,
 	},
 	proteanmaxima: {
 		onSwitchIn(pokemon) {
@@ -612,7 +592,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Protean Maxima",
 		shortDesc: "Transforms into the eeveelution corresponding to the type of the move used.",
 		rating: 4.5,
-		num: 0,
 	},
 	psychocall: {
 		onModifyAtkPriority: 5,
@@ -634,7 +613,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "When this Pokemon has 1/3 or less of its maximum HP, rounded down, its offensive stat is multiplied by 1.5 while using a Psychic-type attack.",
 		shortDesc: "At 1/3 or less of its max HP, this Pokemon's offensive stat is 1.5x with Psychic attacks.",
 		rating: 2,
-		num: 0,
 	},
 	regurgitation: {
 		onAfterMove(source, target, move) {
@@ -650,7 +628,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Regurgitation",
 		shortDesc: "After attacking deals 1/6 max HP modified by forme's type effectiveness.",
 		rating: 3,
-		num: 0,
 	},
 	shadowcall: {
 		onModifyAtkPriority: 5,
@@ -672,7 +649,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "When this Pokemon has 1/3 or less of its maximum HP, rounded down, its offensive stat is multiplied by 1.5 while using a Dark-type attack.",
 		shortDesc: "At 1/3 or less of its max HP, this Pokemon's offensive stat is 1.5x with Dark attacks.",
 		rating: 2,
-		num: 0,
 	},
 	shadowdance: {
 		onModifySpe(spe, pokemon) {
@@ -684,7 +660,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Shadow Dance",
 		shortDesc: "If New Moon is active, this Pokemon's Speed is doubled.",
 		rating: 3,
-		num: 0,
 	},
 	shadowsynergy: {
 		onModifyAtkPriority: 5,
@@ -705,7 +680,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Shadow Synergy",
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Dark-type attack.",
 		rating: 2,
-		num: 0,
 	},
 	spectraljaws: {
 		onBasePowerPriority: 19,
@@ -723,7 +697,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Spectral Jaws",
 		shortDesc: "Biting moves have 1.3x power and become Special.",
 		rating: 3,
-		num: 0,
 	},
 	speedswap: {
 		onStart(pokemon) {
@@ -733,7 +706,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Speed Swap",
 		shortDesc: "This Pokemon summons Trick Room on switch-in.",
 		rating: 4.5,
-		num: 0,
 	},
 	spiritcall: {
 		onModifyAtkPriority: 5,
@@ -755,7 +727,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "When this Pokemon has 1/3 or less of its maximum HP, rounded down, its offensive stat is multiplied by 1.5 while using a Ghost-type attack.",
 		shortDesc: "At 1/3 or less of its max HP, this Pokemon's offensive stat is 1.5x with Ghost attacks.",
 		rating: 2,
-		num: 0,
 	},
 	supercell: {
 		onStart(pokemon) {
@@ -781,7 +752,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "If New Moon/Rain is active, this Pokemon's Special Attack is multiplied by 1.5.",
 		shortDesc: "If New Moon/Rain is active, this Pokemon's Sp. Atk is 1.5x.",
 		rating: 2,
-		num: 0,
 	},
 	unleafed: {
 		onStart(pokemon) {
@@ -806,7 +776,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Unleafed",
 		shortDesc: "Receives a temporary omniboost on Switch-in based on fallen allies.",
 		rating: 2.5,
-		num: 0,
 	},
 	vampiric: {
 		onAfterMoveSecondarySelf(pokemon, target, move) {
@@ -818,7 +787,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Vampiric",
 		shortDesc: "After making contact, holder gains 1/4 of the damage in HP dealt to a target.",
 		rating: 3.5,
-		num: 0,
 	},
 	vaporization: {
 		onTryHit(target, source, move) {
@@ -840,7 +808,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "Vaporizes Water-type attacks and damages water types.",
 		flags: { breakable: 1 },
 		rating: 3.5,
-		num: 0,
 	},
 	winterjoy: {
 		onBasePower(basePower, pokemon, target, move) {
@@ -852,7 +819,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Winter Joy",
 		shortDesc: "Power is boosted from Nov-Feb, cut from May-Aug.",
 		rating: 3,
-		num: 0,
 	},
 	glitch: {
 		onDamagingHitOrder: 1,
@@ -866,6 +832,5 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "Pokemon making contact with this Pokemon faint.",
 		name: "Glitch",
 		rating: 5,
-		num: 0,
 	},
 };

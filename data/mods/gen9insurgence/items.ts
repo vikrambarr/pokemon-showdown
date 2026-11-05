@@ -64,7 +64,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onTakeItem(item, source) {
 			return !['Arceus', 'Giratina', 'Regigigas'].includes(source.baseSpecies.baseSpecies);
 		},
-		num: 0,
 	},
 	flygonarmor: {
 		name: "Flygon Armor",
@@ -75,7 +74,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		forcedForme: "Flygon-Armor",
 		itemUser: ["Flygon-Armor"],
-		num: 0,
 	},
 	leavannyarmor: {
 		name: "Leavanny Armor",
@@ -86,7 +84,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		forcedForme: "Leavanny-Armor",
 		itemUser: ["Leavanny-Armor"],
-		num: 0,
 	},
 	mewtwoarmor: {
 		name: "Mewtwo Armor",
@@ -97,7 +94,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		forcedForme: "Mewtwo-Armor",
 		itemUser: ["Mewtwo-Armor"],
-		num: 0,
 	},
 	tyranitararmor: {
 		name: "Tyranitar Armor",
@@ -108,7 +104,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		forcedForme: "Tyranitar-Armor",
 		itemUser: ["Tyranitar-Armor"],
-		num: 0,
 	},
 	volcaronadeltaarmor: {
 		name: "Volcarona-Delta Armor",
@@ -120,7 +115,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		forcedForme: "Volcarona-Delta-Armor",
 		itemUser: ["Volcarona-Delta-Armor"],
-		num: 0,
 	},
 	zekromarmor: {
 		name: "Zekrom Armor",
@@ -131,7 +125,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		forcedForme: "Zekrom-Armor",
 		itemUser: ["Zekrom-Armor"],
-		num: 0,
 	},
 	eevite: {
 		name: "Eevite",
@@ -151,6 +144,5 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				source.species.id === 'vaporeon'
 			);
 		},
-		num: 0,
 	},
 };

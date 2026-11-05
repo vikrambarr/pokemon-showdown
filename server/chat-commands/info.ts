@@ -114,7 +114,7 @@ export const commands: Chat.ChatCommands = {
 	whoare: 'whois',
 	altsnorecurse: 'whois',
 	profile: 'whois',
-	async whois(target, room, user, connection, cmd) {
+	whois(target, room, user, connection, cmd) {
 		if (room?.roomid === 'staff' && !this.runBroadcast()) return;
 		const targetUser = this.getUserOrSelf(target, { exactName: user.tempGroup === ' ' });
 		const showAll = (cmd === 'ip' || cmd === 'whoare' || cmd === 'alt' || cmd === 'alts' || cmd === 'altsnorecurse');
@@ -218,7 +218,7 @@ export const commands: Chat.ChatCommands = {
 				}).join(", ");
 				if (prevNames) buf += `<br />Previous names: ${prevNames}`;
 			}
-			buf += await discordWhois(targetUser.s1 || targetUser.id, user);
+			void discordWhois(this, targetUser.s1 || targetUser.id);
 		}
 		if (canViewPunishments) {
 			if (targetUser.namelocked) {
@@ -364,7 +364,7 @@ export const commands: Chat.ChatCommands = {
 
 	'chp': 'offlinewhois',
 	checkpunishment: 'offlinewhois',
-	async offlinewhois(target, room, user) {
+	offlinewhois(target, room, user) {
 		if (!user.trusted) {
 			throw new Chat.ErrorMessage("/offlinewhois - Access denied.");
 		}
@@ -385,7 +385,7 @@ export const commands: Chat.ChatCommands = {
 		if (Users.globalAuth.sectionLeaders.has(userid)) {
 			buf += `<br />Section Leader (${RoomSections.sectionNames[Users.globalAuth.sectionLeaders.get(userid)!]})`;
 		}
-		if (user.can('alts')) buf += await discordWhois(targetUser?.s1 || userid, user);
+		if (user.can('alts')) void discordWhois(this, targetUser?.s1 || userid);
 
 		buf += `<br /><br />`;
 		let atLeastOne = false;
