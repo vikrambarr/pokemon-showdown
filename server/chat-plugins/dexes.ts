@@ -98,16 +98,42 @@ function shownIds(loaded: Dexes.LoadedDex, table: keyof typeof GETTERS, layers =
 const countsCache = new WeakMap<Dexes.LoadedDex, AnyObject[]>();
 const entriesCache = new WeakMap<Dexes.LoadedDex, AnyObject>();
 
+const UNCOMPARED = new Set([
+	'gen', 'isNonstandard', 'num', 'rating', 'evos', 'otherFormes', 'cosmeticFormes', 'formeOrder',
+]);
+
+function gameOf(loaded: Dexes.LoadedDex) {
+	let game = Dex.mod(loaded.row.mod);
+	while (!game.isBase && !/^gen\d+$/.test(game.currentMod)) game = Dex.mod(game.parentMod);
+	return game;
+}
+
+function serialize(value: unknown) {
+	return JSON.stringify(value, (key, each) => typeof each === 'function' ? String(each) : each);
+}
+
+function changed(entry: AnyObject | undefined, original: AnyObject | undefined) {
+	if (!entry || !original) return entry !== original;
+	return [...new Set([...Object.keys(entry), ...Object.keys(original)])].some(key =>
+		!UNCOMPARED.has(key) && serialize(entry[key]) !== serialize(original[key]));
+}
+
+function sortedIds(loaded: Dexes.LoadedDex, table: Dexes.Table, layers: Dexes.LoadedDex[]) {
+	const data = loaded.dex.data, game = gameOf(loaded).data;
+	const ids = table === 'Pokedex' ? loaded.data.species as ID[] : shownIds(loaded, table, layers);
+	const custom = ids.filter(id => !game[table][id]);
+	const modified = ids.filter(id => game[table][id] && (changed(data[table][id], game[table][id]) ||
+		table === 'Pokedex' && changed(data.Learnsets[id], game.Learnsets[id])));
+	return { ids, custom, modified };
+}
+
 function countsOf(loaded: Dexes.LoadedDex) {
 	let counts = countsCache.get(loaded);
 	if (counts) return counts;
 	const layers = Dexes.ancestorsOf(loaded);
-	const world = Dexes.baseOf(loaded.row);
 	counts = COUNTED.map(([table, name]) => {
-		const ids = [...Dexes.entriesOf(loaded, table).keys()];
-		const edited = ids.filter(id => world.data[table][id]).length;
-		const total = table === 'Pokedex' ? loaded.data.species.length : shownIds(loaded, table, layers).length;
-		return { name, table, total, custom: ids.length - edited, edited };
+		const { ids, custom, modified } = sortedIds(loaded, table, layers);
+		return { name, table, total: ids.length, custom: custom.length, modified: modified.length };
 	});
 	countsCache.set(loaded, counts);
 	return counts;
@@ -117,13 +143,12 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 	let entries = entriesCache.get(loaded);
 	if (entries) return entries;
 	const layers = Dexes.ancestorsOf(loaded);
-	const world = Dexes.baseOf(loaded.row);
-	entries = { id: loaded.row.dexid, custom: {}, edited: {} };
+	entries = { id: loaded.row.dexid, custom: {}, modified: {} };
 	for (const table of ['Moves', 'Abilities', 'Items'] as const) {
-		const ids = [...Dexes.entriesOf(loaded, table).keys()];
-		entries[table] = shownIds(loaded, table, layers);
-		entries.custom[table] = ids.filter(id => !world.data[table][id]);
-		entries.edited[table] = ids.filter(id => world.data[table][id]);
+		const { ids, custom, modified } = sortedIds(loaded, table, layers);
+		entries[table] = ids;
+		entries.custom[table] = custom;
+		entries.modified[table] = modified;
 	}
 	entriesCache.set(loaded, entries);
 	return entries;
@@ -352,7 +377,7 @@ export const commands: Chat.ChatCommands = {
 			buf += `. ${dex.visibility === 'private' ? 'Private' : 'Public'}.`;
 			if (loaded.editors.size) buf += Utils.html` Edited by ${[...loaded.editors.values()].join(', ')}.`;
 			buf += `<br /><small>${dex.counts.map(count =>
-				`${count.name}: ${count.total} total, ${count.custom} custom, ${count.edited} edited`).join(' &middot; ')}</small>.`;
+				`${count.name}: ${count.total} total, ${count.custom} custom, ${count.modified} modified`).join(' &middot; ')}</small>.`;
 			buf += ` Version <code>${loaded.data.hash}</code>.`;
 			for (const entry of loaded.entries.values()) {
 				buf += Utils.html`<br /><strong>${entry.data.name}</strong>${entry.inheritsfrom ? ` (based on ${entry.inheritsfrom})` : ''}`;

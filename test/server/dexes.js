@@ -338,22 +338,22 @@ describe('Dexes', () => {
 		assert(!source.effects.Moves.get('scorchsoak').locked);
 	});
 
-	it('should list a dex\'s custom and edited entries, count them, and answer every request about it', async () => {
+	it('should list a dex\'s custom and modified entries, count them, and answer every request about it', async () => {
 		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
 		const mocha = id('Mocha Dex');
 		const entries = await crqHandlers.dexentries.call(null, mocha, owner);
 		assert.equal(entries.query, mocha);
 		assert.deepEqual(entries.custom.Moves.sort(), ['scorchsoak', 'shield', 'voltjab']);
-		assert.deepEqual(entries.edited.Moves, []);
-		assert.deepEqual(entries.edited.Abilities, ['intimidate']);
+		assert.deepEqual(entries.modified.Moves, []);
+		assert.deepEqual(entries.modified.Abilities, ['intimidate']);
 		assert.deepEqual(entries.custom.Items, ['voltorb']);
-		assert.deepEqual(entries.edited.Items, ['choicescarf']);
+		assert.deepEqual(entries.modified.Items, ['choicescarf']);
 		assert(entries.Moves.includes('voltjab') && entries.Moves.includes('thunderbolt'));
 		assert.equal(await crqHandlers.dexentries.call(null, mocha, owner).then(again => again.Moves), entries.Moves);
 
 		const [dex] = await crqHandlers.dexes.call(null, 'mocha dex', owner);
 		const moves = dex.counts.find(count => count.table === 'Moves');
-		assert.deepEqual([moves.custom, moves.edited, moves.total], [3, 0, entries.Moves.length]);
+		assert.deepEqual([moves.custom, moves.modified, moves.total], [3, 0, entries.Moves.length]);
 		assert.equal(moves.customIds, undefined);
 
 		assert.deepEqual(await crqHandlers.dexentries.call(null, 'nosuchdex', owner), { query: 'nosuchdex', missing: true });
@@ -497,6 +497,12 @@ describe('Dexes', () => {
 		assert.equal(dex.species.get('Weird Virus').num, dex.species.get('Hammer Bro').num);
 		assert.equal(dex.species.get('Weird Virus').maxHP, 1);
 		assert(dex.conditions.get('frb').exists);
+		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
+		const entries = await crqHandlers.dexentries.call(null, id('Engine Dex'), owner);
+		assert(entries.custom.Moves.includes('fireball'));
+		assert.deepEqual(entries.custom.Items.sort(), ['goombaboots', 'sturdyshell']);
+		assert(entries.custom.Abilities.includes('chaosemeralds'));
+		assert(entries.modified.Abilities.includes('angerpoint'));
 		await Dexes.deleteDex(loaded);
 	});
 
@@ -522,6 +528,9 @@ describe('Dexes', () => {
 		await Dexes.putEntry(get('parentdex'), { name: 'Pikachu', types: ['Electric', 'Fire'] });
 		assert.deepEqual(get('childdex').data.parents, [get('parentdex').data.hash]);
 		assert.deepEqual(get('childdex').dex.species.get('Pikachu').types, ['Electric', 'Fire']);
+		const [summary] = await require('../../dist/server/chat-plugins/dexes').crqHandlers.dexes.call(null, 'child dex', editor);
+		const pokedex = summary.counts.find(count => count.table === 'Pokedex');
+		assert.deepEqual([pokedex.custom, pokedex.modified], [1, 1]);
 		await Dexes.setSpecies(get('childdex'), Dexes.findSpecies(get('childdex'), ['Bulbasaur']), false);
 		assert(!get('childdex').data.species.includes('bulbasaur'));
 		assert(get('parentdex').data.species.includes('bulbasaur'));
