@@ -595,7 +595,11 @@ export function clientData(loaded: LoadedDex) {
 			uploader: image.uploadername, dex: image.dexname, ...(image.artist ? { artist: image.artist } : {}), ...image.display,
 		};
 	}
+	const origins: { [speciesid: string]: string } = {};
 	for (const entry of loaded.entries.values()) {
+		let origin = entry.origin;
+		while (origin?.from) origin = origin.from;
+		if (origin) origins[entry.speciesid] = origin.dex;
 		for (const [key, uploadid] of Object.entries(usedSprites(loaded, entry.sprites))) {
 			const [speciesid, kind] = key.includes(':') ? key.split(':') : [entry.speciesid, key];
 			(speciesSprites[speciesid] ||= {})[kind] = uploadid;
@@ -620,6 +624,7 @@ export function clientData(loaded: LoadedDex) {
 		sprites: speciesSprites, ...effects, ...(TypeChart ? { TypeChart } : {}),
 		...(Object.keys(itemSprites).length ? { itemSprites } : {}),
 		...(Object.keys(images).length ? { images } : {}),
+		...(Object.keys(origins).length ? { origins } : {}),
 	};
 }
 

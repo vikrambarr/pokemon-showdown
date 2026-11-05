@@ -55,7 +55,7 @@ export const Rulesets: import('../sim/dex-formats').ModdedFormatDataTable = {
 			if (set.fusion && !fusion.exists) return [`The Pokemon "${set.fusion}" does not exist.`];
 
 			if (set.fusion && fusion.exists) {
-				if ((species.eggGroups.includes("Infinite Fusion") || fusion.eggGroups.includes("Infinite Fusion")))
+				if (((species.tags as string[]).includes("Triple Fusion") || (fusion.tags as string[]).includes("Triple Fusion")))
 					return [`You cannot fuse with triple fusions.`];
 
 				[set.species, set.fusion] = [set.fusion, set.species];
