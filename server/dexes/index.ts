@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { FS, Utils } from '../../lib';
 import { SQL, PGDatabase } from '../../lib/database';
 import {
-	buildBase, buildDex, buildFormat, EFFECT_TABLES, isBuiltDex, releaseDex, type DexLayer, type EffectTable,
+	buildBase, buildDex, buildFormat, EFFECT_TABLES, isBuiltDex, isObject, releaseDex, type DexLayer, type EffectTable,
 } from '../../sim/dex-custom';
 import { handlersOf } from '../../sim/dex-handlers';
 import type { ModdedDex } from '../../sim/dex';
@@ -88,7 +88,6 @@ export function database() {
 }
 
 const json = (value: unknown) => JSON.stringify(value);
-const isObject = (value: unknown): value is AnyObject => !!value && typeof value === 'object' && !Array.isArray(value);
 const newID = (prefix: string, taken: (id: ID) => boolean) => {
 	for (;;) {
 		const id = `${prefix}${crypto.randomBytes(5).toString('hex')}` as ID;
@@ -102,6 +101,13 @@ const TABLES: Table[] = ['Pokedex', ...EFFECT_TABLES, 'TypeChart'];
 
 export function entriesOf(loaded: LoadedDex, table: Table): Map<ID, Entry> {
 	return table === 'Pokedex' ? loaded.entries : loaded.effects[table];
+}
+
+function newNum(table: Table, taken: Iterable<Entry> = []) {
+	return Math.min(
+		-10000, ...[...taken].map(other => other.num),
+		...[...dexes.values()].flatMap(other => [...entriesOf(other, table).values()].map(each => each.num))
+	) - 1;
 }
 
 function isBase(dex: ModdedDex, table: Table, id: ID) {
@@ -669,10 +675,6 @@ export function setAccount(userid: ID, account: string) {
 	accounts.set(userid, account);
 }
 
-export function knownAccount(user: User) {
-	return user.registered ? accounts.get(user.id) || null : null;
-}
-
 export function listed(loaded: LoadedDex, account: string | null) {
 	return loaded.row.visibility === 'public' ||
 		(!!account && (loaded.row.ownerid === account || loaded.editors.has(account)));
@@ -933,10 +935,7 @@ export async function putEntries(loaded: LoadedDex, inputs: unknown[]) {
 		const entry = validateEntry(input, base, entries, loaded.dex, loaded.row.official);
 		checkUnlocked(loaded, 'Pokedex', [entry.speciesid, entry.inheritsfrom]);
 		if (!entry.num && !base.data.Pokedex[entry.speciesid]) {
-			entry.num = Math.min(
-				-10000, ...[...entries.values()].map(other => other.num),
-				...[...dexes.values()].flatMap(other => [...other.entries.values()].map(each => each.num))
-			) - 1;
+			entry.num = newNum('Pokedex', entries.values());
 		}
 		entries.set(entry.speciesid, entry);
 		changed.set(entry.speciesid, entry);
@@ -1053,9 +1052,7 @@ export async function putEffect(loaded: LoadedDex, table: EffectTable, input: An
 	const entry = validateEffect(input, table, base, loaded.effects[table], lookup, loaded.row.official);
 	checkUnlocked(loaded, table, [entry.effectid, entry.inheritsfrom]);
 	if (!base.data[table][entry.effectid]) {
-		entry.num ||= Math.min(
-			-10000, ...[...dexes.values()].flatMap(other => [...other.effects[table].values()].map(each => each.num))
-		) - 1;
+		entry.num ||= newNum(table);
 		entry.data.num = entry.num;
 	}
 	const effects = { ...loaded.effects, [table]: new Map([...loaded.effects[table], [entry.effectid, entry]]) };
@@ -1194,11 +1191,7 @@ async function copyInto(
 		}
 		const copy = { ...JSON.parse(json(entry)), origin: originOf(source, entry), trackdex: source.row.dexid, trackid: id };
 		copy.locked = (existing ? existing.locked : entry.locked) && copy.origin.creator === target.row.ownerid;
-		copy.num = official ? existing?.num || 0 :
-			existing?.num || Math.min(
-				-10000, ...[...into.values()].map(other => other.num),
-				...[...dexes.values()].flatMap(other => [...entriesOf(other, table).values()].map(each => each.num))
-			) - 1;
+		copy.num = official ? existing?.num || 0 : existing?.num || newNum(table, into.values());
 		if (table !== 'Pokedex' && table !== 'TypeChart' && !official) copy.data.num = copy.num;
 		into.set(id, copy);
 		if (table === 'Pokedex' && official) species.add(id);

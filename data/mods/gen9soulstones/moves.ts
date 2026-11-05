@@ -105,10 +105,7 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 	},
 	laserfocus: {
 		inherit: true,
-		name: "Laser Focus",
 		pp: 20,
-		priority: 0,
-		flags: { snatch: 1, metronome: 1 },
 		sideCondition: 'laserfocus',
 		condition: {
 			duration: 4,
@@ -124,7 +121,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 				this.add('-sideend', side, 'move: Laser Focus');
 			},
 		},
-		target: "self",
 		type: "Light",
 		desc: "For 4 turns, allies have increased crit ratio.",
 		shortDesc: "For 4 turns, allies have increased crit ratio.",
@@ -161,7 +157,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 				target.trySetStatus(status, source);
 			},
 		},
-		target: "normal",
 		type: "Light",
 		desc: "20% chance to paralyze or burn or frostbite target.",
 		shortDesc: "20% chance to paralyze or burn or frostbite target.",
@@ -316,7 +311,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 	dreameater: {
 		inherit: true,
 		basePower: 50,
-		flags: { protect: 1, mirror: 1, heal: 1, metronome: 1 },
 		onTryImmunity(target) {},
 		onModifyMove(move, pokemon, target) {
 			if (!target) return;
@@ -439,9 +433,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 	flameburst: {
 		inherit: true,
 		accuracy: true,
-		name: "Flame Burst",
-		pp: 15,
-		priority: 0,
 		flags: { protect: 1, mirror: 1, metronome: 1, bullet: 1, defrost: 1 },
 		onHit(target, source, move) {},
 		onAfterSubDamage(damage, target, source, move) {},
@@ -455,7 +446,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		basePower: 80,
 		category: "Physical",
 		pp: 15,
-		flags: { protect: 1, mirror: 1, distance: 1, metronome: 1, wind: 1 },
 		condition: {
 			duration: 4,
 			onStart(target) {
@@ -611,12 +601,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 	steelroller: {
 		inherit: true,
 		onTry() {},
-		onHit() {
-			this.field.clearTerrain();
-		},
-		onAfterSubDamage() {
-			this.field.clearTerrain();
-		},
 		onBasePower(basePower, source, target, move) {
 			if (this.field.terrain) return this.chainModify(0.5);
 		},
@@ -707,16 +691,8 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 				move.ignoreImmunity = false;
 			}
 		},
-		onEffectiveness(typeMod, target, type, move) {
-			if (move.type !== 'Ground') return;
-			if (!target) return;
-			if (!target.runImmunity('Ground')) {
-				if (target.hasType('Flying')) return 0;
-			}
-		},
 	},
 	submerge: {
-		num: 0,
 		basePower: 80,
 		accuracy: 100,
 		category: "Physical",
@@ -763,7 +739,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Dives underwater turn 1, strikes turn 2.",
 	},
 	blackhole: {
-		num: 0,
 		basePower: 90,
 		accuracy: 100,
 		category: "Special",
@@ -809,7 +784,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Grounds target.",
 	},
 	blackout: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -842,7 +816,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "For 5 turns, Light-type attacks have 1/3 power.",
 	},
 	dragonmagic: {
-		num: 0,
 		basePower: 0,
 		accuracy: 75,
 		category: "Status",
@@ -863,7 +836,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "100% to inflict random status condition",
 	},
 	changelings: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -892,7 +864,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Swaps stat stages with target.",
 	},
 	peekaboo: {
-		num: 0,
 		basePower: 40,
 		accuracy: 100,
 		category: "Special",
@@ -916,7 +887,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits first. First turn out only. 100% flinch chance.",
 	},
 	wildimagination: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -1007,7 +977,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Power doubles with each hit. Repeats for 5 turns.",
 	},
 	edenfruit: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -1048,7 +1017,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Raises the user's Defense and Sp. Def by 1. Ingrains User.",
 	},
 	continentalrift: {
-		num: 0,
 		basePower: 100,
 		accuracy: 90,
 		category: "Physical",
@@ -1075,7 +1043,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Ignores the Abilities of other Pokemon. Special if would be stronger.",
 	},
 	seismicshift: {
-		num: 0,
 		basePower: 1,
 		accuracy: 100,
 		category: "Special",
@@ -1108,7 +1075,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "More power the heavier the target.",
 	},
 	frozenheart: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -1138,7 +1104,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Cures the user's party of all status conditions.",
 	},
 	hallowedground: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -1180,7 +1145,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Protects allies from damaging attacks. Turn 1 only.",
 	},
 	luminousblade: {
-		num: 0,
 		basePower: 125,
 		accuracy: 100,
 		category: "Physical",
@@ -1210,7 +1174,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Charges turn 1. Hits turn 2. No charge in sunlight.",
 	},
 	repentance: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -1231,7 +1194,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "User loses 50% max HP. Maximizes Sp. Atk.",
 	},
 	curbstomp: {
-		num: 0,
 		basePower: 1,
 		accuracy: 100,
 		category: "Physical",
@@ -1263,7 +1225,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "More power the heavier the user than the target.",
 	},
 	genesis: {
-		num: 0,
 		basePower: 100,
 		accuracy: 90,
 		category: "Special",
@@ -1283,7 +1244,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Extends weather/terrain duration by 1 turn on KO.",
 	},
 	powernap: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -1312,7 +1272,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Cures the user's party of all status conditions.",
 	},
 	shutdown: {
-		num: 0,
 		basePower: 40,
 		accuracy: 100,
 		category: "Physical",
@@ -1336,7 +1295,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits first. First turn out only. 100% flinch chance.",
 	},
 	checkmate: {
-		num: 0,
 		basePower: 50,
 		accuracy: 100,
 		category: "Special",
@@ -1353,7 +1311,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Raises user's Sp. Atk by 2 if this KOes the target.",
 	},
 	gemstorm: {
-		num: 0,
 		basePower: 110,
 		accuracy: 70,
 		category: "Special",
@@ -1370,7 +1327,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Can't miss in Sandstorm.",
 	},
 	schizophrenia: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -1400,7 +1356,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Raises user's lowest and highest stats by 1 stage.",
 	},
 	staccato: {
-		num: 0,
 		basePower: 40,
 		accuracy: 100,
 		category: "Special",
@@ -1424,7 +1379,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits first. First turn out only. 100% flinch chance.",
 	},
 	wail: {
-		num: 0,
 		basePower: 75,
 		accuracy: 100,
 		category: "Physical",
@@ -1444,7 +1398,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "2x power if the user had a stat lowered this turn.",
 	},
 	concoction: {
-		num: 0,
 		basePower: 100,
 		accuracy: 90,
 		category: "Physical",
@@ -1470,7 +1423,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Special if would be stronger.",
 	},
 	bombardment: {
-		num: 0,
 		basePower: 100,
 		accuracy: 90,
 		category: "Physical",
@@ -1496,7 +1448,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Special if would be stronger.",
 	},
 	gravitypress: {
-		num: 0,
 		basePower: 1,
 		accuracy: 100,
 		category: "Physical",
@@ -1528,7 +1479,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "More power the heavier the user than the target.",
 	},
 	flatulence: {
-		num: 0,
 		basePower: 50,
 		accuracy: 90,
 		category: "Physical",
@@ -1549,7 +1499,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Power doubles if the user ate a berry.",
 	},
 	duneblast: {
-		num: 0,
 		basePower: 50,
 		accuracy: 100,
 		category: "Special",
@@ -1566,7 +1515,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Raises user's Sp. Atk by 2 if this KOes the target.",
 	},
 	stonegaze: {
-		num: 0,
 		basePower: 40,
 		accuracy: 100,
 		category: "Special",
@@ -1590,7 +1538,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits first. First turn out only. 100% flinch chance.",
 	},
 	zephyrpurge: {
-		num: 0,
 		basePower: 140,
 		accuracy: 100,
 		category: "Special",
@@ -1616,7 +1563,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Fails unless each known move has been used.",
 	},
 	glitch: {
-		num: 0,
 		basePower: 95,
 		accuracy: 100,
 		category: "Special",
@@ -1633,7 +1579,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Inverts type chart for damage calculation.",
 	},
 	piddle: {
-		num: 0,
 		basePower: 0,
 		accuracy: 100,
 		category: "Status",
@@ -1654,7 +1599,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Lowers target's Def, Sp. Def by 1. User switches.",
 	},
 	wraithpulse: {
-		num: 0,
 		basePower: 70,
 		accuracy: 100,
 		category: "Special",
@@ -1676,7 +1620,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "1.5x power if user moves before the target.",
 	},
 	wyrmsrage: {
-		num: 0,
 		basePower: 65,
 		accuracy: 100,
 		category: "Physical",
@@ -1697,7 +1640,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Power doubles if the user's last move failed.",
 	},
 	huntdown: {
-		num: 0,
 		basePower: 40,
 		accuracy: 100,
 		category: "Physical",
@@ -1762,7 +1704,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "If a foe is switching out, hits it at 2x power.",
 	},
 	icydeluge: {
-		num: 0,
 		basePower: 70,
 		accuracy: 100,
 		category: "Physical",
@@ -1784,7 +1725,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "1.5x if user moves before the target.",
 	},
 	chillingblast: {
-		num: 0,
 		basePower: 50,
 		accuracy: 100,
 		category: "Special",
@@ -1801,7 +1741,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Raises user's Sp. Atk by 2 if this KOes the target.",
 	},
 	fanaticism: {
-		num: 0,
 		basePower: 75,
 		accuracy: 100,
 		category: "Physical",
@@ -1822,7 +1761,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Power doubles if the user's last move failed.",
 	},
 	refurbish: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -1852,7 +1790,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Raises user's lowest and highest stats by 1 stage.",
 	},
 	nebulastrike: {
-		num: 0,
 		basePower: 75,
 		accuracy: 100,
 		category: "Physical",
@@ -1924,7 +1861,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Protects from damaging attacks. Special move: frostbite.",
 	},
 	powercycle: {
-		num: 0,
 		basePower: 90,
 		accuracy: 100,
 		category: "Special",
@@ -1962,7 +1898,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Morpeko-Orion: Light; Unpowered: Dark; 100% +1 Spe.",
 	},
 	infernalblade: {
-		num: 0,
 		accuracy: 100,
 		basePower: 120,
 		category: "Physical",
@@ -1992,7 +1927,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Charges turn 1. Hits turn 2. No charge in sunlight.",
 	},
 	moonstoneray: {
-		num: 0,
 		basePower: 120,
 		accuracy: 90,
 		category: "Special",

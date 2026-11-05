@@ -17,7 +17,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		onModifyCritRatio(critRatio) {
 			return critRatio + 3;
 		},
-		num: 0,
 	},
 	necrozium: {
 		name: "Necrozium",
@@ -31,7 +30,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			return true;
 		},
 		itemUser: ["Necrozma"],
-		num: 0,
 	},
 	deepseascale: {
 		inherit: true,

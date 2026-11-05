@@ -116,10 +116,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 			attacker.addVolatile('twoturnmove', defender);
 			return null;
 		},
-		condition: {
-			duration: 2,
-			onInvulnerability: false,
-		},
 	},
 	shadowforce: {
 		inherit: true,
@@ -138,10 +134,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 			}
 			attacker.addVolatile('twoturnmove', defender);
 			return null;
-		},
-		condition: {
-			duration: 2,
-			onInvulnerability: false,
 		},
 	},
 	weatherball: {
@@ -614,7 +606,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	jetstream: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -697,7 +688,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Clever",
 	},
 	lunarcannon: {
-		num: 0,
 		accuracy: 100,
 		basePower: 105,
 		category: "Special",
@@ -728,7 +718,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Cool",
 	},
 	morph: {
-		num: 0,
 		accuracy: true,
 		basePower: 0,
 		category: "Status",
@@ -874,7 +863,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Clever",
 	},
 	retrograde: {
-		num: 0,
 		accuracy: 100,
 		basePower: 0,
 		category: "Status",
@@ -891,7 +879,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		zMove: { boost: { def: 3, spd: 3 } },
 	},
 	spiritaway: {
-		num: 0,
 		accuracy: 100,
 		basePower: 100,
 		category: "Physical",
@@ -983,7 +970,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 	},
 	wildfire: {
-		num: 0,
 		accuracy: 75,
 		basePower: 0,
 		category: "Status",

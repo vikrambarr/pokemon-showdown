@@ -170,7 +170,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 				}
 			}
 		},
-		onAllyModifyAtkPriority: 3,
 		onAllyModifyAtk(atk, pokemon) {
 			const target = this.effectState.target;
 			if (target.baseSpecies.baseSpecies !== 'Cherrim' && !target.m.fusion?.includes('Cherrim')) return;
@@ -178,7 +177,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 				return this.chainModify(1.5);
 			}
 		},
-		onAllyModifySpDPriority: 4,
 		onAllyModifySpD(spd, pokemon) {
 			const target = this.effectState.target;
 			if (target.baseSpecies.baseSpecies !== 'Cherrim' && !target.m.fusion?.includes('Cherrim')) return;
@@ -232,7 +230,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 				}
 			}
 		},
-		onDamagePriority: 1,
 		onDamage(damage, target, source, effect) {
 			if (
 				effect?.effectType === 'Move' && effect.category === 'Physical' &&
@@ -367,7 +364,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 				}
 			}
 		},
-		onResidualOrder: 29,
 		onResidual(pokemon) {
 			if (pokemon.transformed || !pokemon.hp) return;
 			const fusionSpecies = this.dex.species.get(pokemon.m.fusion);

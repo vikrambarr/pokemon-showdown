@@ -3,18 +3,20 @@ import { Utils } from '../../lib';
 
 let challengeOnlyWords: string[] | null = null;
 
-export async function discordWhois(userid: string, user: User) {
+export async function discordWhois(context: Chat.CommandContext, userid: string) {
 	const [discord] = await LoginServer.request('discord/names', { userid });
-	if (!discord?.discordid) return '';
+	if (!discord?.discordid) return;
 	const linkedNames = discord.names.map((id: ID) => {
 		const p = Punishments.userids.get(id);
-		if (!p || !user.can('alts')) return id;
+		if (!p || !context.user.can('alts')) return id;
 		return p.map(
 			cur => `${id} (${Punishments.punishmentTypes.get(cur.type)?.desc || 'punished'}` + `${cur.id !== id ? ` as ${cur.id}` : ``})`
 		).join(' | ');
 	}).join(", ");
-	return Utils.html`<br />Discord: <a href="https://discord.com/users/${discord.discordid}">${discord.discordid}</a>` +
-		`<br />Linked names: ${linkedNames}`;
+	context.sendReplyBox(
+		Utils.html`Discord: <a href="https://discord.com/users/${discord.discordid}">${discord.discordid}</a>` +
+		`<br />Linked names: ${linkedNames}`
+	);
 }
 
 export const commands: Chat.ChatCommands = {
@@ -64,6 +66,17 @@ export const loginfilter: Chat.LoginFilter = user => {
 };
 
 export const handlers: Chat.Handlers = {
+	onBattleRanked(battle, winnerid) {
+		const winner = Users.get(winnerid);
+		if (!winner?.s1) return;
+		void LoginServer.request('discord/addname', {
+			userid: winner.s1,
+			username: winner.name,
+			ip: winner.latestIp,
+		}).then(([res]) => {
+			if (res?.actionsuccess) winner.popup(`The name "${winner.name}" is now linked to your Discord account.`);
+		});
+	},
 	onRename(user, oldID, newID) {
 		if (!user.s1 || newID.startsWith('guest')) return;
 		for (const punishment of Punishments.userids.get(user.s1) || []) {

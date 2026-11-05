@@ -346,7 +346,7 @@ export const Teams = new class Teams {
 				set.teraType = misc[5];
 				set.fusion = misc[6];
 				set.altsprite = toID(misc[7]);
-				set.ability2 = this.unpackName(misc[8], Dex.abilities);
+				set.ability2 = this.unpackName(misc[8], dex.abilities);
 			}
 			if (j < 0) break;
 			i = j + 1;
@@ -524,7 +524,7 @@ export const Teams = new class Teams {
 			line = line.slice(8);
 			set.fusion = aggressive ? toID(line) : line;
 		} else if (line.startsWith('Alt: ')) {
-			line = line.charAt(5);
+			line = line.slice(5);
 			set.altsprite = toID(line);
 		} else if (line === 'Gigantamax: Yes') {
 			set.gigantamax = true;

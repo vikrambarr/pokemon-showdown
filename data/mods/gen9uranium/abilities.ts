@@ -85,7 +85,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Acceleration",
 		shortDesc: "Priority moves are boosted by 1.5x.",
 		rating: 3.5,
-		num: 0,
 	},
 	atomizate: {
 		onModifyTypePriority: -1,
@@ -108,7 +107,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "This Pokemon's Normal-type moves become Nuclear-type moves and have their power multiplied by 1.2. This effect comes after other effects that change a move's type.",
 		shortDesc: "This Pokemon's Normal-type moves become Nuclear type and have 1.2x power.",
 		rating: 4,
-		num: 0,
 	},
 	bloodlust: {
 		onAfterMoveSecondarySelf(pokemon, target, move) {
@@ -118,7 +116,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Blood Lust",
 		shortDesc: "After an attack, holder gains 1/6 of the damage in HP dealt to other Pokemon.",
 		rating: 3.5,
-		num: 0,
 	},
 	disenchant: {
 		onTryHit(target, source, move) {
@@ -131,7 +128,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Disenchant",
 		shortDesc: "This Pokemon is immune to Fairy-type moves.",
 		rating: 3.5,
-		num: 0,
 	},
 	elementalist: {
 		onModifyMove(move, pokemon, target) {
@@ -141,7 +137,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Elementalist",
 		shortDesc: "User's Fire, Water, and Electric moves become STAB.",
 		rating: 2,
-		num: 0,
 	},
 	energizate: {
 		onModifyTypePriority: -1,
@@ -164,7 +159,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "This Pokemon's Normal-type moves become Electric-type moves and have their power multiplied by 1.2. This effect comes after other effects that change a move's type.",
 		shortDesc: "This Pokemon's Normal-type moves become Electric type and have 1.2x power.",
 		rating: 4,
-		num: 0,
 	},
 	geigersense: {
 		onSwitchIn(pokemon) {
@@ -178,7 +172,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Geiger Sense",
 		shortDesc: "Raises this Pokemon's Atk and Sp. Atk if a Nuclear-type Pokemon is on the field.",
 		rating: 3.5,
-		num: 0,
 	},
 	infuriate: {
 		onDamagingHit(damage, target, source, move) {
@@ -190,7 +183,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Infuriate",
 		shortDesc: "If this Pokemon is hit by a physical attack, its attack is raised by 1 stage.",
 		rating: 3.5,
-		num: 0,
 	},
 	lazy: {
 		onSwitchIn(pokemon) {
@@ -202,7 +194,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Lazy",
 		shortDesc: "This Pokemon falls asleep on Switch-in.",
 		rating: 3.5,
-		num: 0,
 	},
 	leadskin: {
 		onTryHit(target, source, move) {
@@ -215,7 +206,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Lead Skin",
 		shortDesc: "This Pokemon is immune to Nuclear-type moves.",
 		rating: 3.5,
-		num: 0,
 	},
 	petrify: {
 		onStart(pokemon) {
@@ -237,7 +227,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "On switch-in, this Pokemon lowers the Speed of opposing Pokemon by 1 stage. Pokemon behind a substitute are immune.",
 		shortDesc: "On switch-in, this Pokemon lowers the Speed of opponents by 1 stage.",
 		rating: 3.5,
-		num: 0,
 	},
 	quickcharge: {
 		onModifyPriority(priority, pokemon) {
@@ -247,7 +236,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Quick Charge",
 		shortDesc: "On this Pokemon's first turn, its moves have +4 priority.",
 		rating: 4.5,
-		num: 0,
 	},
 	rebuild: {
 		onDamagingHit(damage, target, source, move) {
@@ -265,7 +253,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Rebuild",
 		shortDesc: "If this Pokemon is not hit by an attack during a turn, it heals 1/8th HP.",
 		rating: 3.5,
-		num: 0,
 	},
 	sharpcoral: {
 		onModifyAtkPriority: 5,
@@ -288,7 +275,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Sharp Coral",
 		shortDesc: "Doubles the user's offensive stats and halves its defensive stats.",
 		rating: 4,
-		num: 0,
 	},
 	soundboost: {
 		onBasePowerPriority: 7,
@@ -302,7 +288,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Sound Boost",
 		shortDesc: "Sound-based moves are boosted by 1.3x.",
 		rating: 3.5,
-		num: 0,
 	},
 	tentaclesnare: {
 		onSourceDamagingHit(damage, target, source, move) {
@@ -314,7 +299,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Tentacle Snare",
 		rating: 4,
-		num: 0,
 		shortDesc: "This Pokemon's contact moves lower the foe's Speed by 1 stage.",
 	},
 	scaleburst: {
@@ -346,7 +330,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Scale Burst",
 		rating: 3,
-		num: 0,
 		shortDesc: "At 1/3 or less of this Pokemon's max HP: +1 Atk, Sp. Atk, Spe, and -1 Def, Sp. Def.",
 	},
 	outeruniverse: {
@@ -368,7 +351,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Outer Universe",
 		rating: 3,
-		num: 0,
 		shortDesc: "On switch-in clears all hazards, screens, terrain, and weather.",
 	},
 	innerself: {
@@ -387,7 +369,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Inner Self",
 		rating: 3,
-		num: 0,
 		shortDesc: "On switch-in clears all stat changes and conditions.",
 	},
 };

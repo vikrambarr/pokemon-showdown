@@ -20,7 +20,6 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			}
 		},
 		itemUser: ["Terathwack"],
-		num: 0,
 		gen: 6,
 		shortDesc: "If held by a Terathwack, its critical hit ratio is raised by 2 stages.",
 	},

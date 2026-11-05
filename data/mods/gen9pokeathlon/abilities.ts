@@ -72,7 +72,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Lernean",
 		shortDesc: "Grows heads when it loses HP. Moves become multihit.",
 		rating: 4.5,
-		num: 0,
 	},
 	pressure: {
 		inherit: true,
@@ -126,7 +125,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "The first successful attack used by this Pokémon every time it is sent out onto the field will cause it to switch items with its opponent. Fails if the move misses, has no effect, or if the target's item cannot be removed.",
 		shortDesc: "First successful attack after switching in swaps items.",
 		rating: 3,
-		num: 0,
 	},
 	windywall: {
 		onTryHit(target, source, move) {
@@ -139,7 +137,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Windy Wall",
 		shortDesc: "This Pokemon is immune to Flying-type moves.",
 		rating: 3.5,
-		num: 0,
 	},
 	musclememory: {
 		onBeforeSwitchOut(pokemon) {
@@ -154,7 +151,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Muscle Memory",
 		shortDesc: "This Pokemon's stat boosts remain after switching.",
 		rating: 4,
-		num: 0,
 	},
 	bushido: {
 		onModifyAtkPriority: 5,
@@ -175,7 +171,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Bushido",
 		shortDesc: "When this Pokemon moves first, its attacks have 1.3x power.",
 		rating: 4,
-		num: 0,
 	},
 	sandydefense: {
 		onModifySpD(spd, pokemon) {
@@ -195,7 +190,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Sandy Defense",
 		shortDesc: "This Pokemon's Defense and Special Defense are boosted 1.5 in sandstorm.",
 		rating: 3,
-		num: 0,
 	},
 	inertia: {
 		onAnyModifyPriority(priority, pokemon) {
@@ -205,7 +199,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Inertia",
 		shortDesc: "On every Pokemon's first turn, its moves have -1 priority. Includes user.",
 		rating: 4.5,
-		num: 0,
 	},
 	multishot: {
 		onModifyMove(move, pokemon, target) {
@@ -219,7 +212,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Multishot",
 		shortDesc: "This Pokemon's special moves become multihit with 0.3x power.",
 		rating: 4.5,
-		num: 0,
 	},
 	ivywall: {
 		onImmunity(type, pokemon) {
@@ -242,7 +234,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Ivy Wall",
 		shortDesc: "This Pokémon takes on the resistances and immunities of the Grass type.",
 		rating: 3,
-		num: 0,
 	},
 	kablooey: {
 		onModifyTypePriority: -1,
@@ -271,7 +262,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Kablooey",
 		shortDesc: "This Pokemon attempts to Self-Destruct at the end of each turn.",
 		rating: 3,
-		num: 0,
 	},
 	counterclockwise: {
 		onChangeBoost(boost, target, source, effect) {
@@ -282,7 +272,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Counterclockwise",
 		shortDesc: "This Pokemon's SpA boosts are swapped with its Atk boosts.",
 		rating: 4,
-		num: 0,
 	},
 	undeterred: {
 		onDamage(damage, target, source, effect) {
@@ -309,7 +298,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Undeterred",
 		shortDesc: "This Pokemon is immune to all entry hazards.",
 		rating: 4,
-		num: 0,
 	},
 	necromancy: {
 		onStart(target) {
@@ -365,7 +353,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Necromancy",
 		shortDesc: "This Pokemon can control the body of the last Pokemon who fainted.",
 		rating: 4,
-		num: 0,
 	},
 	cleansweep: {
 		onStart(pokemon) {
@@ -390,7 +377,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Clean Sweep",
 		shortDesc: "If this Pokemon is at full HP, it clears all hazards on switch-in.",
 		rating: 4,
-		num: 0,
 	},
 	starfall: {
 		onStart(pokemon) {
@@ -408,7 +394,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Starfall",
 		shortDesc: "Clears one random hazard on switch-in.",
 		rating: 4,
-		num: 0,
 	},
 	zealousflock: {
 		onDamagingHitOrder: 1,
@@ -427,7 +412,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Zealous Flock",
 		shortDesc: "If the User is hit by an attack, the attacker loses 1/16 HP per turn until switched out.",
 		rating: 4,
-		num: 0,
 	},
 	multitasker: {
 		onModifyMove(move, pokemon) {
@@ -438,7 +422,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Multitasker",
 		shortDesc: "Pokemon will always use highest attacking stat.",
 		rating: 4,
-		num: 0,
 	},
 	glutinousrice: {
 		onSourceModifyDamage(damage, source, target, move) {
@@ -451,7 +434,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Glutinous Rice",
 		shortDesc: "Takes 1/4 damage from Fighting-type attacks.",
 		rating: 2,
-		num: 0,
 	},
 	clairvoyance: {
 		onChargeMove(pokemon, target, move) {
@@ -464,7 +446,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Clairvoyance",
 		shortDesc: "Charge moves do not require a charge turn",
 		rating: 5,
-		num: 0,
 	},
 	spittingfire: {
 		onModifyMovePriority: -1,
@@ -482,7 +463,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Spitting Fire",
 		shortDesc: "Fire-type moves become sound-based. Sound-based moves have 1.2x power.",
 		rating: 3,
-		num: 0,
 	},
 	hueshift: {
 		onPrepareHit(source, target, move) {
@@ -499,7 +479,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		desc: "This Pokemon's type changes to match the type of the move it is about to use. This effect comes after all effects that change a move's type.",
 		shortDesc: "This Pokemon's type changes to match the type of the move it is about to use.",
 		rating: 4,
-		num: 0,
 	},
 	burstingspores: {
 		onDamagingHitOrder: 1,
@@ -513,7 +492,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Bursting Spores",
 		shortDesc: "Pokemon making contact with this Pokemon take 1/8 max HP recoil. User is healed for same amount.",
 		rating: 2,
-		num: 0,
 	},
 	belligerentquills: {
 		onSourceDamagingHit(damage, target, source, move) {
@@ -525,7 +503,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Belligerent Quills",
 		shortDesc: "When dealing contact-based damage, deals an additional 1/16 max HP.",
 		rating: 4,
-		num: 0,
 	},
 	aquaguard: {
 		onFoeBeforeMove(source, target, move) {
@@ -546,7 +523,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Aqua Guard",
 		shortDesc: "Ignores opposing Pokemon's abilities when taking damage.",
 		rating: 3,
-		num: 0,
 	},
 	sweettooth: {
 		onAfterUseItem(item, pokemon) {
@@ -562,7 +538,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Sweet Tooth",
 		shortDesc: "After consuming a berry, changes Caramitti's form to Crazed.",
 		rating: 2.5,
-		num: 0,
 	},
 	luckycharm: {
 		onStart(pokemon) {
@@ -576,7 +551,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Lucky Charm",
 		shortDesc: "User's side is protected from critical hits and move secondaries.",
 		rating: 2.5,
-		num: 0,
 	},
 	crystalmana: {
 		onTerrainChange(pokemon) {
@@ -595,7 +569,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Crystal Mana",
 		shortDesc: "Raises Def and Sp.Def by 1 stage upon terrain change.",
 		rating: 2.5,
-		num: 0,
 	},
 	adaptivearmor: {
 		onDamagingHitOrder: 1,
@@ -620,7 +593,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Adaptive Armor",
 		shortDesc: "Takes half damage from moves with the type of first move user is hit by.",
 		rating: 2.5,
-		num: 0,
 	},
 	momentum: {
 		onStart(target) {
@@ -653,7 +625,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Momentum",
 		shortDesc: "The last stat changes in a turn are repeated next turn at 1 stage.",
 		rating: 2.5,
-		num: 0,
 	},
 	pixiepower: {
 		onBasePowerPriority: 19,
@@ -666,7 +637,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Pixie Power",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's Fairy-Type moves have 1.5x power.",
 	},
 	windyspirit: {
@@ -680,7 +650,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Windy Spirit",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's wind-based attacks have 1.3x power.",
 	},
 	strangeanatomy: {
@@ -705,7 +674,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Strange Anatomy",
 		rating: 4,
-		num: 0,
 		shortDesc: "Replaces ability on contact. Reduces BP of Physical moves by 5 each turn.",
 	},
 	tailgunrailgun: {
@@ -721,7 +689,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Tailgun Railgun",
 		rating: 4,
-		num: 0,
 		shortDesc: "If all Electric-type moves have full PP, uses Charge.",
 	},
 	hiddenambush: {
@@ -732,7 +699,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Hidden Ambush",
 		rating: 4,
-		num: 0,
 		shortDesc: "Boosts moves that require a charge turn by 50%.",
 	},
 	vacuumbubble: {
@@ -754,7 +720,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Vacuum Bubble",
 		rating: 4,
-		num: 0,
 		shortDesc: "Ignores foe's items and defensive boosts when attacking. Immune to Pressure.",
 	},
 	hivemind: {
@@ -780,7 +745,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		},
 		name: "Hive Mind",
 		rating: 4,
-		num: 0,
 		shortDesc: "If Zorblob: 1/2 damage taken and transforms to Split after taking 1/4 max HP damage.",
 	},
 	coatofarms: {
@@ -799,7 +763,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		},
 		name: "Coat of Arms",
 		rating: 4,
-		num: 0,
 		shortDesc: "Gains additional type based on form.",
 	},
 	retribution: {
@@ -820,7 +783,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Retribution",
 		rating: 4,
-		num: 0,
 		shortDesc: "+1 crit ratio on KO.",
 	},
 	asabove: {
@@ -844,7 +806,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "As Above",
 		rating: 4,
-		num: 0,
 		shortDesc: "While on field, stat changes have the opposite effect. Breaks upon any hit.",
 	},
 	caeciliandefense: {
@@ -865,7 +826,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Caecilian Defense",
 		rating: 4,
-		num: 0,
 		shortDesc: "When attacked, user uses Def. as offensive stat until the user's next move.",
 	},
 	naturalanomaly: {
@@ -879,7 +839,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Natural Anomaly",
 		shortDesc: "This Pokemon takes halved damage from Grass-type's weaknesses.",
 		rating: 3,
-		num: 0,
 	},
 	sweetcollateral: {
 		onBasePowerPriority: 30,
@@ -894,7 +853,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Sweet Collateral",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "This Pokemon's moves of 65 power or less have 1.5x power, including Struggle.",
 	},
 	concentrate: {
@@ -907,7 +865,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Concentrate",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "If this Pokemon strikes with a critical hit, the damage is multiplied by 1.5.",
 	},
 	moneyequalspower: {
@@ -922,7 +879,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Money Equals Power",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "If coins are scattered, 1.3x Power. Removes scattered coins after attacking.",
 	},
 	dualmastery: {
@@ -939,7 +895,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Dual Mastery",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "x1.3 power to Special moves after using a Physical move, and vice versa.",
 	},
 	zeitwinder: {
@@ -967,7 +922,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Zeitwinder",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "User's future moves suppress the target's ability and clears their stat changes when they hit.",
 	},
 	cadenza: {
@@ -982,7 +936,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { breakable: 1 },
 		name: "Cadenza",
 		rating: 3,
-		num: 0,
 		shortDesc: "This Pokemon is immune to Sound moves; +1 Sp.Atk when hit by one.",
 	},
 	voltaicsiphon: {
@@ -995,7 +948,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Voltaic Siphon",
 		rating: 1,
-		num: 0,
 		shortDesc: "This Pokemon gains the Charge effect when it succesfully uses a draining move.",
 	},
 	rampagingdespair: {
@@ -1014,7 +966,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, cantsuppress: 1 },
 		name: "Rampaging Despair",
 		rating: 3.5,
-		num: 0,
 		shortDesc: "If Mazetsubo: transforms into Mazetsubo-Despair on KO, gaining spread on single-targetting moves.",
 	},
 };

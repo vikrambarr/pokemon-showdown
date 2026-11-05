@@ -22,6 +22,5 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 				return this.chainModify([4915, 4096]);
 			}
 		},
-		num: 0,
 	},
 };

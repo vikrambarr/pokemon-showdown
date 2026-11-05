@@ -1,6 +1,5 @@
 export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 	cleanse: {
-		num: 0,
 		basePower: 0,
 		accuracy: true,
 		category: "Status",
@@ -36,7 +35,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "-1 evasion; ends user and target hazards/terrain.",
 	},
 	divinevision: {
-		num: 0,
 		basePower: 120,
 		accuracy: 90,
 		category: "Special",
@@ -72,7 +70,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits two turns after being used.",
 	},
 	darkomen: {
-		num: 0,
 		basePower: 120,
 		accuracy: 90,
 		category: "Special",
@@ -108,7 +105,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits two turns after being used.",
 	},
 	winterwarning: {
-		num: 0,
 		basePower: 120,
 		accuracy: 100,
 		category: "Special",
@@ -144,7 +140,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Hits two turns after being used.",
 	},
 	overflow: {
-		num: 0,
 		basePower: 50,
 		accuracy: 100,
 		category: "Physical",
@@ -198,7 +193,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Free user from hazards/bind/Leech Seed; +1 Spe.",
 	},
 	heavensknuckle: {
-		num: 0,
 		accuracy: 85,
 		basePower: 90,
 		category: "Physical",
@@ -213,7 +207,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Fairy",
 	},
 	sinfulsmite: {
-		num: 0,
 		basePower: 60,
 		accuracy: 100,
 		category: "Physical",
@@ -231,7 +224,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Resets all of the target's stat stages to 0.",
 	},
 	antimatter: {
-		num: 0,
 		basePower: 80,
 		accuracy: 100,
 		category: "Physical",
@@ -249,7 +241,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Resets all of the target's stat stages to 0.",
 	},
 	starsaligned: {
-		num: 0,
 		basePower: 20,
 		accuracy: 100,
 		category: "Special",
@@ -268,7 +259,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: " + 20 power for each of the user's stat boosts.",
 	},
 	valkyriechariot: {
-		num: 0,
 		basePower: 110,
 		accuracy: 90,
 		category: "Physical",
@@ -286,7 +276,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "User is hurt by 50% of its max HP if it misses.",
 	},
 	goldrush: {
-		num: 0,
 		basePower: 75,
 		accuracy: 100,
 		category: "Physical",
@@ -304,7 +293,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Resets all of the target's stat stages to 0.",
 	},
 	songofsilence: {
-		num: 0,
 		basePower: 60,
 		accuracy: true,
 		category: "Special",
@@ -322,7 +310,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Resets all of the target's stat stages to 0.",
 	},
 	boomingbeats: {
-		num: 0,
 		basePower: 20,
 		accuracy: 100,
 		category: "Special",
@@ -341,7 +328,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: " + 20 power for each of the user's stat boosts.",
 	},
 	cobaltray: {
-		num: 0,
 		basePower: 80,
 		accuracy: 100,
 		category: "Special",
@@ -359,7 +345,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Resets all of the target's stat stages to 0.",
 	},
 	unlockchi: {
-		num: 0,
 		basePower: 20,
 		accuracy: 100,
 		category: "Special",
@@ -378,7 +363,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: " + 20 power for each of the user's stat boosts.",
 	},
 	neutralize: {
-		num: 0,
 		basePower: 40,
 		accuracy: 100,
 		category: "Special",
@@ -396,7 +380,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Resets all of the target's stat stages to 0.",
 	},
 	wyrmbeam: {
-		num: 0,
 		basePower: 80,
 		accuracy: 100,
 		category: "Special",
@@ -414,7 +397,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Resets all of the target(s)'s stat stages to 0. Hits adjacent foes.",
 	},
 	beatdrop: {
-		num: 0,
 		basePower: 110,
 		accuracy: 90,
 		category: "Physical",

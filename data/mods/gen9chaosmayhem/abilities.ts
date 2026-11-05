@@ -32,7 +32,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, cantsuppress: 1 },
 		name: "Dark Swarm",
 		rating: 3,
-		num: 0,
 		shortDesc: "If user is Wishiwashi-Orion, changes to Symphny Form if it has > 1/4 max HP.",
 	},
 	symphony: {
@@ -68,7 +67,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, cantsuppress: 1 },
 		name: "Symphony",
 		rating: 3,
-		num: 0,
 		shortDesc: "If user is Unown-Orion, changes to Symphony Form if it has > 1/4 max HP.",
 	},
 	lightaura: {
@@ -86,7 +84,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Light Aura",
 		rating: 3,
-		num: 0,
 		shortDesc: "While this Pokemon is active, a Light move used by any Pokemon has 1.33x power.",
 	},
 	soulsymphony: {
@@ -99,7 +96,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		flags: {},
 		name: "Soul Symphony",
 		rating: 1.5,
-		num: 0,
 		shortDesc: "This Pokemon's sound-based moves become Ghost type.",
 	},
 };

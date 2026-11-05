@@ -635,9 +635,6 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 			[...Dexes.dexes.values()].filter(loaded => Dexes.listed(loaded, account));
 		return list.map(summary);
 	},
-	async dexesof(target, user) {
-		return (await Dexes.dexesOf(target, await viewer(user))).map(summary);
-	},
 	dex(target) {
 		const loaded = Dexes.findDex(target);
 		if (!loaded) return null;
@@ -649,68 +646,43 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		return dexEntries(loaded);
 	},
 	async dexupload(target, user) {
-		try {
-			return { url: await uploadURL(user, target) };
-		} catch (e) {
-			if (e instanceof Chat.ErrorMessage) return { error: e.message };
-			throw e;
-		}
+		return { url: await uploadURL(user, target) };
 	},
 	async dexfork(target, user) {
-		try {
-			return { html: await forkHTML(user, target) };
-		} catch (e) {
-			if (e instanceof Chat.ErrorMessage) return { error: e.message };
-			throw e;
-		}
+		return { html: await forkHTML(user, target) };
 	},
 	async dexforkline(target, user) {
-		try {
-			return { html: await forkLineHTML(user, target) };
-		} catch (e) {
-			if (e instanceof Chat.ErrorMessage) return { error: e.message };
-			throw e;
-		}
+		return { html: await forkLineHTML(user, target) };
 	},
 	async dexcreate(target, user) {
-		try {
-			checkEnabled(user);
-			const input = parseJSON(target);
-			let loaded = await Dexes.createDex(user, `${input.name || ''}`, `${input.base || 'gen9'}`);
-			if (input.visibility === 'private') loaded = await Dexes.setVisibility(loaded, 'private');
-			return { id: loaded.row.dexid };
-		} catch (e) {
-			if (e instanceof Chat.ErrorMessage) return { error: e.message };
-			throw e;
-		}
+		checkEnabled(user);
+		const input = parseJSON(target);
+		let loaded = await Dexes.createDex(user, `${input.name || ''}`, `${input.base || 'gen9'}`);
+		if (input.visibility === 'private') loaded = await Dexes.setVisibility(loaded, 'private');
+		return { id: loaded.row.dexid };
 	},
 	async dexedit(target, user) {
-		try {
-			checkEnabled(user);
-			const [dexid, input] = Utils.splitFirst(target, ',').map(part => part.trim());
-			const edit = parseJSON(input);
-			let loaded = await Dexes.editable(user, dexid);
-			const owner = ['name', 'visibility', 'base', 'clear', 'delete'].some(key => edit[key] !== undefined) ||
-				(edit.editor && (edit.add || toID(edit.editor) !== user.id));
-			if (owner) loaded = await owned(user, dexid);
-			if (edit.delete) {
-				await Dexes.deleteDex(loaded);
-				return { id: null };
-			}
-			if (edit.name !== undefined && edit.name !== loaded.row.name) loaded = await Dexes.setName(loaded, `${edit.name}`);
-			if (edit.visibility !== undefined && edit.visibility !== loaded.row.visibility) {
-				loaded = await Dexes.setVisibility(loaded, `${edit.visibility}`);
-			}
-			if (edit.description !== undefined) loaded = await Dexes.setDescription(loaded, `${edit.description}`);
-			if (edit.editor) loaded = await Dexes.setEditor(loaded, `${edit.editor}`, !!edit.add);
-			if (edit.clear) loaded = await Dexes.clearDex(loaded);
-			let stale: string[] = [];
-			if (edit.base !== undefined) ({ loaded, stale } = await Dexes.setBase(loaded, `${edit.base}`));
-			return { id: loaded.row.dexid, ...(stale.length ? { stale } : {}) };
-		} catch (e) {
-			if (e instanceof Chat.ErrorMessage) return { error: e.message };
-			throw e;
+		checkEnabled(user);
+		const [dexid, input] = Utils.splitFirst(target, ',').map(part => part.trim());
+		const edit = parseJSON(input);
+		let loaded = await Dexes.editable(user, dexid);
+		const owner = ['name', 'visibility', 'base', 'clear', 'delete'].some(key => edit[key] !== undefined) ||
+			(edit.editor && (edit.add || toID(edit.editor) !== user.id));
+		if (owner) loaded = await owned(user, dexid);
+		if (edit.delete) {
+			await Dexes.deleteDex(loaded);
+			return { id: null };
 		}
+		if (edit.name !== undefined && edit.name !== loaded.row.name) loaded = await Dexes.setName(loaded, `${edit.name}`);
+		if (edit.visibility !== undefined && edit.visibility !== loaded.row.visibility) {
+			loaded = await Dexes.setVisibility(loaded, `${edit.visibility}`);
+		}
+		if (edit.description !== undefined) loaded = await Dexes.setDescription(loaded, `${edit.description}`);
+		if (edit.editor) loaded = await Dexes.setEditor(loaded, `${edit.editor}`, !!edit.add);
+		if (edit.clear) loaded = await Dexes.clearDex(loaded);
+		let stale: string[] = [];
+		if (edit.base !== undefined) ({ loaded, stale } = await Dexes.setBase(loaded, `${edit.base}`));
+		return { id: loaded.row.dexid, ...(stale.length ? { stale } : {}) };
 	},
 	dexformat(target) {
 		return Dexes.formatDetails(target);
@@ -720,22 +692,18 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		const loaded = Dexes.findDex(dexid);
 		const table = EFFECT_TABLES[toID(kind)];
 		if (!loaded || !table) return null;
-		try {
-			return { dexid: loaded.row.dexid, ...Dexes.effectEditor(loaded, table, name) };
-		} catch (e) {
-			if (e instanceof Chat.ErrorMessage) return null;
-			throw e;
-		}
+		return { dexid: loaded.row.dexid, ...Dexes.effectEditor(loaded, table, name) };
 	},
 };
 
 for (const [name, handler] of Object.entries(crqHandlers)) {
-	if (name === 'dexes' || name === 'dexesof') continue;
+	if (name === 'dexes') continue;
 	crqHandlers[name] = async function (target, user, trustable) {
 		let data;
 		try {
 			data = await handler.call(this, target, user, trustable);
 		} catch (e: any) {
+			if (e instanceof Chat.ErrorMessage) return { query: target, error: e.message };
 			Monitor.crashlog(e, `A /crq ${name} request`);
 			return { query: target, error: `Something went wrong. Try again.` };
 		}

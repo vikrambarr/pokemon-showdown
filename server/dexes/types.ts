@@ -1,5 +1,7 @@
 import type { ModdedDex } from '../../sim/dex';
 import type { TypeData } from '../../sim/dex-data';
+import { isObject } from '../../sim/dex-custom';
+import { typeName } from '../../sim/dex-handlers';
 import { validateName, type Origin } from './species';
 
 export interface TypeEntry {
@@ -20,9 +22,6 @@ export interface TypeEntry {
 export const MAX_TYPES = 32;
 
 const CODES: { [multiplier: string]: number } = { 1: 0, 2: 1, 0.5: 2, 0: 3 };
-
-const isObject = (value: unknown): value is AnyObject => !!value && typeof value === 'object' && !Array.isArray(value);
-const typeName = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
 
 function conditions(dex: ModdedDex) {
 	const names = new Set(Object.keys(dex.data.TypeChart).map(typeName));

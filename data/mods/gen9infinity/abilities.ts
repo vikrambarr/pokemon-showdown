@@ -22,7 +22,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Pure Focus",
 		shortDesc: "Doubles the user's Special Attack stat.",
 		rating: 5,
-		num: 0,
 	},
 	nightmareheart: {
 		onTryHit(target, source, move) {
@@ -51,7 +50,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Nightmare Heart",
 		shortDesc: "This Pokemon is healed 1/4 by Dark, 1/8 by Snow; is hurt 1.25x by Fairy, 1/8 by Sun.",
 		rating: 5,
-		num: 0,
 	},
 	wokhei: {
 		onFoeAfterSetStatus(status, target, source, effect) {
@@ -63,7 +61,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Wok Hei",
 		shortDesc: "+2 Atk. when burning a foe.",
 		rating: 5,
-		num: 0,
 	},
 	crystalline: {
 		onSourceModifyAtkPriority: 6,
@@ -98,7 +95,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Migraine",
 		shortDesc: "-7 prio on attacks; 100% crit chance.",
 		rating: 5,
-		num: 0,
 	},
 	supercharged: {
 		onModifyMovePriority: -5,
@@ -121,7 +117,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Supercharged",
 		shortDesc: "Electric-type moves hit Ground for resisted; Charges when hit by special move.",
 		rating: 5,
-		num: 0,
 	},
 	restlessspirit: {
 		onStart(pokemon) {
@@ -142,7 +137,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Restless Spirit",
 		shortDesc: "Immune to status bar sleep; if asleep at end of turn, faints.",
 		rating: 5,
-		num: 0,
 	},
 	illusionist: {
 		onBeforeSwitchIn(pokemon) {
@@ -194,7 +188,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Illusionist",
 		shortDesc: "Illusion. While illusion, x1.25 evasion. Loses illusion when attacking.",
 		rating: 5,
-		num: 0,
 	},
 	grandentrance: {
 		onStart(target) {
@@ -205,7 +198,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Grand Entrance",
 		shortDesc: "+1 to highest stat on switch-in.",
 		rating: 5,
-		num: 0,
 	},
 	simplyevil: {
 		onAnyTryBoost(boost, target, source, effect) {
@@ -220,7 +212,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Simply Evil",
 		shortDesc: "x2 to stat changes for all Poison-type pokemon.",
 		rating: 5,
-		num: 0,
 	},
 	livingprism: {
 		onAfterMoveSecondary(target, source, move) {
