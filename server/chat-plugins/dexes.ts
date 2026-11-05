@@ -5,7 +5,6 @@ import * as Dexes from '../dexes';
 import { EFFECT_NAMES, EFFECT_PLURALS } from '../dexes/effects';
 import type { Origin } from '../dexes/species';
 import type { EffectTable } from '../../sim/dex-custom';
-import { handlersOf } from '../../sim/dex-handlers';
 import { MAX_SPRITE_BYTES, SPRITE_KINDS, spriteURL, toKind, toSettings } from '../dexes/sprites';
 
 void Dexes.load().catch(err => Monitor.crashlog(err, 'Loading dexes'));
@@ -96,23 +95,38 @@ function shownIds(loaded: Dexes.LoadedDex, table: keyof typeof GETTERS, layers =
 		layers.some(layer => Dexes.entriesOf(layer, table).has(id as ID)));
 }
 
-function dedent(src: string) {
-	const lines = src.split('\n');
-	const indent = Math.min(...lines.slice(1).filter(line => line.trim()).map(line => /^\s*/.exec(line)![0].length));
-	return lines.map((line, i) => i && Number.isFinite(indent) ? line.slice(indent) : line).join('\n');
-}
+const countsCache = new WeakMap<Dexes.LoadedDex, AnyObject[]>();
+const entriesCache = new WeakMap<Dexes.LoadedDex, AnyObject>();
 
 function countsOf(loaded: Dexes.LoadedDex) {
+	let counts = countsCache.get(loaded);
+	if (counts) return counts;
 	const layers = Dexes.ancestorsOf(loaded);
 	const world = Dexes.baseOf(loaded.row);
-	return COUNTED.map(([table, name]) => {
+	counts = COUNTED.map(([table, name]) => {
 		const ids = [...Dexes.entriesOf(loaded, table).keys()];
-		const editedIds = ids.filter(id => world.data[table][id]);
+		const edited = ids.filter(id => world.data[table][id]).length;
 		const total = table === 'Pokedex' ? loaded.data.species.length : shownIds(loaded, table, layers).length;
-		const counts = { name, table, total, custom: ids.length - editedIds.length, edited: editedIds.length };
-		if (table === 'Pokedex') return counts;
-		return { ...counts, customIds: ids.filter(id => !world.data[table][id]), editedIds };
+		return { name, table, total, custom: ids.length - edited, edited };
 	});
+	countsCache.set(loaded, counts);
+	return counts;
+}
+
+function dexEntries(loaded: Dexes.LoadedDex) {
+	let entries = entriesCache.get(loaded);
+	if (entries) return entries;
+	const layers = Dexes.ancestorsOf(loaded);
+	const world = Dexes.baseOf(loaded.row);
+	entries = { id: loaded.row.dexid, custom: {}, edited: {} };
+	for (const table of ['Moves', 'Abilities', 'Items'] as const) {
+		const ids = [...Dexes.entriesOf(loaded, table).keys()];
+		entries[table] = shownIds(loaded, table, layers);
+		entries.custom[table] = ids.filter(id => !world.data[table][id]);
+		entries.edited[table] = ids.filter(id => world.data[table][id]);
+	}
+	entriesCache.set(loaded, entries);
+	return entries;
 }
 
 function summary(loaded: Dexes.LoadedDex) {
@@ -632,21 +646,7 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 	dexentries(target) {
 		const loaded = Dexes.findDex(target);
 		if (!loaded) return null;
-		const tables = Object.fromEntries((['Moves', 'Abilities', 'Items'] as const).map(table => [table, shownIds(loaded, table)]));
-		return { id: loaded.row.dexid, ...tables };
-	},
-	dexmove(target) {
-		const [dexid, moveid] = target.split(',').map(toID);
-		const loaded = Dexes.findDex(dexid);
-		const data = loaded?.dex.data.Moves[moveid];
-		if (!data) return null;
-		const inherited = Dexes.ancestorsOf(loaded).map(layer => layer.effects.Moves.get(moveid)?.inheritsfrom).find(id => id);
-		const baseid = inherited || (Dexes.baseOf(loaded.row).data.Moves[moveid] ? moveid : '');
-		return {
-			dexid: loaded.row.dexid, id: moveid, base: baseid ? loaded.dex.moves.get(baseid).name : '',
-			data: JSON.parse(JSON.stringify(data)),
-			code: handlersOf(data).map(([path, fn]) => [path, dedent(fn.toString())]),
-		};
+		return dexEntries(loaded);
 	},
 	async dexupload(target, user) {
 		try {
@@ -721,13 +721,27 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		const table = EFFECT_TABLES[toID(kind)];
 		if (!loaded || !table) return null;
 		try {
-			return Dexes.effectEditor(loaded, table, name);
+			return { dexid: loaded.row.dexid, ...Dexes.effectEditor(loaded, table, name) };
 		} catch (e) {
 			if (e instanceof Chat.ErrorMessage) return null;
 			throw e;
 		}
 	},
 };
+
+for (const [name, handler] of Object.entries(crqHandlers)) {
+	if (name === 'dexes' || name === 'dexesof') continue;
+	crqHandlers[name] = async function (target, user, trustable) {
+		let data;
+		try {
+			data = await handler.call(this, target, user, trustable);
+		} catch (e: any) {
+			Monitor.crashlog(e, `A /crq ${name} request`);
+			return { query: target, error: `Something went wrong. Try again.` };
+		}
+		return data && typeof data === 'object' ? { ...data, query: target } : { query: target, missing: true };
+	};
+}
 
 export const handlers: Chat.Handlers = {
 	onBattleCreate(battle) {

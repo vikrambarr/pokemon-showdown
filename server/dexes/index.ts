@@ -4,6 +4,7 @@ import { SQL, PGDatabase } from '../../lib/database';
 import {
 	buildBase, buildDex, buildFormat, EFFECT_TABLES, isBuiltDex, releaseDex, type DexLayer, type EffectTable,
 } from '../../sim/dex-custom';
+import { handlersOf } from '../../sim/dex-handlers';
 import type { ModdedDex } from '../../sim/dex';
 import type { Format, FormatData } from '../../sim/dex-formats';
 import { TeamValidator } from '../../sim/team-validator';
@@ -233,15 +234,15 @@ function reregister() {
 	registeredOn = Dex;
 }
 
-function formatData(loaded: LoadedDex, data: FormatData): FormatData {
+function formatData(loaded: LoadedDex, data: FormatData, formatid: ID): FormatData {
 	return {
-		...data, name: `[${loaded.row.name}] ${data.name}`, searchShow: false, challengeShow: true, tournamentShow: true,
+		...data, id: formatid, name: `[${loaded.row.name}] ${data.name}`, searchShow: false, challengeShow: true, tournamentShow: true,
 	};
 }
 
 function register(loaded: LoadedDex) {
 	for (const [formatid, data] of loaded.formats) {
-		Dex.formats.rulesetCache.set(formatid, buildFormat(loaded.dex, formatData(loaded, data)));
+		Dex.formats.rulesetCache.set(formatid, buildFormat(loaded.dex, formatData(loaded, data, formatid)));
 		formatDexes.set(formatid, loaded.row.dexid);
 	}
 }
@@ -541,7 +542,7 @@ export function battleData(formatid: string) {
 	const data = loaded?.formats.get(toID(formatid));
 	if (!loaded || !data) return undefined;
 	for (const layer of ancestorsOf(loaded)) saveLayer(layer);
-	return { hash: loaded.data.hash, format: formatData(loaded, data) };
+	return { hash: loaded.data.hash, format: formatData(loaded, data, toID(formatid)) };
 }
 
 function saveLayer(loaded: LoadedDex) {
@@ -1340,7 +1341,14 @@ export function effectEditor(loaded: LoadedDex, table: EffectTable, name: string
 	return {
 		...describeEffect(base, table, id, loaded.effects[table].get(id), lookup),
 		data: { ...effect, ...describeText(base, table, edit, effect, id) },
+		source: handlersOf(loaded.dex.data[table][id]).map(([path, fn]) => [path, dedent(fn.toString())]),
 	};
+}
+
+function dedent(src: string) {
+	const lines = src.split('\n');
+	const indent = Math.min(...lines.slice(1).filter(line => line.trim()).map(line => /^\s*/.exec(line)![0].length));
+	return lines.map((line, i) => i && Number.isFinite(indent) ? line.slice(indent) : line).join('\n');
 }
 
 function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): FormatData {
@@ -1378,7 +1386,7 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 	}
 	if (!data.ruleset) data.ruleset = ['Standard'];
 	try {
-		Dex.formats.getRuleTable(buildFormat(loaded.dex, formatData(loaded, data as FormatData)));
+		Dex.formats.getRuleTable(buildFormat(loaded.dex, formatData(loaded, data as FormatData, '' as ID)));
 	} catch (e: any) {
 		throw new Chat.ErrorMessage(`That format doesn't work: ${e.message}`);
 	}
