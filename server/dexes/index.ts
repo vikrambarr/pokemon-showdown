@@ -431,14 +431,15 @@ function unbuildableForme(species: Species) {
 	return !!species.battleOnly && !species.requiredItem && !species.requiredItems;
 }
 
-export function formatDetails(formatid: string) {
+export function formatDetails(formatid: string, draft?: AnyObject) {
 	const id = toID(formatid);
 	const loaded = dexes.get(formatDexes.get(id)!);
-	const data = loaded?.formats.get(id);
-	if (!loaded || !data) return null;
+	const saved = loaded?.formats.get(id);
+	if (!loaded || !saved) return null;
+	const data = draft ? validateFormat(loaded, { name: saved.name, ...draft }, saved) : saved;
 	const key = `${loaded.data.hash}:${loaded.row.name}:${json(data)}`;
 	if (formatDetailsCache.get(id)?.key === key) return formatDetailsCache.get(id)!.details;
-	const validator = new TeamValidator(Dex.formats.get(id));
+	const validator = new TeamValidator(draft ? buildFormat(loaded.dex, formatData(loaded, data, id)) : Dex.formats.get(id));
 	const { dex, ruleTable } = validator;
 	const inDex = new Set(loaded.data.species);
 	const legal: { [kind: string]: ID[] } = { pokemon: [], move: [], ability: [], item: [] };
@@ -541,7 +542,7 @@ export function formatDetails(formatid: string) {
 		sources: Object.fromEntries([...ruleTable].filter(([rule, source]) => source && !/^[-+*!]/.test(rule) && !rule.includes(':'))),
 		bans, legal, banned, outright, rulesets: Utils.sortBy(rulesets, rule => rule.name), tags: Utils.sortBy(tags, tag => [tag.kind, tag.name]),
 	};
-	formatDetailsCache.set(id, { key, details });
+	if (!draft) formatDetailsCache.set(id, { key, details });
 	return details;
 }
 
