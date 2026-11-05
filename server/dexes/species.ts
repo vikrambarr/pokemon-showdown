@@ -155,9 +155,9 @@ const FIELDS = new Map<string, Field>([
 		if (!abilities['0']) throw new Chat.ErrorMessage(`An ability in slot "0" is required.`);
 		return abilities;
 	}],
-	['eggGroups', value => list(value, 'eggGroups', 8, group => (
+	['eggGroups', value => (Array.isArray(value) && !value.length ? [] : list(value, 'eggGroups', 8, group => (
 		EGG_GROUPS.find(entry => toID(entry) === toID(group)) || text(group, 'eggGroups', 20)
-	))],
+	)))],
 	['weightkg', value => number(value, 'weightkg', 0, 10000)],
 	['heightm', value => number(value, 'heightm', 0.01, 200)],
 	['color', value => fromList(value, COLORS, 'color')],
