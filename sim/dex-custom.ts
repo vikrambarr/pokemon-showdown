@@ -365,19 +365,58 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 	return dex;
 }
 
+const tiered = new Map<string, { dex: ModdedDex, parent: string }>();
+
+function hashText(text: string) {
+	let hash = 5381;
+	for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+	return hash.toString(16);
+}
+
+function tieredDex(dex: ModdedDex, tiers: AnyObject) {
+	const id = `${dex.currentMod}tiers${hashText(JSON.stringify(tiers))}`;
+	const cached = tiered.get(id);
+	if (cached) return cached.dex;
+	const FormatsData: AnyObject = { ...dex.data.FormatsData };
+	for (const speciesid of Object.keys(tiers)) {
+		const species = dex.species.get(speciesid);
+		if (UNSAFE.includes(speciesid) || !isObject(tiers[speciesid]) || !species.exists) continue;
+		FormatsData[species.id] = {
+			...FormatsData[species.id], tier: species.tier, doublesTier: species.doublesTier, natDexTier: species.natDexTier,
+			...tiers[speciesid],
+		};
+	}
+	const child = new Dex.ModdedDex(id);
+	child.parentMod = dex.currentMod;
+	child.gen = dex.gen;
+	child.dataCache = { ...dex.data, FormatsData };
+	child.getAlias = alias => dex.getAlias(alias);
+	child.forGen = gen => (!gen || gen === dex.gen ? child : dex.forGen(gen));
+	Dex.dexes[id] = child;
+	tiered.set(id, { dex: child, parent: dex.currentMod });
+	return child;
+}
+
 export function releaseDex(dex: ModdedDex) {
 	const cached = built.get(dex.currentMod);
 	if (!cached || --cached.refs > 0) return;
 	built.delete(dex.currentMod);
 	delete cached.base.dexes[dex.currentMod];
+	for (const [id, entry] of tiered) {
+		if (entry.parent !== dex.currentMod) continue;
+		tiered.delete(id);
+		delete Dex.dexes[id];
+	}
 	for (const parent of cached.parents) releaseDex(parent);
 }
 
 export function buildFormat(dex: ModdedDex, formatData: FormatData): Format {
 	const ruleset = ['Dex Pokemon', 'Dex Snapshot', ...formatData.ruleset || []];
 	const battle = formatData.debug ? { trunc: Math.trunc } : undefined;
-	const format = new dex.Format({
-		...formatData, battle, effectType: 'Format', mod: dex.currentMod, ruleset, baseRuleset: ruleset,
+	const tiers = (formatData as AnyObject).tiers;
+	const formatDex = isObject(tiers) && Object.keys(tiers).length ? tieredDex(dex, tiers) : dex;
+	const format = new formatDex.Format({
+		...formatData, battle, effectType: 'Format', mod: formatDex.currentMod, ruleset, baseRuleset: ruleset,
 	});
 	if (formatData.id) (format as AnyObject).id = formatData.id;
 	return format;

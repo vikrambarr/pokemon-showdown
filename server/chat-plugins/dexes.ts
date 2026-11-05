@@ -707,7 +707,17 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		if (edit.clear) loaded = await Dexes.clearDex(loaded);
 		let stale: string[] = [];
 		if (edit.base !== undefined) ({ loaded, stale } = await Dexes.setBase(loaded, `${edit.base}`));
-		return { id: loaded.row.dexid, ...(stale.length ? { stale } : {}) };
+		if (edit.pokemon) ({ loaded } = await Dexes.putEntry(loaded, edit.pokemon));
+		if (edit.tiers) loaded = await Dexes.setTiers(loaded, edit.tiers);
+		if (edit.deletepokemon) loaded = await Dexes.deleteEntry(loaded, `${edit.deletepokemon}`);
+		if (edit.sprite) {
+			const { name, kind, image, settings } = edit.sprite;
+			loaded = await Dexes.setSprite(user, loaded, `${name}`, toKind(`${kind}`), image ? `${image}` : null, settings || {});
+		}
+		let formatid;
+		if (edit.format) ({ loaded, formatid } = await Dexes.putFormat(loaded, edit.format));
+		if (edit.deleteformat) loaded = await Dexes.deleteFormat(loaded, `${edit.deleteformat}`);
+		return { id: loaded.row.dexid, ...(stale.length ? { stale } : {}), ...(formatid ? { formatid } : {}) };
 	},
 	dexformat(target) {
 		return Dexes.formatDetails(target);

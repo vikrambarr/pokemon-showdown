@@ -11,7 +11,7 @@ import { TeamValidator } from '../../sim/team-validator';
 import type { PokemonSet } from '../../sim/teams';
 import { Tags } from '../../data/tags';
 import * as sprites from './sprites';
-import { resolveEntries, validateEntry, validateName, type Origin, type SpeciesEntry } from './species';
+import { DOUBLES_TIERS, resolveEntries, TIERS, validateEntry, validateName, type Origin, type SpeciesEntry } from './species';
 import {
 	describeEffect, describeText, EFFECT_NAMES, lookupTables, resolveEdits, validateEffect, type EffectEntry,
 } from './effects';
@@ -535,6 +535,8 @@ export function formatDetails(formatid: string) {
 	const details = {
 		id, name: data.name, dex: loaded.row.name, dexid: loaded.row.dexid, mod: loaded.row.mod,
 		gameType: data.gameType || 'singles', ruleset: data.ruleset || [],
+		banlist: data.banlist || [], unbanlist: data.unbanlist || [], restricted: data.restricted || [],
+		tiers: (data as AnyObject).tiers || {},
 		rules: [...ruleTable.keys()].filter(rule => !/^[-+*!]/.test(rule) && !rule.includes(':')),
 		sources: Object.fromEntries([...ruleTable].filter(([rule, source]) => source && !/^[-+*!]/.test(rule) && !rule.includes(':'))),
 		bans, legal, banned, outright, rulesets: Utils.sortBy(rulesets, rule => rule.name), tags: Utils.sortBy(tags, tag => [tag.kind, tag.name]),
@@ -1344,6 +1346,68 @@ function dedent(src: string) {
 	return lines.map((line, i) => i && Number.isFinite(indent) ? line.slice(indent) : line).join('\n');
 }
 
+function validateTiers(loaded: LoadedDex, input: unknown) {
+	if (input === null) return null;
+	if (!isObject(input) || Object.keys(input).length > 5000) {
+		throw new Chat.ErrorMessage(`"tiers" must map Pokemon to tiers, like {"pikachu": {"tier": "UU"}}.`);
+	}
+	const tiers: AnyObject = {};
+	for (const name of Object.keys(input)) {
+		const species = loaded.dex.species.get(name);
+		if (!species.exists || !loaded.data.species.includes(species.id)) {
+			throw new Chat.ErrorMessage(`"${name}" isn't a Pokemon in ${loaded.row.name}.`);
+		}
+		const entry = input[name];
+		if (!isObject(entry)) throw new Chat.ErrorMessage(`The tiers of ${species.name} must be like {"tier": "UU"}.`);
+		const checked: AnyObject = {};
+		for (const key of Object.keys(entry)) {
+			const list = key === 'doublesTier' ? DOUBLES_TIERS : ['tier', 'natDexTier'].includes(key) ? TIERS : null;
+			if (!list) throw new Chat.ErrorMessage(`"${key}" isn't a tier field: use tier, natDexTier or doublesTier.`);
+			if (!list.includes(entry[key])) throw new Chat.ErrorMessage(`"${entry[key]}" isn't a ${key}: use one of ${list.join(', ')}.`);
+			checked[key] = entry[key];
+		}
+		if (Object.keys(checked).length) tiers[species.id] = checked;
+	}
+	return Object.keys(tiers).length ? tiers : null;
+}
+
+export async function setTiers(loaded: LoadedDex, input: AnyObject) {
+	const field = `${input.field}`;
+	if (!['tier', 'natDexTier', 'doublesTier'].includes(field)) {
+		throw new Chat.ErrorMessage(`"field" must be tier, natDexTier or doublesTier.`);
+	}
+	const names: string[] = Array.isArray(input.species) ? input.species.map(String) : [];
+	if (!input.reset && (!names.length || names.length > 5000)) throw new Chat.ErrorMessage(`Pick some Pokemon.`);
+	const tier = input.tier === null || input.tier === undefined ? null : `${input.tier}`;
+	if (!input.format) {
+		if (tier === null) throw new Chat.ErrorMessage(`Pick a tier.`);
+		return (await putEntries(loaded, names.map(name => {
+			const species: AnyObject = loaded.dex.species.get(name);
+			const own: AnyObject = loaded.dex.data.FormatsData[species.id] || {};
+			const resolved: AnyObject = {};
+			for (const key of ['tier', 'doublesTier', 'natDexTier']) {
+				if (!own[key] && (key === 'doublesTier' ? DOUBLES_TIERS : TIERS).includes(species[key])) resolved[key] = species[key];
+			}
+			return { name, ...resolved, [field]: tier };
+		}))).loaded;
+	}
+	const formatid = toID(input.format);
+	const old = loaded.formats.get(formatid);
+	if (!old) throw new Chat.ErrorMessage(`${loaded.row.name} has no format "${input.format}".`);
+	if (input.reset) return (await putFormat(loaded, { id: formatid, name: old.name, tiers: null })).loaded;
+	const tiers: AnyObject = JSON.parse(JSON.stringify((old as AnyObject).tiers || {}));
+	for (const name of names) {
+		const species = loaded.dex.species.get(name);
+		if (!species.exists) throw new Chat.ErrorMessage(`"${name}" isn't a Pokemon.`);
+		const entry = tiers[species.id] || {};
+		if (tier === null || (species as AnyObject)[field] === tier) delete entry[field];
+		else entry[field] = tier;
+		if (Object.keys(entry).length) tiers[species.id] = entry;
+		else delete tiers[species.id];
+	}
+	return (await putFormat(loaded, { id: formatid, name: old.name, tiers })).loaded;
+}
+
 function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): FormatData {
 	const data: AnyObject = { ...old, name: validateName(input.name, 'format') };
 	if (input.from !== undefined) {
@@ -1372,8 +1436,13 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 			}
 		} else if (FORMAT_FLAGS.includes(field)) {
 			if (typeof value !== 'boolean') throw new Chat.ErrorMessage(`"${field}" must be true or false.`);
+		} else if (field === 'tiers') {
+			const tiers = validateTiers(loaded, value);
+			if (tiers) data.tiers = tiers;
+			else delete data.tiers;
+			continue;
 		} else {
-			throw new Chat.ErrorMessage(`"${field}" isn't something you can set. You can set: name, from, gameType, ${[...FORMAT_LISTS, ...FORMAT_FLAGS].join(', ')}.`);
+			throw new Chat.ErrorMessage(`"${field}" isn't something you can set. You can set: name, from, gameType, tiers, ${[...FORMAT_LISTS, ...FORMAT_FLAGS].join(', ')}.`);
 		}
 		data[field] = value;
 	}
