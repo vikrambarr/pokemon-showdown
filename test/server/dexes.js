@@ -26,6 +26,9 @@ function gif(width, height) {
 	return data.toString('base64');
 }
 
+const id = name => Dexes.getDex(name).row.dexid;
+const formatOf = (dex, name) => [...Dexes.getDex(dex).formats].find(([, data]) => toID(data.name) === toID(name))[0];
+
 const team = species => Teams.pack([{
 	species, ability: 'Static', moves: ['thunderbolt', 'protect'],
 	evs: { hp: 4 }, nature: 'Modest',
@@ -66,7 +69,7 @@ describe('Dexes', () => {
 		assert(loaded.row.species.includes('pikachu'));
 		assert(!loaded.row.species.includes('pikachuworld') || Dex.species.get('Pikachu-World').isNonstandard === null);
 		await assert.rejects(Dexes.createDex(owner, 'mocha dex', 'gen9'), /already a dex/);
-		await assert.rejects(Dexes.createDex(owner, 'Other', 'nosuchmod'), /isn't a dex or mod you can build on/);
+		await assert.rejects(Dexes.createDex(owner, 'Other', 'nosuchmod'), /isn't a world/);
 	});
 
 	it('should make custom Pokemon, edit existing ones, and play them in its formats', async () => {
@@ -93,7 +96,7 @@ describe('Dexes', () => {
 
 		let formatid;
 		({ loaded, formatid } = await Dexes.putFormat(loaded, { name: 'OU', ruleset: ['Standard'] }));
-		assert.equal(formatid, 'mochadexou');
+		assert.match(formatid, /^f[0-9a-f]{10}$/);
 		assert.equal(Dex.formats.get(formatid).name, '[Mocha Dex] OU');
 		assert.equal(Dexes.battleData(formatid).format.name, '[Mocha Dex] OU');
 		assert.equal(Dexes.battleData('gen9ou'), undefined);
@@ -114,7 +117,7 @@ describe('Dexes', () => {
 		let loaded = await Dexes.setEditor(Dexes.getDex('mochadex'), 'Dex Editor', true);
 		assert.deepEqual([...loaded.editors], [[EDITOR, 'Dex Editor']]);
 		assert(await Dexes.editable(editor, 'mochadex'));
-		assert.deepEqual((await Dexes.dexesOf('Dex Editor', null)).map(dex => dex.row.dexid), ['mochadex']);
+		assert.deepEqual((await Dexes.dexesOf('Dex Editor', null)).map(dex => dex.row.dexid), [id('Mocha Dex')]);
 		loaded = await Dexes.setEditor(loaded, 'Dex Editor', false);
 		await assert.rejects(Dexes.editable(editor, 'mochadex'), /can't edit/);
 		await assert.rejects(Dexes.setEditor(loaded, 'Dex Editor', false), /isn't an editor/);
@@ -238,7 +241,7 @@ describe('Dexes', () => {
 		assert(loaded.dex.abilities.get('Intimidate').onStart.toString().includes('atk: (-2)'));
 
 		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltlet', learnset: { voltjab: ['9L1'], scorchsoak: ['9M'] } }));
-		const result = await TeamValidatorAsync.get('mochadexou').validateTeam(Teams.pack([{
+		const result = await TeamValidatorAsync.get(formatOf('Mocha Dex', 'OU')).validateTeam(Teams.pack([{
 			species: 'Voltlet', ability: 'Static', item: 'Volt Orb', moves: ['voltjab', 'scorchsoak'], evs: { hp: 4 }, nature: 'Adamant',
 		}]));
 		assert.equal(result.charAt(0), '1', result);
@@ -250,10 +253,10 @@ describe('Dexes', () => {
 
 	it('should hide private dexes from lists and searches, but not from their exact names', async () => {
 		let loaded = Dexes.getDex('mochadex');
-		assert.deepEqual(Dexes.search('mocha', null).map(dex => dex.row.dexid), ['mochadex']);
+		assert.deepEqual(Dexes.search('mocha', null).map(dex => dex.row.dexid), [id('Mocha Dex')]);
 		loaded = await Dexes.setVisibility(loaded, 'private');
 		assert.deepEqual(Dexes.search('mocha', null), []);
-		assert.deepEqual(Dexes.search('mocha', EDITOR).map(dex => dex.row.dexid), ['mochadex']);
+		assert.deepEqual(Dexes.search('mocha', EDITOR).map(dex => dex.row.dexid), [id('Mocha Dex')]);
 		LoginServer.request = async () => [{ discordid: OWNER }];
 		assert.deepEqual(await Dexes.dexesOf('Dex Owner', null), []);
 		assert.equal((await Dexes.dexesOf('Dex Owner', OWNER)).length, 1);
@@ -271,7 +274,7 @@ describe('Dexes', () => {
 		assert(result.copied.includes('move Volt Jab'));
 		assert(result.copied.includes('move Scorch Soak'));
 		const voltlet = copy.entries.get('voltlet');
-		assert.equal(voltlet.trackdex, 'mochadex');
+		assert.equal(voltlet.trackdex, id('Mocha Dex'));
 		assert.deepEqual([voltlet.origin.dex, voltlet.origin.owner], ['Mocha Dex', 'Dex Owner']);
 		assert.equal(voltlet.sprites.front, source.entries.get('voltlet').sprites.front);
 		assert(copy.dex.moves.get('Volt Jab').exists);
@@ -289,10 +292,10 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.forkEntry(Dexes.getDex('mochadex'), Dexes.getDex('copydex'), 'Moves', 'Volt Jab', true),
 			/comes from Mocha Dex already/);
 
-		result = await Dexes.forkDex(editor, 'Whole Copy', Dexes.getDex('mochadex'));
-		assert.equal(result.loaded.row.origin.dex, 'Mocha Dex');
-		assert(result.loaded.formats.has('wholecopyou'));
-		assert.equal(result.loaded.entries.get('voltlet').trackdex, 'mochadex');
+		const whole = await Dexes.createDex(editor, 'Whole Copy', 'gen9');
+		result = await Dexes.forkEntry(whole, Dexes.getDex('mochadex'), 'Pokedex', 'Voltlet');
+		result = await Dexes.forkEntry(result.loaded, Dexes.getDex('mochadex'), 'Items', 'Volt Orb');
+		assert.equal(result.loaded.entries.get('voltlet').trackdex, id('Mocha Dex'));
 		assert.deepEqual(result.loaded.data.Pokedex.voltlet.types, ['Electric', 'Dragon']);
 
 		({ loaded: source } = await Dexes.putEffect(Dexes.getDex('mochadex'), 'Items', { name: 'Volt Orb', spriteFrom: 'Leftovers' }));
@@ -322,11 +325,10 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.setLocked(Dexes.getDex('copydex'), 'Pokedex', 'Voltlet', true), /can't be locked/);
 		await assert.rejects(Dexes.setLocked(Dexes.getDex('wholecopy'), 'Moves', 'Volt Jab', true), /can't be locked/);
 
-		const skipped = await Dexes.forkDex(editor, 'Locked Out', source);
-		assert(!skipped.loaded.effects.Moves.has('scorchsoak'));
-		assert(!skipped.loaded.entries.has('voltlet'));
-		assert(skipped.warnings.some(warning => warning.includes('Scorch Soak is locked')));
-		await Dexes.deleteDex(skipped.loaded);
+		const lockedOut = await Dexes.createDex(editor, 'Locked Out', 'gen9');
+		await assert.rejects(Dexes.forkEntry(lockedOut, source, 'Pokedex', 'Voltlet'), /is locked/);
+		assert(!Dexes.getDex('Locked Out').entries.has('voltlet'));
+		await Dexes.deleteDex(Dexes.getDex('Locked Out'));
 
 		const own = await Dexes.createDex(owner, 'Own Fork', 'gen9');
 		const forked = (await Dexes.forkEntry(own, source, 'Moves', 'Scorch Soak')).loaded;
@@ -334,6 +336,70 @@ describe('Dexes', () => {
 		await Dexes.deleteDex(forked);
 		source = await Dexes.setLocked(source, 'Moves', 'Scorch Soak', false);
 		assert(!source.effects.Moves.get('scorchsoak').locked);
+	});
+
+	it('should list a dex\'s custom and edited entries, count them, and answer every request about it', async () => {
+		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
+		const mocha = id('Mocha Dex');
+		const entries = await crqHandlers.dexentries.call(null, mocha, owner);
+		assert.equal(entries.query, mocha);
+		assert.deepEqual(entries.custom.Moves.sort(), ['scorchsoak', 'shield', 'voltjab']);
+		assert.deepEqual(entries.edited.Moves, []);
+		assert.deepEqual(entries.edited.Abilities, ['intimidate']);
+		assert.deepEqual(entries.custom.Items, ['voltorb']);
+		assert.deepEqual(entries.edited.Items, ['choicescarf']);
+		assert(entries.Moves.includes('voltjab') && entries.Moves.includes('thunderbolt'));
+		assert.equal(await crqHandlers.dexentries.call(null, mocha, owner).then(again => again.Moves), entries.Moves);
+
+		const [dex] = await crqHandlers.dexes.call(null, 'mocha dex', owner);
+		const moves = dex.counts.find(count => count.table === 'Moves');
+		assert.deepEqual([moves.custom, moves.edited, moves.total], [3, 0, entries.Moves.length]);
+		assert.equal(moves.customIds, undefined);
+
+		assert.deepEqual(await crqHandlers.dexentries.call(null, 'nosuchdex', owner), { query: 'nosuchdex', missing: true });
+		const effect = await crqHandlers.dexeffect.call(null, `${mocha}, move, protect`, owner);
+		assert.equal(effect.query, `${mocha}, move, protect`);
+		assert.equal(effect.dexid, mocha);
+		assert(effect.source.some(([path, code]) => path === 'condition.onTryHit' && code.startsWith('onTryHit(')));
+		const scorch = await crqHandlers.dexeffect.call(null, `${mocha}, move, scorchsoak`, owner);
+		assert(scorch.source.find(([path]) => path === 'onHit')[1].includes('"Fire"'));
+
+		const crashlog = Monitor.crashlog;
+		Dexes.dexes.set('dbroken', { row: { dexid: 'dbroken', name: 'Broken' } });
+		Monitor.crashlog = () => {};
+		try {
+			assert.deepEqual(await crqHandlers.dexentries.call(null, 'dbroken', owner), {
+				query: 'dbroken', error: 'Something went wrong. Try again.',
+			});
+		} finally {
+			Dexes.dexes.delete('dbroken');
+			Monitor.crashlog = crashlog;
+		}
+	});
+
+	it('should count only what exists in a dex\'s generation, and tell outright bans from tag bans', async () => {
+		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
+		let loaded = await Dexes.createDex(owner, 'Old Dex', 'gen7');
+		const entries = await crqHandlers.dexentries.call(null, loaded.row.dexid, owner);
+		assert(entries.Items.includes('leftovers'));
+		assert(!entries.Items.includes('heavydutyboots'));
+		assert(!entries.Moves.includes('dynamaxcannon'));
+
+		({ loaded } = await Dexes.putFormat(loaded, { name: 'OU', ruleset: ['Standard'], banlist: ['Uber', 'Pikachu'] }));
+		const details = Dexes.formatDetails(formatOf('Old Dex', 'OU'));
+		assert(details.outright.includes('pikachu'));
+		assert(details.banned.pokemon.includes('mewtwo'));
+		assert(!details.outright.includes('mewtwo'));
+		assert(details.legal.pokemon.includes('bulbasaur'));
+
+		({ loaded } = await Dexes.putType(loaded, { name: 'Cosmic', damageTaken: { Dark: 2 }, color: '#3B3F8F', label: 'cosmic' }));
+		const cosmic = Dexes.clientData(loaded).TypeChart.cosmic;
+		assert.deepEqual([cosmic.color, cosmic.label], ['#3b3f8f', 'COSMIC']);
+		({ loaded } = await Dexes.putType(loaded, { name: 'Cosmic', damageTaken: { Dark: 1 } }));
+		assert.equal(Dexes.clientData(loaded).TypeChart.cosmic.color, '#3b3f8f');
+		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', color: 'blue' }), /hex color/);
+		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', label: 'TOOLONG' }), /1 to 6/);
+		await Dexes.deleteDex(Dexes.getDex('olddex'));
 	});
 
 	it('should make chained formes, types, many Pokemon at once, and formats from existing ones', async () => {
@@ -431,6 +497,7 @@ describe('Dexes', () => {
 		assert.equal(dex.species.get('Weird Virus').num, dex.species.get('Hammer Bro').num);
 		assert.equal(dex.species.get('Weird Virus').maxHP, 1);
 		assert(dex.conditions.get('frb').exists);
+		await Dexes.deleteDex(loaded);
 	});
 
 	it('should build dexes on other dexes, keeping only their own changes', async () => {
@@ -443,9 +510,9 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.createDex(editor, 'gen9', 'Parent Dex'), /name of a mod/);
 
 		const child = await Dexes.createDex(editor, 'Child Dex', 'Parent Dex');
-		assert.deepEqual(child.row.parents, ['parentdex']);
+		assert.deepEqual(child.row.parents, [id('Parent Dex')]);
 		assert.deepEqual(child.data.parents, [get('parentdex').data.hash]);
-		assert(child.formats.has('childdexou'));
+		assert(formatOf('Child Dex', 'OU'));
 		assert.equal(child.data.Pokedex.sproutle, undefined);
 		assert(child.data.species.includes('sproutle'));
 		await Dexes.putEntry(child, { name: 'Sproutle', types: ['Grass', 'Fairy'] });
@@ -466,7 +533,7 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.putEntry(get('childdex'), { name: 'Pikachu', types: ['Water'] }), /locked in Parent Dex/);
 		await assert.rejects(Dexes.putEntry(get('childdex'), { name: 'Sproutlet', inheritsFrom: 'Sproutle' }), /locked in Parent Dex/);
 
-		assert.deepEqual(Object.keys(Dexes.battleData('childdexou')).sort(), ['format', 'hash']);
+		assert.deepEqual(Object.keys(Dexes.battleData(formatOf('Child Dex', 'OU'))).sort(), ['format', 'hash']);
 		const hashes = [get('childdex').data.hash, get('parentdex').data.hash];
 		const query = require('../../dist/lib/database').SQL`SELECT hash, data FROM dex_layers`;
 		let saved = [];
@@ -479,15 +546,15 @@ describe('Dexes', () => {
 		assert.deepEqual(saved.find(row => row.hash === hashes[0]).data.parents, [hashes[1]]);
 		assert(saved.find(row => row.hash === hashes[1]).data.Pokedex.sproutle);
 		const team = Teams.pack([{ species: 'Sproutle', ability: 'Overgrow', moves: ['tackle'], evs: { hp: 4 }, nature: 'Bold' }]);
-		assert.equal((await TeamValidatorAsync.get('childdexou').validateTeam(team)).charAt(0), '1');
+		assert.equal((await TeamValidatorAsync.get(formatOf('Child Dex', 'OU')).validateTeam(team)).charAt(0), '1');
 
-		await assert.rejects(Dexes.deleteDex(get('parentdex')), /built on Parent Dex/);
-		const fork = await Dexes.forkDex(owner, 'Child Fork', get('childdex'));
-		assert.deepEqual(fork.loaded.row.parents, ['parentdex']);
-		assert(fork.loaded.entries.has('sproutle'));
+		await assert.rejects(Dexes.deleteDex(get('parentdex')), /is set in Parent Dex/);
+		const fork = { loaded: await Dexes.createDex(owner, 'Child Fork', 'Child Dex') };
+		assert.deepEqual(fork.loaded.row.parents, [id('Child Dex')]);
+		assert(fork.loaded.data.species.includes('sproutle'));
 		assert(!fork.loaded.data.species.includes('bulbasaur'));
 
-		const bulk = Array.from({ length: 201 }, (_, i) => ({ name: `Bulk ${i}`, inheritsFrom: 'Bulbasaur' }));
+		const bulk = Array.from({ length: Dexes.MAX_ENTRIES + 1 }, (_, i) => ({ name: `Bulk ${i}`, inheritsFrom: 'Bulbasaur' }));
 		await assert.rejects(Dexes.putEntries(get('parentdex'), bulk), /at a time/);
 		assert((await Dexes.setOfficial(get('parentdex'), true)).row.official);
 		await Dexes.deleteDex(fork.loaded);
@@ -507,11 +574,11 @@ describe('Dexes', () => {
 		]);
 		await assert.rejects(Dexes.createDex(editor, 'Bad Dex', 'Left Dex + gen9'), /no dex called "gen9"/);
 		await assert.rejects(Dexes.createDex(editor, 'Bad Dex', 'Left Dex + leftdex'), /same dex twice/);
-		await assert.rejects(Dexes.createDex(editor, 'Bad Dex', 'Left Dex', undefined, 'gen7'), /different generation/);
-		await assert.rejects(Dexes.createDex(editor, 'Bad Dex', 'Left Dex', undefined, 'nosuchmod'), /isn't a mod/);
+		await assert.rejects(Dexes.createDex(editor, 'Bad Dex', 'Left Dex', 'gen7'), /different generation/);
+		await assert.rejects(Dexes.createDex(editor, 'Bad Dex', 'Left Dex', 'nosuchmod'), /isn't a mod/);
 
 		let both = await Dexes.createDex(editor, 'Both Dex', 'Left Dex + Right Dex');
-		assert.deepEqual(both.row.parents, ['leftdex', 'rightdex']);
+		assert.deepEqual(both.row.parents, [id('Left Dex'), id('Right Dex')]);
 		assert.equal(both.formats.size, 0);
 		assert(both.data.species.includes('sproutle'));
 		assert.notEqual(both.dex.species.get('Sparkit').num, both.dex.species.get('Sproutle').num);
@@ -519,12 +586,14 @@ describe('Dexes', () => {
 		assert.equal(Dexes.baseName(both.row), 'Left Dex + Right Dex');
 		({ loaded: both } = await Dexes.putFormat(both, { name: 'OU', from: 'gen9ou' }));
 		const team = Teams.pack([{ species: 'Sproutle', ability: 'Overgrow', moves: ['tackle'], evs: { hp: 4 }, nature: 'Bold' }]);
-		assert.equal((await TeamValidatorAsync.get('bothdexou').validateTeam(team)).charAt(0), '1');
+		assert.equal((await TeamValidatorAsync.get(formatOf('Both Dex', 'OU')).validateTeam(team)).charAt(0), '1');
 		await Dexes.putEntry(get('leftdex'), { name: 'Pikachu', types: ['Electric', 'Fire'] });
 		assert.deepEqual(get('bothdex').data.parents, [get('leftdex').data.hash, get('rightdex').data.hash]);
 		assert.deepEqual(get('bothdex').dex.species.get('Pikachu').types, ['Electric', 'Fire']);
+		await assert.rejects(Dexes.deleteDex(get('rightdex')), /is set in Right Dex/);
+		await Dexes.deleteDex(get('bothdex'));
 
-		const mario = await Dexes.createDex(editor, 'Mario Dex', 'Left Dex', undefined, 'gen9mariomon');
+		const mario = await Dexes.createDex(editor, 'Mario Dex', 'Left Dex', 'gen9mariomon');
 		assert.equal(mario.row.mod, 'gen9mariomon');
 		assert(mario.dex.currentMod.startsWith('gen9mariomondex'));
 		assert.equal(Dexes.baseName(mario.row), 'Left Dex (on gen9mariomon)');
@@ -532,16 +601,16 @@ describe('Dexes', () => {
 		assert(mario.dex.conditions.get('frb').exists);
 		assert(!get('leftdex').dex.conditions.get('frb').exists);
 
-		await assert.rejects(Dexes.deleteDex(get('rightdex')), /built on Right Dex/);
-		for (const dexid of ['mariodex', 'bothdex', 'leftdex', 'rightdex']) await Dexes.deleteDex(get(dexid));
+		for (const dexid of ['mariodex', 'leftdex', 'rightdex']) await Dexes.deleteDex(get(dexid));
 	});
 
 	it('should save a snapshot when a battle starts, which outlives the dex', async () => {
 		const loaded = Dexes.getDex('mochadex');
+		const formatid = formatOf('Mocha Dex', 'OU');
 		const p1 = makeUser('Dex Player 1');
 		const p2 = makeUser('Dex Player 2');
 		const room = Rooms.createBattle({
-			format: 'mochadexou', players: [{ user: p1, team: team('Voltlet') }, { user: p2, team: team('Voltlet') }],
+			format: formatid, players: [{ user: p1, team: team('Voltlet') }, { user: p2, team: team('Voltlet') }],
 		});
 		const { hash } = loaded.data;
 		require('../../dist/server/chat-plugins/dexes').handlers.onBattleCreate(room.battle, [p1.id, p2.id]);
@@ -554,7 +623,7 @@ describe('Dexes', () => {
 				SELECT data FROM dex_snapshots WHERE hash = ${hash}
 			`);
 		}
-		assert.equal(row.data.dexid, 'mochadex');
+		assert.equal(row.data.dexid, loaded.row.dexid);
 		assert(row.data.Pokedex.voltlet);
 		assert.equal(row.data.sprites.voltlet.front, loaded.entries.get('voltlet').sprites.front);
 		assert(row.data.images[row.data.sprites.voltlet.front].file.endsWith('.png'));
@@ -566,8 +635,8 @@ describe('Dexes', () => {
 		p2.destroy();
 
 		await Dexes.deleteDex(loaded);
-		assert(!Dex.formats.get('mochadexou').exists);
-		assert(!Dexes.dexes.has('mochadex'));
+		assert(!Dex.formats.get(formatid).exists);
+		assert(!Dexes.dexes.has(loaded.row.dexid));
 		const kept = await Dexes.database().queryOne(require('../../dist/lib/database').SQL`
 			SELECT hash FROM dex_snapshots WHERE hash = ${hash}
 		`);

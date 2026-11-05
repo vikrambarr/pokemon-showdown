@@ -349,7 +349,9 @@ export function releaseDex(dex: ModdedDex) {
 export function buildFormat(dex: ModdedDex, formatData: FormatData): Format {
 	const ruleset = ['Dex Pokemon', 'Dex Snapshot', ...formatData.ruleset || []];
 	const battle = formatData.debug ? { trunc: Math.trunc } : undefined;
-	return new dex.Format({
+	const format = new dex.Format({
 		...formatData, battle, effectType: 'Format', mod: dex.currentMod, ruleset, baseRuleset: ruleset,
 	});
+	if (formatData.id) (format as AnyObject).id = formatData.id;
+	return format;
 }
