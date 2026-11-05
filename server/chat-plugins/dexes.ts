@@ -719,8 +719,12 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		if (edit.deleteformat) loaded = await Dexes.deleteFormat(loaded, `${edit.deleteformat}`);
 		return { id: loaded.row.dexid, ...(stale.length ? { stale } : {}), ...(formatid ? { formatid } : {}) };
 	},
-	dexformat(target) {
-		return Dexes.formatDetails(target);
+	async dexformat(target, user) {
+		const [formatid, draft] = Utils.splitFirst(target, ',').map(part => part.trim());
+		if (!draft) return Dexes.formatDetails(formatid);
+		const details = Dexes.formatDetails(formatid);
+		if (details) await Dexes.editable(user, details.dexid);
+		return Dexes.formatDetails(formatid, parseJSON(draft));
 	},
 	dexeffect(target) {
 		const [dexid, kind, name] = Utils.splitFirst(target, ',', 2).map(part => part.trim());
