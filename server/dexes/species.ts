@@ -32,12 +32,12 @@ const EGG_GROUPS = [
 	'Mineral', 'Monster', 'Undiscovered', 'Water 1', 'Water 2', 'Water 3',
 ];
 const EVO_TYPES = ['trade', 'useItem', 'levelMove', 'levelExtra', 'levelFriendship', 'levelHold', 'other'];
-const TIERS = [
+export const TIERS = [
 	'AG', 'Uber', '(Uber)', 'OU', '(OU)', 'UUBL', 'UU', 'RUBL', 'RU', 'NUBL', 'NU', '(NU)', 'PUBL', 'PU', '(PU)',
 	'ZUBL', 'ZU', 'NFE', 'LC', 'Illegal', 'Unreleased',
 ];
 const NONSTANDARD = ['Past', 'Future', 'Unobtainable', 'CAP', 'LGPE', 'Custom', 'Gigantamax'];
-const DOUBLES_TIERS = ['DUber', '(DUber)', 'DOU', '(DOU)', 'DBL', 'DUU', '(DUU)', 'NFE', 'LC', 'Illegal', 'Unreleased'];
+export const DOUBLES_TIERS = ['DUber', '(DUber)', 'DOU', '(DOU)', 'DBL', 'DUU', '(DUU)', 'NFE', 'LC', 'Illegal', 'Unreleased'];
 const MOVE_SOURCE_REGEX = /^[1-9][MTLREDSVC][a-zA-Z0-9]*$/;
 const FORMATS_FIELDS = ['tier', 'doublesTier', 'natDexTier'];
 const LEARNSET_FIELDS = ['eventOnly', 'eventData'];
