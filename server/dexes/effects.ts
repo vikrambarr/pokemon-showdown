@@ -360,10 +360,14 @@ function checkEffect(
 	}
 	const locked = unlimited ? undefined : Object.keys(fields).find(field => !EDITABLE[table].includes(field));
 	if (locked) throw new Chat.ErrorMessage(`"${locked}" can only be changed in official dexes.`);
-	for (let parent = fields.countsAs && toID(fields.countsAs), steps = 0; parent; parent = data[table][parent]?.countsAs) {
-		if (parent === effectid || ++steps > 50) {
-			throw new Chat.ErrorMessage(`${name} can't count as itself, even through other effects.`);
+	if (fields.countsAs !== undefined) {
+		if (fields.countsAs !== null && typeof fields.countsAs !== 'boolean') {
+			throw new Chat.ErrorMessage(`"countsAs" must be true or false.`);
 		}
+		if (fields.countsAs && !inheritsfrom) {
+			throw new Chat.ErrorMessage(`Only copies can count as something: ${name} isn't copied from another ${what}.`);
+		}
+		fields.countsAs = fields.countsAs ? inheritsfrom : null;
 	}
 	const keep = old?.inheritsfrom === inheritsfrom;
 	const start = keep ? old!.data : !base ? BLANK[table] : {};
@@ -406,6 +410,7 @@ function checkEffect(
 	}
 
 	const catalogue = effectSlots(dex, table, effectid, editOf(entry), entry.data.name, data);
+	const own = (found: Slot) => found.kind === 'ref' && [effectid, inheritsfrom].includes(toID(found.value));
 	const setSlot = (path: string, index: number, value: unknown) => {
 		const found = catalogue.find(other => other.path === path);
 		const target = found?.handler?.slots[index];
@@ -416,6 +421,9 @@ function checkEffect(
 			delete edits[index];
 			if (!Object.keys(edits).length) delete entry.slots[path];
 			return;
+		}
+		if (own(target)) {
+			throw new Chat.ErrorMessage(`"${path}:${index}" names ${entry.data.name} itself, so it can't be changed.`);
 		}
 		let to;
 		try {
@@ -441,7 +449,7 @@ function checkEffect(
 			let count = 0;
 			for (const { path, handler, values } of catalogue) {
 				handler?.slots.forEach((other, index) => {
-					if (!sameValue(other.value, from) && !sameValue(values[index], from)) return;
+					if (own(other) || (!sameValue(other.value, from) && !sameValue(values[index], from))) return;
 					setSlot(path, index, to);
 					count++;
 				});
