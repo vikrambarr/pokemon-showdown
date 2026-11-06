@@ -160,6 +160,19 @@ const MOVE_BOOLEANS = [
 	'stallingMove', 'stealsBoosts', 'struggleRecoil', 'thawsTarget', 'tracksTarget', 'willCrit',
 ];
 const ITEM_BOOLEANS = ['ignoreKlutz', 'isBerry', 'isChoice', 'isGem', 'isPokeball', 'isPrimalOrb'];
+export const EDITABLE: { [table in EffectTable]: string[] } = {
+	Moves: [
+		'accuracy', 'basePower', 'category', 'pp', 'priority', 'type', 'target', 'critRatio', 'flags', 'drain', 'recoil', 'heal',
+		'secondary', 'secondaries', 'self', 'boosts', 'selfBoost', 'status', 'volatileStatus', 'sideCondition', 'slotCondition',
+		'pseudoWeather', 'weather', 'terrain', 'multihit', 'selfSwitch', 'selfdestruct', 'ignoreImmunity', 'overrideOffensiveStat',
+		'overrideDefensiveStat', 'overrideOffensivePokemon', 'overrideDefensivePokemon', 'damage', 'ohko', 'condition',
+		'breaksProtect', 'forceSwitch', 'hasCrashDamage', 'hasSheerForceBoost', 'ignoreAbility', 'ignoreDefensive', 'ignoreEvasion',
+		'infiltrates', 'multiaccuracy', 'sleepUsable', 'stealsBoosts', 'thawsTarget', 'tracksTarget', 'willCrit', 'desc', 'shortDesc',
+	],
+	Abilities: ['flags', 'suppressWeather', 'desc', 'shortDesc'],
+	Items: ['fling', 'naturalGift', 'boosts', 'ignoreKlutz', 'spritenum', 'desc', 'shortDesc'],
+	Conditions: ['duration', 'counterMax', 'noCopy', 'affectsFainted', 'desc', 'shortDesc'],
+};
 
 const FIELDS: { [table in EffectTable]: Fields } = {
 	Moves: {
@@ -341,6 +354,8 @@ function checkEffect(
 	for (const field of REQUIRED[table]) {
 		if (fields[field] === null) throw new Chat.ErrorMessage(`"${field}" can't be removed.`);
 	}
+	const locked = unlimited ? undefined : Object.keys(fields).find(field => !EDITABLE[table].includes(field));
+	if (locked) throw new Chat.ErrorMessage(`"${locked}" can only be changed in official dexes.`);
 	const keep = old?.inheritsfrom === inheritsfrom;
 	const start = keep ? old!.data : !base ? BLANK[table] : {};
 	const entry: EffectEntry = {

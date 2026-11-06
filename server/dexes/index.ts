@@ -13,7 +13,7 @@ import { Tags } from '../../data/tags';
 import * as sprites from './sprites';
 import { DOUBLES_TIERS, resolveEntries, TIERS, validateEntry, validateName, type Origin, type SpeciesEntry } from './species';
 import {
-	describeEffect, describeText, EFFECT_NAMES, lookupTables, resolveEdits, validateEffect, type EffectEntry,
+	describeEffect, describeText, EDITABLE, EFFECT_NAMES, lookupTables, resolveEdits, validateEffect, type EffectEntry,
 } from './effects';
 import { MAX_TYPES, resolveTypes, validateType, type TypeEntry } from './types';
 
@@ -1341,6 +1341,7 @@ export function effectEditor(loaded: LoadedDex, table: EffectTable, name: string
 	const edit = loaded.data.effects?.[table]?.[id] || { data: {} };
 	return {
 		...describeEffect(base, table, id, loaded.effects[table].get(id), lookup),
+		edited: loaded.effects[table].has(id), editable: loaded.row.official ? null : EDITABLE[table],
 		data: { ...effect, ...describeText(base, table, edit, effect, id) },
 		source: handlersOf(loaded.dex.data[table][id]).map(([path, fn]) => [path, dedent(fn.toString())]),
 	};
