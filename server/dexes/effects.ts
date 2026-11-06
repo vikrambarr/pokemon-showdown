@@ -41,10 +41,6 @@ type Fields = { [field: string]: Check };
 
 const CONTROL = ['name', 'inheritsFrom', 'slots', 'replace', 'events', 'spriteFrom'];
 const EVENT_STATS: { [stat: string]: string } = { Atk: 'atk', SpA: 'spa', Def: 'def', SpD: 'spd', Spe: 'spe' };
-const STAT_NAMES: { [stat: string]: string } = {
-	hp: 'HP', atk: 'Attack', def: 'Defense', spa: 'Sp. Atk', spd: 'Sp. Def', spe: 'Speed',
-	accuracy: 'accuracy', evasion: 'evasiveness',
-};
 const MAX_NUMBER = 1e6;
 const REQUIRED: { [table in EffectTable]: string[] } = {
 	Moves: ['accuracy', 'basePower', 'category', 'flags', 'pp', 'priority', 'target', 'type'],
@@ -538,47 +534,10 @@ export function describeEffect(
 	};
 }
 
-export function describeText(
-	dex: ModdedDex, table: EffectTable, edit: EffectEdit, effect: AnyObject, id: ID, data: AnyObject
-) {
-	const { official, baseid, base } = baseEffect(dex, table, id, edit);
+export function describeText(dex: ModdedDex, table: EffectTable, edit: EffectEdit, id: ID) {
+	const { baseid, base } = baseEffect(dex, table, id, edit);
 	if (!base || table === 'Conditions') return {};
 	const getter = { Moves: dex.moves, Abilities: dex.abilities, Items: dex.items }[table];
 	const descs = dex.text.get(getter.get(baseid) as any) as AnyObject;
-	const pairs: [string | number, string | number][] = official ? [] : [[base.name, effect.name]];
-	const display = (value: string | number, found: Slot): string | number => {
-		if (found.kind === 'stat') return STAT_NAMES[value];
-		if (found.kind !== 'ref') return value;
-		return data[found.tables!.find(other => data[other][toID(value)]) || 'Moves'][toID(value)]?.name || value;
-	};
-	for (const path in edit.slots) {
-		const handler = parseHandler(getPath(base, path) as Function, data);
-		for (const index in edit.slots[path]) {
-			const found = handler?.slots[Number(index)];
-			const [from, to] = edit.slots[path][index];
-			if (found && !['status', 'flag'].includes(found.kind)) pairs.push([display(from, found), display(to, found)]);
-		}
-	}
-	const numbers = (value: unknown, old: unknown) => {
-		if (typeof value === 'number' && typeof old === 'number') pairs.push([old, value]);
-		if (isObject(value) && isObject(old)) for (const key in value) numbers(value[key], old[key]);
-	};
-	numbers(edit.data, base);
-	for (const path in edit.events) {
-		const statOf = (key: string) => STAT_NAMES[EVENT_STATS[STAT_EVENT.exec(key)?.[2] || '']];
-		const [from, to] = [lastKey(path), edit.events[path]].map(statOf);
-		if (from && to) pairs.push([from, to]);
-	}
-	const replace = (description: string | undefined) => {
-		if (!description) return description;
-		for (const [from, to] of pairs) {
-			if (from === to) continue;
-			const escaped = String(from).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-			const pattern = new RegExp(typeof from === 'number' ? `(?<![\\d.])${escaped}(?![\\d.])` : `\\b${escaped}\\b`, 'g');
-			if (typeof from === 'number' && description.match(pattern)?.length !== 1) continue;
-			description = description.replace(pattern, String(to));
-		}
-		return description;
-	};
-	return { desc: edit.data.desc ?? replace(descs.desc), shortDesc: edit.data.shortDesc ?? replace(descs.shortDesc) };
+	return { desc: edit.data.desc ?? descs.desc, shortDesc: edit.data.shortDesc ?? descs.shortDesc };
 }

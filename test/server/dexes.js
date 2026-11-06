@@ -205,16 +205,16 @@ describe('Dexes', () => {
 		let editor = Dexes.effectEditor(loaded, 'Moves', 'Scorch Soak');
 		const onHit = editor.handlers.find(handler => handler.path === 'onHit');
 		assert(onHit.slots.length && onHit.slots.every(slot => slot.value === 'Fire' && slot.original === 'Water' && slot.edited));
-		assert.equal(editor.data.shortDesc, `Changes the target's type to Fire.`);
+		assert.equal(editor.data.shortDesc, `Changes the target's type to Water.`);
 		assert.equal(Dexes.clientData(loaded).Moves.scorchsoak.type, 'Fire');
 
 		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Choice Band', slots: { 'onModifyAtk:1': 3 } }));
-		assert(Dexes.effectEditor(loaded, 'Items', 'Choice Band').data.shortDesc.startsWith(`Holder's Attack is 3×`));
+		assert(Dexes.effectEditor(loaded, 'Items', 'Choice Band').data.shortDesc.startsWith(`Holder's Attack is 1.5×`));
 		({ loaded } = await Dexes.putEffect(loaded, 'Items', {
 			name: 'Volt Orb', inheritsFrom: 'Light Ball', replace: [['Pikachu', 'Voltlet']],
 		}));
 		assert.equal(Dexes.effectEditor(loaded, 'Items', 'Volt Orb').data.shortDesc,
-			'If held by a Voltlet, its Attack and Sp. Atk are doubled.');
+			'If held by a Pikachu, its Attack and Sp. Atk are doubled.');
 		({ loaded } = await Dexes.putEffect(loaded, 'Moves', {
 			name: 'Volt Jab', type: 'Electric', category: 'Physical', basePower: 70, flags: { contact: 1 },
 			secondary: { chance: 30, status: 'par' },
@@ -235,7 +235,7 @@ describe('Dexes', () => {
 
 		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Choice Scarf', events: { onModifySpe: 'atk' } }));
 		assert.equal(loaded.dex.items.get('Choice Scarf').onModifySpe, undefined);
-		assert(Dexes.effectEditor(loaded, 'Items', 'Choice Scarf').data.shortDesc.startsWith(`Holder's Attack is 1.5×`));
+		assert(Dexes.effectEditor(loaded, 'Items', 'Choice Scarf').data.shortDesc.startsWith(`Holder's Speed is 1.5×`));
 		await assert.rejects(Dexes.putEffect(loaded, 'Items', { name: 'Choice Scarf', events: { onModifySpe: 'hp' } }), /can become/);
 		({ loaded } = await Dexes.putEffect(loaded, 'Abilities', { name: 'Intimidate', slots: { 'onStart:3': -2 } }));
 		assert(loaded.dex.abilities.get('Intimidate').onStart.toString().includes('atk: (-2)'));
