@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { FS, Utils } from '../../lib';
 import { SQL, PGDatabase } from '../../lib/database';
 import {
-	buildBase, buildDex, buildFormat, EFFECT_TABLES, isBuiltDex, isObject, releaseDex, type DexLayer, type EffectTable,
+	baseEffect, buildBase, buildDex, buildFormat, EFFECT_TABLES, isBuiltDex, isObject, releaseDex, type DexLayer, type EffectTable,
 } from '../../sim/dex-custom';
 import { handlersOf } from '../../sim/dex-handlers';
 import type { ModdedDex } from '../../sim/dex';
@@ -1339,10 +1339,15 @@ export function effectEditor(loaded: LoadedDex, table: EffectTable, name: string
 	const lookup = lookupTables(base, loaded.data.Pokedex, loaded.effects);
 	const effect = JSON.parse(json(loaded.dex.data[table][id]));
 	const edit = loaded.data.effects?.[table]?.[id] || { data: {} };
+	const { official, base: original } = baseEffect(base, table, id, edit);
 	return {
 		...describeEffect(base, table, id, loaded.effects[table].get(id), lookup),
 		edited: loaded.effects[table].has(id), editable: loaded.row.official ? null : EDITABLE[table],
 		data: { ...effect, ...describeText(base, table, edit, effect, id) },
+		original: original ? {
+			...JSON.parse(json(original)), ...describeText(base, table, { data: {}, inherit: edit.inherit }, effect, id),
+			...(official ? {} : { countsAs: true }),
+		} : null,
 		source: handlersOf(loaded.dex.data[table][id]).map(([path, fn]) => [path, dedent(fn.toString())]),
 	};
 }
