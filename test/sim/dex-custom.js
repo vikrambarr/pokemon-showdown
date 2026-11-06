@@ -137,6 +137,21 @@ describe('Custom dexes', () => {
 		assert.throws(() => buildDex({ ...DATA, hash: 'simclash', effects: clash }), /already has its own handler/);
 		const blaze = { Abilities: { blaze: { data: {}, events: { onModifyAtk: 'onModifySpe' } } } };
 		assert.throws(() => buildDex({ ...DATA, hash: 'simblaze', effects: blaze }), /can't become onModifySpe/);
+
+		const prefixed = buildDex({
+			...DATA, hash: 'simprefixes', effects: {
+				Items: { lifeorb: { data: {}, events: { onModifyDamage: 'onSourceModifyDamage' } } },
+				Abilities: { technician: { data: {}, events: { onBasePower: 'onAllyBasePower' } } },
+				Moves: { reflect: { data: {}, events: { 'condition.onAnyModifyDamage': 'onFoeModifyDamage' } } },
+			},
+		});
+		assert.equal(prefixed.items.get('lifeorb').onSourceModifyDamage, Dex.data.Items.lifeorb.onModifyDamage);
+		assert.equal(prefixed.items.get('lifeorb').onModifyDamage, undefined);
+		assert.equal(prefixed.abilities.get('technician').onAllyBasePowerPriority, Dex.data.Abilities.technician.onBasePowerPriority);
+		assert.equal(prefixed.conditions.get('reflect').onFoeModifyDamage, Dex.data.Moves.reflect.condition.onAnyModifyDamage);
+		releaseDex(prefixed);
+		const facade = { Moves: { facade: { data: {}, events: { onBasePower: 'onSourceBasePower' } } } };
+		assert.throws(() => buildDex({ ...DATA, hash: 'simfacade', effects: facade }), /can't become onSourceBasePower/);
 	});
 
 	it('should only Mega Evolve the exact species a Mega Stone names, through chained formes', () => {

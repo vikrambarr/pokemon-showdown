@@ -152,7 +152,9 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 	}
 	entries.names = Object.fromEntries(entries.Conditions.map((id: ID) => [id, loaded.dex.data.Conditions[id].name || id]));
 	entries.choices = choicesOf(loaded, entries);
-	entries.Pokedex = loaded.data.species;
+	const shown = new Set(loaded.data.species);
+	entries.Pokedex = Object.keys(loaded.dex.data.Pokedex).filter(id => shown.has(id) ||
+		shown.has(toID(loaded.dex.data.Pokedex[id].baseSpecies)));
 	entriesCache.set(loaded, entries);
 	return entries;
 }
