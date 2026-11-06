@@ -144,12 +144,13 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 	if (entries) return entries;
 	const layers = Dexes.ancestorsOf(loaded);
 	entries = { id: loaded.row.dexid, custom: {}, modified: {} };
-	for (const table of ['Moves', 'Abilities', 'Items'] as const) {
+	for (const table of ['Moves', 'Abilities', 'Items', 'Conditions'] as const) {
 		const { ids, custom, modified } = sortedIds(loaded, table, layers);
 		entries[table] = ids;
 		entries.custom[table] = custom;
 		entries.modified[table] = modified;
 	}
+	entries.names = Object.fromEntries(entries.Conditions.map((id: ID) => [id, loaded.dex.data.Conditions[id].name || id]));
 	entriesCache.set(loaded, entries);
 	return entries;
 }
@@ -710,6 +711,10 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		if (edit.pokemon) ({ loaded } = await Dexes.putEntry(loaded, edit.pokemon));
 		if (edit.tiers) loaded = await Dexes.setTiers(loaded, edit.tiers);
 		if (edit.deletepokemon) loaded = await Dexes.deleteEntry(loaded, `${edit.deletepokemon}`);
+		for (const kind in EFFECT_TABLES) {
+			if (edit[kind]) ({ loaded } = await Dexes.putEffect(loaded, EFFECT_TABLES[kind], edit[kind]));
+			if (edit[`delete${kind}`]) loaded = await Dexes.deleteEffect(loaded, EFFECT_TABLES[kind], `${edit[`delete${kind}`]}`);
+		}
 		if (edit.sprite) {
 			const { name, kind, image, settings } = edit.sprite;
 			loaded = await Dexes.setSprite(user, loaded, `${name}`, toKind(`${kind}`), image ? `${image}` : null, settings || {});
