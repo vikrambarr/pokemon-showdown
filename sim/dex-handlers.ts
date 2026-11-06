@@ -146,6 +146,11 @@ function find(src: string, data: AnyObject): Handler | null {
 				slots.push({ start: key.start - offset, end: key.end - offset, kind: 'stat', value: key.name, key: true });
 			}
 		}
+		if (node.type === 'MemberExpression' && !node.computed && BOOSTS.includes(node.property.name) &&
+			node.object.type === 'MemberExpression' && !node.object.computed && node.object.property.name === 'boosts') {
+			const { property } = node;
+			slots.push({ start: property.start - offset, end: property.end - offset, kind: 'stat', value: property.name, key: true });
+		}
 		if (node.type === 'UnaryExpression' && node.operator === '-' && node.argument.type === 'Literal' &&
 			typeof node.argument.value === 'number') {
 			slots.push({ start: node.start - offset, end: node.end - offset, kind: 'number', value: -node.argument.value });
