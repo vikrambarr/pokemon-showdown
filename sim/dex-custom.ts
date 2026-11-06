@@ -90,7 +90,7 @@ export function effectSlots(
 	const { baseid, base, renames } = baseEffect(parent, table, id, edit);
 	if (!base) return [];
 	return handlersOf(base).map(([path, fn]) => {
-		const handler = parseHandler(fn, parent.data);
+		const handler = parseHandler(fn, data);
 		const changes = Object.hasOwn(edit.slots || {}, path) ? edit.slots![path] : {};
 		const values = handler ? handler.slots.map((slot, index) => {
 			const change = changes[index];

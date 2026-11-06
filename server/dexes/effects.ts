@@ -292,7 +292,7 @@ export function resolveEdits(dex: ModdedDex, entry: EffectEntry, data: AnyObject
 	const slots: NonNullable<EffectEdit['slots']> = {};
 	for (const path in entry.slots) {
 		const fn = getPath(base, path);
-		const handler = typeof fn === 'function' ? parseHandler(fn, dex.data) : null;
+		const handler = typeof fn === 'function' ? parseHandler(fn, data) : null;
 		for (const index in entry.slots[path]) {
 			const { from, to, nth } = entry.slots[path][index];
 			let found = handler?.slots[Number(index)]?.value === from ? Number(index) : -1;
@@ -538,20 +538,21 @@ export function describeEffect(
 	};
 }
 
-export function describeText(dex: ModdedDex, table: EffectTable, edit: EffectEdit, effect: AnyObject, id: ID) {
+export function describeText(
+	dex: ModdedDex, table: EffectTable, edit: EffectEdit, effect: AnyObject, id: ID, data: AnyObject
+) {
 	const { official, baseid, base } = baseEffect(dex, table, id, edit);
 	if (!base || table === 'Conditions') return {};
 	const getter = { Moves: dex.moves, Abilities: dex.abilities, Items: dex.items }[table];
 	const descs = dex.text.get(getter.get(baseid) as any) as AnyObject;
 	const pairs: [string | number, string | number][] = official ? [] : [[base.name, effect.name]];
-	const data: AnyObject = dex.data;
 	const display = (value: string | number, found: Slot): string | number => {
 		if (found.kind === 'stat') return STAT_NAMES[value];
 		if (found.kind !== 'ref') return value;
 		return data[found.tables!.find(other => data[other][toID(value)]) || 'Moves'][toID(value)]?.name || value;
 	};
 	for (const path in edit.slots) {
-		const handler = parseHandler(getPath(base, path) as Function, dex.data);
+		const handler = parseHandler(getPath(base, path) as Function, data);
 		for (const index in edit.slots[path]) {
 			const found = handler?.slots[Number(index)];
 			const [from, to] = edit.slots[path][index];
