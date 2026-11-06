@@ -149,7 +149,7 @@ const species = slot('ref', { tables: ['Pokedex'], form: 'name' });
 const countsAs = (table: EffectTable) => slot('ref', { tables: [table], form: 'id' });
 const boosts = record(slot('stat', { value: 'atk', key: true }), int(-6, 6));
 const fraction = list(int(1, 100), 2);
-const desc = { desc: text(1024), shortDesc: text(256) };
+const desc = (short: number) => ({ desc: text(1024), shortDesc: text(short) });
 const nonstandard = oneOf(...used('Moves', entry => entry.isNonstandard), 'Custom');
 const secondaryFields: Fields = {
 	chance: int(1, 100), boosts, status, volatileStatus: condition, sideCondition: condition, pseudoWeather: condition,
@@ -194,10 +194,10 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		}),
 		maxMove: object({ basePower: int(0, 1000) }),
 		contestType: oneOf(...used('Moves', entry => entry.contestType)), isNonstandard: nonstandard, gen: int(1, 9),
-		...Object.fromEntries(MOVE_BOOLEANS.map(field => [field, bool])), ...desc, countsAs: countsAs('Moves'),
+		...Object.fromEntries(MOVE_BOOLEANS.map(field => [field, bool])), ...desc(55), countsAs: countsAs('Moves'),
 	},
 	Abilities: {
-		rating: num(-1, 5), suppressWeather: bool, isNonstandard: nonstandard, gen: int(1, 9), ...desc,
+		rating: num(-1, 5), suppressWeather: bool, isNonstandard: nonstandard, gen: int(1, 9), ...desc(90),
 		countsAs: countsAs('Abilities'),
 		flags: record(oneOf(...used('Abilities', entry => Object.keys(entry.flags || {}))), oneOf(1)),
 	},
@@ -207,10 +207,10 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		naturalGift: object({ basePower: int(0, 250), type }), itemUser: list(species, 30), forcedForme: species,
 		megaStone: record(species, species), boosts, zMove: either(oneOf(true), move), zMoveFrom: move, zMoveType: type,
 		onPlate: type, onMemory: type, onDrive: type, isNonstandard: nonstandard, gen: int(1, 9),
-		...Object.fromEntries(ITEM_BOOLEANS.map(field => [field, bool])), ...desc, countsAs: countsAs('Items'),
+		...Object.fromEntries(ITEM_BOOLEANS.map(field => [field, bool])), ...desc(90), countsAs: countsAs('Items'),
 	},
 	Conditions: {
-		duration: int(1, 100), counterMax: int(1, 10000), noCopy: bool, affectsFainted: bool, ...desc,
+		duration: int(1, 100), counterMax: int(1, 10000), noCopy: bool, affectsFainted: bool, ...desc(90),
 		countsAs: countsAs('Conditions'),
 	},
 };
