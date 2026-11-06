@@ -152,9 +152,21 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 	}
 	entries.names = Object.fromEntries(entries.Conditions.map((id: ID) => [id, loaded.dex.data.Conditions[id].name || id]));
 	entries.choices = choicesOf(loaded, entries);
+	entries.conditions = Object.fromEntries(entries.Conditions.map((id: ID) => {
+		const condition: AnyObject = loaded.dex.data.Conditions[id];
+		const kind = condition.effectType === 'Status' ? 'status' : CHOICE_FIELDS.find(field => entries.choices[field].includes(id));
+		return [id, [kind || '', condition.shortDesc || condition.desc || '']];
+	}));
 	const shown = new Set(loaded.data.species);
 	entries.Pokedex = Object.keys(loaded.dex.data.Pokedex).filter(id => shown.has(id) ||
 		shown.has(toID(loaded.dex.data.Pokedex[id].baseSpecies)));
+	const base = Dexes.baseOf(loaded.row).data;
+	entries.originals = {};
+	for (const entry of loaded.entries.values()) {
+		const id = base.Pokedex[entry.speciesid] ? entry.speciesid : entry.inheritsfrom;
+		entries.originals[entry.speciesid] = id && base.Pokedex[id] ?
+			{ ...base.Pokedex[id], learnset: Object.keys(base.Learnsets[id]?.learnset || {}) } : null;
+	}
 	entriesCache.set(loaded, entries);
 	return entries;
 }
