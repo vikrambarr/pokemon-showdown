@@ -613,7 +613,7 @@ export function clientData(loaded: LoadedDex) {
 		for (const [id, entry] of loaded.effects[table]) {
 			const effect = JSON.parse(json(loaded.dex.data[table][id]));
 			const edit = loaded.data.effects![table]![id];
-			(effects[table] ||= {})[id] = { ...effect, ...describeText(baseOf(loaded.row), table, edit, effect, id) };
+			(effects[table] ||= {})[id] = { ...effect, ...describeText(baseOf(loaded.row), table, edit, effect, id, loaded.dex.data) };
 			const uploadid = usedSprites(loaded, entry.sprites).item;
 			if (uploadid) itemSprites[id] = uploadid;
 		}
@@ -1343,9 +1343,9 @@ export function effectEditor(loaded: LoadedDex, table: EffectTable, name: string
 	return {
 		...describeEffect(base, table, id, loaded.effects[table].get(id), lookup),
 		edited: loaded.effects[table].has(id), editable: loaded.row.official ? null : EDITABLE[table],
-		data: { ...effect, ...describeText(base, table, edit, effect, id) },
+		data: { ...effect, ...describeText(base, table, edit, effect, id, lookup) },
 		original: original ? {
-			...JSON.parse(json(original)), ...describeText(base, table, { data: {}, inherit: edit.inherit }, effect, id),
+			...JSON.parse(json(original)), ...describeText(base, table, { data: {}, inherit: edit.inherit }, effect, id, lookup),
 			...(official ? {} : { countsAs: true }),
 		} : null,
 		source: handlersOf(loaded.dex.data[table][id]).map(([path, fn]) => [path, dedent(fn.toString())]),
