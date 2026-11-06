@@ -1,3 +1,4 @@
+import { countsAs } from '../../../sim/counts-as';
 import { Rulesets } from '../../pokeathlon-rulesets';
 
 export const Scripts: ModdedBattleScriptsData = {
@@ -47,7 +48,7 @@ export const Scripts: ModdedBattleScriptsData = {
 					}
 				}
 				if (
-					move.alwaysHit || (move.id === 'toxic' && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
+					move.alwaysHit || (countsAs(this.battle.dex, move.id, 'toxic') && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
 					(move.target === 'self' && move.category === 'Status' && !target.isSemiInvulnerable())
 				) {
 					accuracy = true;

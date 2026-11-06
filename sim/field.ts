@@ -8,6 +8,7 @@
 import { State } from './state';
 import { type EffectState } from './pokemon';
 import { toID } from './dex';
+import { countedAs, countedCondition, countingHolder, countsAs } from './counts-as';
 
 export class Field {
 	readonly battle: Battle;
@@ -29,7 +30,7 @@ export class Field {
 		this.weatherState = this.battle.initEffectState({ id: '' });
 		this.terrain = '';
 		this.terrainState = this.battle.initEffectState({ id: '' });
-		this.pseudoWeather = {};
+		this.pseudoWeather = countingHolder(this.battle.dex, {});
 	}
 
 	toJSON(): AnyObject {
@@ -47,7 +48,7 @@ export class Field {
 				if (this.battle.gen > 5 || this.weatherState.duration === 0) {
 					return false;
 				}
-			} else if (this.battle.gen > 2 || status.id === 'sandstorm') {
+			} else if (this.battle.gen > 2 || countsAs(this.battle.dex, status.id, 'sandstorm')) {
 				return false;
 			}
 		}
@@ -118,9 +119,9 @@ export class Field {
 	isWeather(weather: string | string[]) {
 		const ourWeather = this.effectiveWeather();
 		if (!Array.isArray(weather)) {
-			return ourWeather === toID(weather);
+			return countsAs(this.battle.dex, ourWeather, toID(weather));
 		}
-		return weather.map(toID).includes(ourWeather);
+		return weather.some(entry => countsAs(this.battle.dex, ourWeather, toID(entry)));
 	}
 
 	getWeather() {
@@ -174,9 +175,9 @@ export class Field {
 	isTerrain(terrain: string | string[], target?: Pokemon | Side | Battle) {
 		const ourTerrain = this.effectiveTerrain(target);
 		if (!Array.isArray(terrain)) {
-			return ourTerrain === toID(terrain);
+			return countsAs(this.battle.dex, ourTerrain, toID(terrain));
 		}
-		return terrain.map(toID).includes(ourTerrain);
+		return terrain.some(entry => countsAs(this.battle.dex, ourTerrain, toID(entry)));
 	}
 
 	getTerrain() {
@@ -192,7 +193,7 @@ export class Field {
 		if (source === 'debug') source = this.battle.sides[0].active[0];
 		status = this.battle.dex.conditions.get(status);
 
-		let state = this.pseudoWeather[status.id];
+		let state = Object.hasOwn(this.pseudoWeather, status.id) ? this.pseudoWeather[status.id] : undefined;
 		if (state) {
 			if (!(status as any).onFieldRestart) return false;
 			return this.battle.singleEvent('FieldRestart', status, state, this, source, sourceEffect);
@@ -216,14 +217,15 @@ export class Field {
 	}
 
 	getPseudoWeather(status: string | Effect) {
-		status = this.battle.dex.conditions.get(status);
+		status = countedCondition(this.battle.dex, this.pseudoWeather, status);
 		return this.pseudoWeather[status.id] ? status : null;
 	}
 
 	removePseudoWeather(status: string | Effect) {
 		status = this.battle.dex.conditions.get(status);
+		const copies: string[] = countedAs(this.battle.dex, status.id).filter(id => this.removePseudoWeather(id));
 		const state = this.pseudoWeather[status.id];
-		if (!state) return false;
+		if (!state) return copies.length > 0;
 		this.battle.singleEvent('FieldEnd', status, state, this);
 		delete this.pseudoWeather[status.id];
 		return true;

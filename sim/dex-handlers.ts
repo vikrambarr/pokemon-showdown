@@ -4,6 +4,14 @@ import { toID } from './dex-data';
 
 export type SlotKind = 'number' | 'type' | 'category' | 'stat' | 'status' | 'flag' | 'ref';
 
+export interface SlotContext {
+	kind: 'compare' | 'case' | 'array';
+	start: number;
+	end: number;
+	other?: [number, number];
+	negate?: boolean;
+}
+
 export interface Slot {
 	start: number;
 	end: number;
@@ -12,6 +20,7 @@ export interface Slot {
 	key?: boolean;
 	tables?: string[];
 	form?: 'id' | 'name';
+	context?: SlotContext;
 }
 
 export interface Handler {
@@ -94,6 +103,20 @@ function comparedWith(node: AnyObject, stack: AnyObject[]) {
 	return other?.type === 'MemberExpression' && !other.computed ? other.property.name as string : '';
 }
 
+function contextOf(node: AnyObject, parent: AnyObject, offset: number): Slot['context'] {
+	if (parent.type === 'BinaryExpression' && ['===', '!==', '==', '!='].includes(parent.operator)) {
+		const other = parent.left === node ? parent.right : parent.left;
+		return {
+			kind: 'compare', start: parent.start - offset, end: parent.end - offset,
+			other: [other.start - offset, other.end - offset], negate: parent.operator.startsWith('!'),
+		};
+	}
+	if (parent.type === 'SwitchCase' && parent.test === node) {
+		return { kind: 'case', start: parent.start - offset, end: parent.start - offset };
+	}
+	if (parent.type === 'ArrayExpression') return { kind: 'array', start: node.end - offset, end: node.end - offset };
+}
+
 export function classify(value: string, comparedTo: string, data: AnyObject): Partial<Slot> | null {
 	if (STATUSES.includes(value) || data.Conditions[value]?.effectType === 'Status') return { kind: 'status' };
 	if (STATS.includes(value) || BOOSTS.includes(value)) return { kind: 'stat' };
@@ -149,7 +172,9 @@ function find(src: string, data: AnyObject): Handler | null {
 		if (node.type === 'MemberExpression' && !node.computed && BOOSTS.includes(node.property.name) &&
 			node.object.type === 'MemberExpression' && !node.object.computed && node.object.property.name === 'boosts') {
 			const { property } = node;
-			slots.push({ start: property.start - offset, end: property.end - offset, kind: 'stat', value: property.name, key: true });
+			slots.push({
+				start: property.start - offset, end: property.end - offset, kind: 'stat', value: property.name, key: true,
+			});
 		}
 		if (node.type === 'UnaryExpression' && node.operator === '-' && node.argument.type === 'Literal' &&
 			typeof node.argument.value === 'number') {
@@ -179,7 +204,11 @@ function find(src: string, data: AnyObject): Handler | null {
 		const comparedTo = comparedWith(node, stack);
 		if (comparedTo === 'effectType') return;
 		const kind = classify(node.value, comparedTo, data);
-		if (kind) slots.push({ start: node.start - offset, end: node.end - offset, value: node.value, ...kind } as Slot);
+		if (!kind) return;
+		const context = ['ref', 'status'].includes(kind.kind!) ? contextOf(node, parent, offset) : undefined;
+		slots.push({
+			start: node.start - offset, end: node.end - offset, value: node.value, ...kind, ...(context ? { context } : {}),
+		} as Slot);
 	});
 	for (const reference of references) {
 		if (!declared.has(reference) && !(reference in globalThis)) return null;

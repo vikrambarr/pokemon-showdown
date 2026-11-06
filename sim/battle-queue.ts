@@ -14,6 +14,7 @@
  */
 
 import type { Battle } from './battle';
+import { countsAs } from './counts-as';
 
 /** Actions are sorted based on order (lower first)
  * followed by priority (higher first)
@@ -261,7 +262,7 @@ export class BattleQueue {
 			action.move = this.battle.dex.getActiveMove(action.move);
 
 			if (this.battle.dex.currentMod.startsWith('champions') &&
-				action.move.id === 'curse' && !action.pokemon.hasType('Ghost')) {
+				countsAs(this.battle.dex, action.move.id, 'curse') && !action.pokemon.hasType('Ghost')) {
 				action.move.target = 'self';
 			}
 

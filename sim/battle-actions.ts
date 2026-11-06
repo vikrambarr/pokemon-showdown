@@ -1,4 +1,5 @@
 import { Dex, toID } from './dex';
+import { countsAs } from './counts-as';
 
 const CHOOSABLE_TARGETS = new Set(['normal', 'any', 'adjacentAlly', 'adjacentAllyOrSelf', 'adjacentFoe']);
 
@@ -170,7 +171,8 @@ export class BattleActions {
 				if (this.battle.gen === 1) {
 					pokemon.side.lastSelectedMoveSlot = 0;
 					for (const poke of pokemon.foes()) {
-						if (poke.volatiles['partialtrappinglock'] && poke.moveSlots[poke.side.lastSelectedMoveSlot].id === 'metronome') {
+						if (poke.volatiles['partialtrappinglock'] &&
+							countsAs(this.battle.dex, poke.moveSlots[poke.side.lastSelectedMoveSlot].id, 'metronome')) {
 							// this is not done for Mirror Move, potentially resulting in a desync
 							poke.side.lastSelectedMove = 'metronome' as ID;
 							poke.side.lastEnemySelectedMove = 'metronome' as ID;
@@ -281,7 +283,7 @@ export class BattleActions {
 		let baseMove = this.dex.getActiveMove(moveOrMoveName);
 		const priority = baseMove.priority;
 		const pranksterBoosted = baseMove.pranksterBoosted;
-		if (baseMove.id !== 'struggle' && !zMove && !maxMove && !externalMove) {
+		if (!countsAs(this.battle.dex, baseMove.id, 'struggle') && !zMove && !maxMove && !externalMove) {
 			const changedMove = this.battle.runEvent('OverrideAction', pokemon, target, baseMove);
 			if (changedMove && changedMove !== true) {
 				baseMove = this.dex.getActiveMove(changedMove);
@@ -336,7 +338,7 @@ export class BattleActions {
 		if (!externalMove) {
 			const lockedMove = pokemon.getLockedMove();
 			if (!lockedMove) {
-				if (!pokemon.deductPP(baseMove, null, target) && (move.id !== 'struggle')) {
+				if (!pokemon.deductPP(baseMove, null, target) && (!countsAs(this.battle.dex, move.id, 'struggle'))) {
 					this.battle.add('cant', pokemon, 'nopp', move);
 					this.battle.clearActiveMove(true);
 					pokemon.moveThisTurnResult = false;
@@ -453,7 +455,7 @@ export class BattleActions {
 
 		let move = this.dex.getActiveMove(moveOrMoveName);
 		pokemon.lastMoveUsed = move;
-		if (move.id === 'weatherball' && zMove) {
+		if (countsAs(this.battle.dex, move.id, 'weatherball') && zMove) {
 			// Z-Weather Ball only changes types if it's used directly,
 			// not if it's called by Z-Sleep Talk or something.
 			this.battle.singleEvent('ModifyType', move, null, pokemon, target, move, move);
@@ -512,7 +514,7 @@ export class BattleActions {
 		let attrs = '';
 
 		let movename = move.name;
-		if (move.id === 'hiddenpower') movename = 'Hidden Power';
+		if (countsAs(this.battle.dex, move.id, 'hiddenpower')) movename = 'Hidden Power';
 		if (sourceEffect) attrs += `|[from] ${sourceEffect.fullname}`;
 		if (zMove && move.isZ === true) {
 			attrs = `|[anim]${movename}${attrs}`;
@@ -681,12 +683,12 @@ export class BattleActions {
 		return moveResult;
 	}
 	hitStepInvulnerabilityEvent(targets: Pokemon[], pokemon: Pokemon, move: ActiveMove) {
-		if (move.id === 'helpinghand') return new Array(targets.length).fill(true);
+		if (countsAs(this.battle.dex, move.id, 'helpinghand')) return new Array(targets.length).fill(true);
 		const hitResults: boolean[] = [];
 		for (const [i, target] of targets.entries()) {
 			if (target.volatiles['commanding']) {
 				hitResults[i] = false;
-			} else if (this.battle.gen >= 8 && move.id === 'toxic' && pokemon.hasType('Poison')) {
+			} else if (this.battle.gen >= 8 && countsAs(this.battle.dex, move.id, 'toxic') && pokemon.hasType('Poison')) {
 				hitResults[i] = true;
 			} else {
 				hitResults[i] = this.battle.runEvent('Invulnerability', target, pokemon, move);
@@ -790,7 +792,8 @@ export class BattleActions {
 				}
 			}
 			if (
-				move.alwaysHit || (move.id === 'toxic' && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
+				move.alwaysHit ||
+				(countsAs(this.battle.dex, move.id, 'toxic') && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
 				(move.target === 'self' && move.category === 'Status' && !target.isSemiInvulnerable())
 			) {
 				accuracy = true; // bypasses ohko accuracy modifiers
@@ -829,7 +832,7 @@ export class BattleActions {
 					}
 				}
 				if (broke) {
-					if (move.id === 'feint') {
+					if (countsAs(this.battle.dex, move.id, 'feint')) {
 						this.battle.add('-activate', target, 'move: Feint');
 					} else {
 						this.battle.add('-activate', target, `move: ${move.name}`, '[broken]');
@@ -948,7 +951,7 @@ export class BattleActions {
 		let hit: number;
 		for (hit = 1; hit <= targetHits; hit++) {
 			if (damage.includes(false)) break;
-			if (hit > 1 && pokemon.status === 'slp' && (!isSleepUsable || this.battle.gen === 4)) break;
+			if (hit > 1 && countsAs(this.battle.dex, pokemon.status, 'slp') && (!isSleepUsable || this.battle.gen === 4)) break;
 			if (targets.every(target => !target?.hp)) break;
 			move.hit = hit;
 			move.lastHit = move.hit === targetHits;
@@ -1364,7 +1367,7 @@ export class BattleActions {
 			}
 			this.battle.debug('move failed because it did nothing');
 		} else if (move.selfSwitch && source.hp && !source.volatiles['commanded'] &&
-			(this.battle.canSwitch(source.side) || move.id === 'revivalblessing')) {
+			(this.battle.canSwitch(source.side) || countsAs(this.battle.dex, move.id, 'revivalblessing'))) {
 			source.switchFlag = move.id;
 		}
 
@@ -1867,8 +1870,8 @@ export class BattleActions {
 
 		if (isCrit && !suppressMessages) this.battle.add('-crit', target);
 
-		if (pokemon.status === 'brn' && move.category === 'Physical' && !pokemon.hasAbility('guts')) {
-			if (this.battle.gen < 6 || move.id !== 'facade') {
+		if (countsAs(this.battle.dex, pokemon.status, 'brn') && move.category === 'Physical' && !pokemon.hasAbility('guts')) {
+			if (this.battle.gen < 6 || !countsAs(this.battle.dex, move.id, 'facade')) {
 				baseDamage = this.battle.modify(baseDamage, 0.5);
 			}
 		}
@@ -1943,7 +1946,7 @@ export class BattleActions {
 
 	canUltraBurst(pokemon: Pokemon) {
 		if (['Necrozma-Dawn-Wings', 'Necrozma-Dusk-Mane'].includes(pokemon.baseSpecies.name) &&
-			pokemon.getItem().id === 'ultranecroziumz') {
+			countsAs(this.battle.dex, pokemon.getItem().id, 'ultranecroziumz')) {
 			return "Necrozma-Ultra";
 		}
 		return null;

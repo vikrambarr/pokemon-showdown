@@ -1,3 +1,4 @@
+import { countsAs } from '../../../sim/counts-as';
 import { Field } from '../../../sim/field';
 import { Pokemon } from '../../../sim/pokemon';
 import { Rulesets } from '../../pokeathlon-rulesets';
@@ -131,14 +132,16 @@ export const Scripts: ModdedBattleScriptsData = {
 
 			if (isCrit && !suppressMessages) this.battle.add('-crit', target);
 
-			if (pokemon.status === 'brn' && move.category === 'Physical' && !pokemon.hasAbility('guts')) {
-				if (this.battle.gen < 6 || move.id !== 'facade') {
+			if (countsAs(this.battle.dex, pokemon.status, 'brn') && move.category === 'Physical' && !pokemon.hasAbility('guts')) {
+				if (this.battle.gen < 6 || !countsAs(this.battle.dex, move.id, 'facade')) {
 					baseDamage = this.battle.modify(baseDamage, 0.5);
 				}
 			}
 
-			if (pokemon.status === 'frb' && move.category === 'Special' && !pokemon.hasAbility('attunement')) {
-				if (this.battle.gen < 6 || move.id !== 'facade') {
+			if (
+				countsAs(this.battle.dex, pokemon.status, 'frb') && move.category === 'Special' && !pokemon.hasAbility('attunement')
+			) {
+				if (this.battle.gen < 6 || !countsAs(this.battle.dex, move.id, 'facade')) {
 					baseDamage = this.battle.modify(baseDamage, 0.5);
 				}
 			}

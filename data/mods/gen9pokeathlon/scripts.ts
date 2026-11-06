@@ -1,3 +1,4 @@
+import { countsAs } from '../../../sim/counts-as';
 import { Pokemon } from '../../../sim/pokemon';
 import { Rulesets } from '../../pokeathlon-rulesets';
 import { Abilities } from '../gen9insurgence/abilities';
@@ -58,7 +59,7 @@ export const Scripts: ModdedBattleScriptsData = {
 					}
 				}
 				if (
-					move.alwaysHit || (move.id === 'toxic' && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
+					move.alwaysHit || (countsAs(this.battle.dex, move.id, 'toxic') && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
 					(move.target === 'self' && move.category === 'Status' && !target.isSemiInvulnerable())
 				) {
 					accuracy = true;
@@ -175,7 +176,8 @@ export const Scripts: ModdedBattleScriptsData = {
 					if (this.battle.gen === 1) {
 						pokemon.side.lastSelectedMoveSlot = 0;
 						for (const poke of pokemon.foes()) {
-							if (poke.volatiles['partialtrappinglock'] && poke.moveSlots[poke.side.lastSelectedMoveSlot].id === 'metronome') {
+							if (poke.volatiles['partialtrappinglock'] &&
+								countsAs(this.battle.dex, poke.moveSlots[poke.side.lastSelectedMoveSlot].id, 'metronome')) {
 								poke.side.lastSelectedMove = 'metronome' as ID;
 								poke.side.lastEnemySelectedMove = 'metronome' as ID;
 								if (this.battle.queue.willMove(poke)) {

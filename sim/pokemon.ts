@@ -7,6 +7,7 @@
 
 import { State } from './state';
 import { toID } from './dex';
+import { countedAs, countedBase, countedCondition, countingHolder, countsAs } from './counts-as';
 import type { DynamaxOptions, MoveRequestData, PokemonMoveRequestData, PokemonSwitchRequestData } from './side';
 
 /** A Pokemon's move slot. */
@@ -376,11 +377,11 @@ export class Pokemon {
 		for (const moveid of this.set.moves) {
 			let move = this.battle.dex.moves.get(moveid);
 			if (!move.id) continue;
-			if (move.id === 'hiddenpower' && move.type !== 'Normal') {
+			if (countsAs(this.battle.dex, move.id, 'hiddenpower') && move.type !== 'Normal') {
 				if (!set.hpType) set.hpType = move.type;
 				move = this.battle.dex.moves.get('hiddenpower');
 			}
-			const ppUps = move.noPPBoosts || move.id === 'trumpcard' ? 0 : 3;
+			const ppUps = move.noPPBoosts || countsAs(this.battle.dex, move.id, 'trumpcard') ? 0 : 3;
 			const basePP = this.battle.calculatePP(move, ppUps);
 			this.baseMoveSlots.push({
 				move: move.name,
@@ -400,7 +401,7 @@ export class Pokemon {
 
 		this.status = '';
 		this.statusState = this.battle.initEffectState({});
-		this.volatiles = {};
+		this.volatiles = countingHolder(this.battle.dex, {});
 		this.showCure = undefined;
 
 		if (!this.set.evs) {
@@ -1010,15 +1011,15 @@ export class Pokemon {
 		let hasValidMove = false;
 		for (const moveSlot of this.moveSlots) {
 			let moveName = moveSlot.move;
-			if (moveSlot.id === 'hiddenpower') {
+			if (countsAs(this.battle.dex, moveSlot.id, 'hiddenpower')) {
 				moveName = `Hidden Power ${this.hpType}`;
 				if (this.battle.gen < 6) moveName += ` ${this.hpPower}`;
-			} else if (moveSlot.id === 'return' || moveSlot.id === 'frustration') {
+			} else if (countsAs(this.battle.dex, moveSlot.id, ['return', 'frustration'])) {
 				const basePowerCallback = this.battle.dex.moves.get(moveSlot.id).basePowerCallback as (pokemon: Pokemon) => number;
 				moveName += ` ${basePowerCallback(this)}`;
 			}
 			let target = moveSlot.target;
-			switch (moveSlot.id) {
+			switch (countedBase(this.battle.dex, moveSlot.id)) {
 			case 'curse':
 				if (!this.hasType('Ghost')) {
 					target = 'self';
@@ -1331,7 +1332,7 @@ export class Pokemon {
 		this.timesAttacked = pokemon.timesAttacked;
 		for (const [i, moveSlot] of pokemon.moveSlots.entries()) {
 			let moveName = moveSlot.move;
-			if (moveSlot.id === 'hiddenpower') {
+			if (countsAs(this.battle.dex, moveSlot.id, 'hiddenpower')) {
 				moveName = 'Hidden Power ' + this.hpType;
 			}
 			const move = this.battle.dex.moves.get(moveSlot.id);
@@ -1379,9 +1380,9 @@ export class Pokemon {
 		if (this.battle.gen === 4) {
 			if (this.species.num === 487) {
 				// Giratina formes
-				if (this.species.name === 'Giratina' && this.item === 'griseousorb') {
+				if (this.species.name === 'Giratina' && countsAs(this.battle.dex, this.item, 'griseousorb')) {
 					this.formeChange('Giratina-Origin');
-				} else if (this.species.name === 'Giratina-Origin' && this.item !== 'griseousorb') {
+				} else if (this.species.name === 'Giratina-Origin' && !countsAs(this.battle.dex, this.item, 'griseousorb')) {
 					this.formeChange('Giratina');
 				}
 			}
@@ -1435,8 +1436,8 @@ export class Pokemon {
 		}
 		if (this.battle.gen <= 1) {
 			// Gen 1: Re-Apply burn and para drops.
-			if (this.status === 'par') this.modifyStat!('spe', 0.25);
-			if (this.status === 'brn') this.modifyStat!('atk', 0.5);
+			if (countsAs(this.battle.dex, this.status, 'par')) this.modifyStat!('spe', 0.25);
+			if (countsAs(this.battle.dex, this.status, 'brn')) this.modifyStat!('atk', 0.5);
 		}
 		this.speed = this.storedStats.spe;
 		return species;
@@ -1552,9 +1553,9 @@ export class Pokemon {
 			}
 		}
 		if (this.species.name === 'Eternatus-Eternamax' && this.volatiles['dynamax']) {
-			this.volatiles = { dynamax: this.volatiles['dynamax'] };
+			this.volatiles = countingHolder(this.battle.dex, { dynamax: this.volatiles['dynamax'] });
 		} else {
-			this.volatiles = {};
+			this.volatiles = countingHolder(this.battle.dex, {});
 		}
 		if (includeSwitchFlags) {
 			this.switchFlag = false;
@@ -1697,7 +1698,7 @@ export class Pokemon {
 	cureStatus(silent = false) {
 		if (!this.hp || !this.status) return false;
 		this.battle.add('-curestatus', this, this.status, silent ? '[silent]' : '[msg]');
-		if (this.status === 'slp' && this.removeVolatile('nightmare')) {
+		if (countsAs(this.battle.dex, this.status, 'slp') && this.removeVolatile('nightmare')) {
 			this.battle.add('-end', this, 'Nightmare', '[silent]');
 		}
 		this.setStatus('');
@@ -1733,7 +1734,7 @@ export class Pokemon {
 			!ignoreImmunities && status.id && !(source?.hasAbility('corrosion') && ['tox', 'psn'].includes(status.id))
 		) {
 			// the game currently never ignores immunities
-			if (!this.runStatusImmunity(status.id === 'tox' ? 'psn' : status.id)) {
+			if (!this.runStatusImmunity(countsAs(this.battle.dex, status.id, 'tox') ? 'psn' : status.id)) {
 				this.battle.debug('immune to status');
 				if ((sourceEffect as Move)?.status) {
 					this.battle.add('-immune', this);
@@ -1777,7 +1778,7 @@ export class Pokemon {
 	 */
 	clearStatus() {
 		if (!this.hp || !this.status) return false;
-		if (this.status === 'slp' && this.removeVolatile('nightmare')) {
+		if (countsAs(this.battle.dex, this.status, 'slp') && this.removeVolatile('nightmare')) {
 			this.battle.add('-end', this, 'Nightmare', '[silent]');
 		}
 		this.setStatus('');
@@ -1790,7 +1791,7 @@ export class Pokemon {
 
 	eatItem(force?: boolean, source?: Pokemon, sourceEffect?: Effect) {
 		if (!this.item) return false;
-		if ((!this.hp && this.item !== 'jabocaberry' && this.item !== 'rowapberry') || !this.isActive) return false;
+		if ((!this.hp && !countsAs(this.battle.dex, this.item, ['jabocaberry', 'rowapberry'])) || !this.isActive) return false;
 
 		if (!sourceEffect && this.battle.effect) sourceEffect = this.battle.effect;
 		if (!source && this.battle.event?.target) source = this.battle.event.target;
@@ -1917,9 +1918,9 @@ export class Pokemon {
 
 	hasItem(item: string | string[]) {
 		if (Array.isArray(item)) {
-			if (!item.map(toID).includes(this.item)) return false;
+			if (!item.some(entry => countsAs(this.battle.dex, this.item, toID(entry)))) return false;
 		} else {
-			if (toID(item) !== this.item) return false;
+			if (!countsAs(this.battle.dex, this.item, toID(item))) return false;
 		}
 		return !this.ignoringItem();
 	}
@@ -1974,9 +1975,9 @@ export class Pokemon {
 
 	hasAbility(ability: string | string[]) {
 		if (Array.isArray(ability)) {
-			if (!ability.map(toID).includes(this.ability)) return false;
+			if (!ability.some(entry => countsAs(this.battle.dex, this.ability, toID(entry)))) return false;
 		} else {
-			if (toID(ability) !== this.ability) return false;
+			if (!countsAs(this.battle.dex, this.ability, toID(ability))) return false;
 		}
 		return !this.ignoringAbility();
 	}
@@ -2003,7 +2004,7 @@ export class Pokemon {
 		}
 		if (!source) source = this;
 
-		if (this.volatiles[status.id]) {
+		if (Object.hasOwn(this.volatiles, status.id)) {
 			if (!status.onRestart) return false;
 			return this.battle.singleEvent('Restart', status, this.volatiles[status.id], this, source, sourceEffect);
 		}
@@ -2050,7 +2051,7 @@ export class Pokemon {
 	}
 
 	getVolatile(status: string | Effect) {
-		status = this.battle.dex.conditions.get(status) as Effect;
+		status = countedCondition(this.battle.dex, this.volatiles, status) as Effect;
 		if (!this.volatiles[status.id]) return null;
 		return status;
 	}
@@ -2058,7 +2059,8 @@ export class Pokemon {
 	removeVolatile(status: string | Effect) {
 		if (!this.hp) return false;
 		status = this.battle.dex.conditions.get(status) as Effect;
-		if (!this.volatiles[status.id]) return false;
+		const copies: string[] = countedAs(this.battle.dex, status.id).filter(id => this.removeVolatile(id));
+		if (!this.volatiles[status.id]) return copies.length > 0;
 		const { linkedPokemon, linkedStatus } = this.volatiles[status.id];
 		this.battle.singleEvent('End', status, this.volatiles[status.id], this);
 		delete this.volatiles[status.id];
@@ -2173,13 +2175,13 @@ export class Pokemon {
 		if ('ingrain' in this.volatiles && this.battle.gen >= 4) return true;
 		if ('smackdown' in this.volatiles) return true;
 		const item = (this.ignoringItem() ? '' : this.item);
-		if (item === 'ironball') return true;
+		if (countsAs(this.battle.dex, item, 'ironball')) return true;
 		// If a Fire/Flying type uses Burn Up and Roost, it becomes ???/Flying-type, but it's still grounded.
 		if (!negateImmunity && this.hasType('Flying') && !(this.hasType('???') && 'roost' in this.volatiles)) return false;
 		if (this.hasAbility(['levitate', 'eelevate']) && !this.battle.suppressingAbility(this)) return null;
 		if ('magnetrise' in this.volatiles) return false;
 		if ('telekinesis' in this.volatiles) return false;
-		return item !== 'airballoon';
+		return !countsAs(this.battle.dex, item, 'airballoon');
 	}
 
 	isSemiInvulnerable() {
@@ -2214,11 +2216,14 @@ export class Pokemon {
 		if (!sourceEffect && this.battle.effect) sourceEffect = this.battle.effect;
 		const weather = this.battle.field.effectiveWeather();
 		if (this.battle.activePokemon?.hasAbility('megasol') && sourceEffect &&
-			(sourceEffect.id === 'megasol' || sourceEffect.effectType === 'Move' || sourceEffect.effectType === 'Weather')) {
-			if (weather !== 'sunnyday' && message) this.battle.add('-activate', this, 'ability: Mega Sol');
+			(countsAs(this.battle.dex, sourceEffect.id, 'megasol') || sourceEffect.effectType === 'Move' ||
+				sourceEffect.effectType === 'Weather')) {
+			if (!countsAs(this.battle.dex, weather, 'sunnyday') && message) {
+				this.battle.add('-activate', this, 'ability: Mega Sol');
+			}
 			return 'sunnyday' as ID;
 		}
-		switch (weather) {
+		switch (countedBase(this.battle.dex, weather)) {
 		case 'sunnyday':
 		case 'raindance':
 		case 'desolateland':
@@ -2243,7 +2248,7 @@ export class Pokemon {
 			!this.battle.suppressingAbility(this)) {
 			if (move.hit === 1) delete this.abilityState.resisted; // reset for first hit
 			if (this.abilityState.resisted) return -1; // all hits of multi-hit move should be not very effective
-			if (move.category === 'Status' || move.id === 'struggle' || !this.runImmunity(move) ||
+			if (move.category === 'Status' || countsAs(this.battle.dex, move.id, 'struggle') || !this.runImmunity(move) ||
 				totalTypeMod < 0 || this.hp < this.maxhp) {
 				return totalTypeMod;
 			}

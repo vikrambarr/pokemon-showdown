@@ -6,6 +6,7 @@ import type { LearnsetData, SpeciesData, SpeciesFormatsData } from './dex-specie
 import type { BattleActions } from './battle-actions';
 import type { Pokemon } from './pokemon';
 import { Rulesets as PokeathlonRulesets } from '../data/pokeathlon-rulesets';
+import { countedAs } from './counts-as';
 import {
 	checkSlot, compileHandler, eventTargets, EVENT_SUFFIXES, handlersOf, parseHandler, render,
 } from './dex-handlers';
@@ -190,6 +191,51 @@ function resolveEffects(parent: ModdedDex, effects: NonNullable<DexLayer['effect
 	}
 }
 
+function countCopies(data: AnyObject) {
+	const dex = { data } as ModdedDex;
+	const originals = new Set<string>();
+	for (const table of EFFECT_TABLES) {
+		for (const id in data[table]) {
+			if (data[table][id]?.countsAs) originals.add(toID(data[table][id].countsAs));
+		}
+	}
+	if (!originals.size) return;
+	const named = (id: string) => EFFECT_TABLES.map(table => data[table][id]?.name).find(Boolean) || id;
+	const words = [...originals].flatMap(id => [id, named(id)]);
+	for (const table of EFFECT_TABLES) {
+		let copied = false;
+		for (const id of Object.keys(data[table])) {
+			let effect = data[table][id];
+			for (const [path, fn] of handlersOf(effect)) {
+				const src = fn.toString();
+				if (!words.some(word => src.includes(word))) continue;
+				const handler = parseHandler(fn, data);
+				if (!handler) continue;
+				const replacements: { start: number, end: number, text: string }[] = [];
+				for (const slot of handler.slots) {
+					const copies = slot.context && countedAs(dex, toID(slot.value));
+					if (!copies?.length) continue;
+					const { kind, start, end, other, negate } = slot.context!;
+					if (replacements.some(entry => entry.start < end && start < entry.end)) continue;
+					const texts = copies.map(copy => JSON.stringify(slot.form === 'name' ? named(copy) : copy));
+					const own = handler.src.slice(slot.start, slot.end);
+					let text = texts.map(copy => `, ${copy}`).join('');
+					if (kind === 'case') text = texts.map(copy => `case ${copy}: `).join('');
+					if (kind === 'compare') {
+						text = `(${negate ? '!' : ''}[${own}${text}].includes(${handler.src.slice(other![0], other![1])}))`;
+					}
+					replacements.push({ start, end, text });
+				}
+				if (!replacements.length) continue;
+				if (!copied) data[table] = { ...data[table] };
+				copied = true;
+				if (data[table][id] === effect) effect = data[table][id] = clone(effect);
+				replaceAt(effect, path, fn, compileHandler(handler, replacements));
+			}
+		}
+	}
+}
+
 const built = new Map<string, {
 	dex: ModdedDex, base: ModdedDex, refs: number, parents: ModdedDex[], data?: DexLayer,
 }>();
@@ -353,6 +399,7 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 		},
 	};
 	if (data.effects) resolveEffects(parent, data.effects, dex.dataCache);
+	countCopies(dex.dataCache);
 	const cosmetic = new Map(Object.entries(data.Pokedex).flatMap(([speciesid, entry]) => (
 		(entry.cosmeticFormes || []).map(forme => [toID(forme), speciesid as ID] as const)
 	)));
