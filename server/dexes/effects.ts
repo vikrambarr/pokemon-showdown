@@ -146,6 +146,7 @@ const status = slot('status');
 const condition = slot('ref', { tables: ['Conditions', 'Moves', 'Abilities', 'Items'], form: 'id' });
 const move = slot('ref', { tables: ['Moves'], form: 'name' });
 const species = slot('ref', { tables: ['Pokedex'], form: 'name' });
+const countsAs = (table: EffectTable) => slot('ref', { tables: [table], form: 'id' });
 const boosts = record(slot('stat', { value: 'atk', key: true }), int(-6, 6));
 const fraction = list(int(1, 100), 2);
 const desc = { desc: text(1024), shortDesc: text(256) };
@@ -168,10 +169,11 @@ export const EDITABLE: { [table in EffectTable]: string[] } = {
 		'overrideDefensiveStat', 'overrideOffensivePokemon', 'overrideDefensivePokemon', 'damage', 'ohko', 'condition',
 		'breaksProtect', 'forceSwitch', 'hasCrashDamage', 'hasSheerForceBoost', 'ignoreAbility', 'ignoreDefensive', 'ignoreEvasion',
 		'infiltrates', 'multiaccuracy', 'sleepUsable', 'stealsBoosts', 'thawsTarget', 'tracksTarget', 'willCrit', 'desc', 'shortDesc',
+		'countsAs',
 	],
-	Abilities: ['flags', 'suppressWeather', 'desc', 'shortDesc'],
-	Items: ['fling', 'naturalGift', 'boosts', 'ignoreKlutz', 'spritenum', 'desc', 'shortDesc'],
-	Conditions: ['duration', 'counterMax', 'noCopy', 'affectsFainted', 'desc', 'shortDesc'],
+	Abilities: ['flags', 'suppressWeather', 'desc', 'shortDesc', 'countsAs'],
+	Items: ['fling', 'naturalGift', 'boosts', 'ignoreKlutz', 'spritenum', 'desc', 'shortDesc', 'countsAs'],
+	Conditions: ['duration', 'counterMax', 'noCopy', 'affectsFainted', 'desc', 'shortDesc', 'countsAs'],
 };
 
 const FIELDS: { [table in EffectTable]: Fields } = {
@@ -192,10 +194,11 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		}),
 		maxMove: object({ basePower: int(0, 1000) }),
 		contestType: oneOf(...used('Moves', entry => entry.contestType)), isNonstandard: nonstandard, gen: int(1, 9),
-		...Object.fromEntries(MOVE_BOOLEANS.map(field => [field, bool])), ...desc,
+		...Object.fromEntries(MOVE_BOOLEANS.map(field => [field, bool])), ...desc, countsAs: countsAs('Moves'),
 	},
 	Abilities: {
 		rating: num(-1, 5), suppressWeather: bool, isNonstandard: nonstandard, gen: int(1, 9), ...desc,
+		countsAs: countsAs('Abilities'),
 		flags: record(oneOf(...used('Abilities', entry => Object.keys(entry.flags || {}))), oneOf(1)),
 	},
 	Items: {
@@ -204,10 +207,11 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		naturalGift: object({ basePower: int(0, 250), type }), itemUser: list(species, 30), forcedForme: species,
 		megaStone: record(species, species), boosts, zMove: either(oneOf(true), move), zMoveFrom: move, zMoveType: type,
 		onPlate: type, onMemory: type, onDrive: type, isNonstandard: nonstandard, gen: int(1, 9),
-		...Object.fromEntries(ITEM_BOOLEANS.map(field => [field, bool])), ...desc,
+		...Object.fromEntries(ITEM_BOOLEANS.map(field => [field, bool])), ...desc, countsAs: countsAs('Items'),
 	},
 	Conditions: {
 		duration: int(1, 100), counterMax: int(1, 10000), noCopy: bool, affectsFainted: bool, ...desc,
+		countsAs: countsAs('Conditions'),
 	},
 };
 
@@ -356,6 +360,11 @@ function checkEffect(
 	}
 	const locked = unlimited ? undefined : Object.keys(fields).find(field => !EDITABLE[table].includes(field));
 	if (locked) throw new Chat.ErrorMessage(`"${locked}" can only be changed in official dexes.`);
+	for (let parent = fields.countsAs && toID(fields.countsAs), steps = 0; parent; parent = data[table][parent]?.countsAs) {
+		if (parent === effectid || ++steps > 50) {
+			throw new Chat.ErrorMessage(`${name} can't count as itself, even through other effects.`);
+		}
+	}
 	const keep = old?.inheritsfrom === inheritsfrom;
 	const start = keep ? old!.data : !base ? BLANK[table] : {};
 	const entry: EffectEntry = {

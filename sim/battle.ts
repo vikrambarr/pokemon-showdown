@@ -15,6 +15,7 @@
  */
 
 import { Dex, toID } from './dex';
+import { countsAs } from './counts-as';
 import type { DexData } from './dex-custom';
 import { Teams } from './teams';
 import { Field } from './field';
@@ -1840,7 +1841,7 @@ export class Battle {
 				return side.pokemon.every(pokemon => (
 					pokemon.fainted ||
 					// frozen pokemon can't thaw in gen 1 without outside help
-					pokemon.status === 'frz' ||
+					countsAs(this.dex, pokemon.status, 'frz') ||
 					// a pokemon can't lose PP if it Transforms into a pokemon with only Transform
 					(pokemon.moves.every(moveid => moveid === 'transform') && foeAllTransform) ||
 					// Struggle can't damage yourself if every foe is a Ghost
@@ -2132,7 +2133,7 @@ export class Battle {
 			}
 			if (targetDamage !== 0) targetDamage = this.clampIntRange(targetDamage, 1);
 
-			if (effect.id !== 'strugglerecoil') { // Struggle recoil is not affected by effects
+			if (!countsAs(this.dex, effect.id, 'strugglerecoil')) { // Struggle recoil is not affected by effects
 				if (effect.effectType === 'Weather' && !target.runStatusImmunity(effect.id)) {
 					this.debug('weather immunity');
 					retVals[i] = 0;

@@ -1,3 +1,4 @@
+import { countsAs } from '../../../sim/counts-as';
 import { Scripts as Insurgence } from '../gen9insurgence/scripts';
 import { Scripts as Mariomon } from '../gen9mariomon/scripts';
 import { Scripts as Pokeathlon } from '../gen9pokeathlon/scripts';
@@ -89,7 +90,7 @@ export const Scripts: ModdedBattleScriptsData = {
 					}
 				}
 				if (
-					move.alwaysHit || (move.id === 'toxic' && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
+					move.alwaysHit || (countsAs(this.battle.dex, move.id, 'toxic') && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
 					(move.target === 'self' && move.category === 'Status' && !target.isSemiInvulnerable())
 				) {
 					accuracy = true;

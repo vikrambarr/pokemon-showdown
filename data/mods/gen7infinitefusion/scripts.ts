@@ -1,3 +1,4 @@
+import { countedAs, countsAs } from '../../../sim/counts-as';
 import { toID } from '../../../sim/dex';
 import { Field } from '../../../sim/field';
 import { Pokemon } from '../../../sim/pokemon';
@@ -312,7 +313,8 @@ export const Scripts: ModdedBattleScriptsData = {
 			if (this.ignoringAbility()) return false;
 			if (Array.isArray(ability)) return ability.some(abil => this.hasAbility(abil));
 			ability = this.battle.toID(ability);
-			return this.ability === ability || !!this.volatiles['ability:' + ability];
+			return countsAs(this.battle.dex, this.ability, ability) ||
+				[ability, ...countedAs(this.battle.dex, ability)].some(id => !!this.volatiles['ability:' + id]);
 		},
 		transformInto(pokemon, effect) {
 			if (!Pokemon.prototype.transformInto.call(this, pokemon, effect || undefined)) return false;

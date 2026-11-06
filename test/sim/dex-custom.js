@@ -265,4 +265,80 @@ describe('Custom dexes', () => {
 		assert(!Dex.types.get('Cosmic').exists);
 		releaseDex(dex);
 	});
+
+	it('should let copies count as their originals, alongside them', () => {
+		const dex = buildDex({
+			...DATA, hash: 'simcounts', species: ['blissey', 'snorlax', 'machamp'], effects: {
+				Items: { hoverdisc: { inherit: 'airballoon', data: { name: 'Hover Disc', countsAs: 'airballoon' } } },
+				Abilities: { floaty: { inherit: 'levitate', data: { name: 'Floaty', countsAs: 'levitate' } } },
+				Moves: {
+					glasswall: { inherit: 'reflect', data: { name: 'Glass Wall', countsAs: 'reflect' } },
+					guardup: { inherit: 'protect', data: { name: 'Guard Up', countsAs: 'protect' } },
+				},
+				Conditions: { scorched: { inherit: 'sunnyday', data: { name: 'Scorched', countsAs: 'sunnyday' } } },
+			},
+		});
+		const format = buildFormat(dex, { name: '[Sim Test] Anything', ruleset: [] });
+		const start = (p1, p2) => {
+			const battle = new Battle({ formatid: 'simtestanything', format, seed: [1, 2, 3, 4] });
+			battle.setPlayer('p1', { team: [{ species: 'Machamp', ability: 'No Guard', evs: {}, ...p1 }] });
+			battle.setPlayer('p2', { team: [{ species: 'Blissey', ability: 'Natural Cure', evs: {}, ...p2 }] });
+			return battle;
+		};
+
+		let battle = start({ moves: ['earthquake'] }, { item: 'hoverdisc', moves: ['splash'] });
+		const blissey = battle.p2.active[0];
+		assert.equal(blissey.getItem().name, 'Hover Disc');
+		assert(blissey.hasItem('airballoon'));
+		assert.equal(blissey.isGrounded(), false);
+		battle.makeChoices('move earthquake', 'move splash');
+		assert.equal(blissey.hp, blissey.maxhp);
+		assert(battle.log.some(line => line.startsWith('|-immune|p2a: Blissey')));
+
+		battle = start({ moves: ['earthquake'] }, { ability: 'Floaty', moves: ['splash'] });
+		battle.makeChoices('move earthquake', 'move splash');
+		assert.equal(battle.p2.active[0].hp, battle.p2.active[0].maxhp);
+
+		battle = start({ moves: ['brickbreak', 'tackle'] }, { moves: ['glasswall', 'reflect'] });
+		battle.makeChoices('move tackle', 'move glasswall');
+		battle.makeChoices('move tackle', 'move reflect');
+		const side = battle.p2;
+		assert(side.sideConditions['glasswall'] && side.sideConditions['reflect']);
+		assert.equal(side.getSideCondition('reflect').id, 'reflect');
+		battle.makeChoices('move brickbreak', 'move glasswall');
+		assert(!side.sideConditions['glasswall'] && !side.sideConditions['reflect']);
+		assert(battle.log.includes('|-sideend|p2: Player 2|Glass Wall'));
+
+		battle = start({ moves: ['feint'] }, { moves: ['guardup'] });
+		battle.makeChoices('move feint', 'move guardup');
+		assert(battle.log.some(line => line.includes('|-activate|p2a: Blissey|move: Feint')));
+
+		battle = start({ moves: ['weatherball'] }, { moves: ['splash'] });
+		battle.field.setWeather('scorched', 'debug');
+		const ball = battle.dex.getActiveMove('weatherball');
+		ball.onModifyType.call(battle, ball, battle.p1.active[0]);
+		assert.equal(ball.type, 'Fire');
+		assert(battle.field.isWeather('sunnyday'));
+		assert(dex.data.Moves.weatherball.onModifyType.toString().includes('case "scorched"'));
+		assert(!Dex.data.Moves.weatherball.onModifyType.toString().includes('scorched'));
+		releaseDex(dex);
+
+		const insurgence = buildDex({
+			...DATA, hash: 'simcountsmod', mod: 'gen9insurgence', species: ['blissey'],
+			effects: { Items: { hoverdisc: { inherit: 'airballoon', data: { name: 'Hover Disc', countsAs: 'airballoon' } } } },
+		});
+		const modBattle = new Battle({ formatid: 'simtestanything', format: buildFormat(insurgence, { name: '[Sim Test] Anything', ruleset: [] }) });
+		for (const side of ['p1', 'p2']) {
+			modBattle.setPlayer(side, { team: [{ species: 'Blissey', ability: 'Natural Cure', item: 'hoverdisc', moves: ['splash'], evs: {} }] });
+		}
+		assert.equal(modBattle.p1.active[0].isGrounded(), false);
+		releaseDex(insurgence);
+
+		const plain = buildDex({ ...DATA, hash: 'simplain' });
+		const plainBattle = new Battle({ formatid: 'simtestanything', format: buildFormat(plain, { name: '[Sim Test] Anything', ruleset: [] }) });
+		plainBattle.setPlayer('p1', { team: [set('Voltlet')] });
+		plainBattle.setPlayer('p2', { team: [set('Voltlet')] });
+		assert(!require('util').types.isProxy(plainBattle.p1.active[0].volatiles));
+		releaseDex(plain);
+	});
 });

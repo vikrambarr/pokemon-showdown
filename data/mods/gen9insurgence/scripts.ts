@@ -1,3 +1,4 @@
+import { countsAs } from '../../../sim/counts-as';
 import { Rulesets } from '../../pokeathlon-rulesets';
 
 export const Scripts: ModdedBattleScriptsData = {
@@ -49,12 +50,14 @@ export const Scripts: ModdedBattleScriptsData = {
 				return false;
 			}
 
-			if (source?.hasAbility('venomous') && status.id === 'psn') status = this.battle.dex.conditions.get('tox');
+			if (source?.hasAbility('venomous') && countsAs(this.battle.dex, status.id, 'psn')) {
+				status = this.battle.dex.conditions.get('tox');
+			}
 
 			if (
 				!ignoreImmunities && status.id && !(source?.hasAbility('corrosion') && ['tox', 'psn'].includes(status.id))
 			) {
-				if (!this.runStatusImmunity(status.id === 'tox' ? 'psn' : status.id)) {
+				if (!this.runStatusImmunity(countsAs(this.battle.dex, status.id, 'tox') ? 'psn' : status.id)) {
 					this.battle.debug('immune to status');
 					if ((sourceEffect as Move)?.status) {
 						this.battle.add('-immune', this);
@@ -175,12 +178,12 @@ export const Scripts: ModdedBattleScriptsData = {
 			if ('smackdown' in this.volatiles) return true;
 			if ('groundingstomp' in this.volatiles) return true;
 			const item = (this.ignoringItem() ? '' : this.item);
-			if (item === 'ironball') return true;
+			if (countsAs(this.battle.dex, item, 'ironball')) return true;
 			if (!negateImmunity && this.hasType('Flying') && !(this.hasType('???') && 'roost' in this.volatiles)) return false;
 			if (this.hasAbility(['levitate', 'eelevate', 'omnitype']) && !this.battle.suppressingAbility(this)) return null;
 			if ('magnetrise' in this.volatiles) return false;
 			if ('telekinesis' in this.volatiles) return false;
-			return item !== 'airballoon';
+			return !countsAs(this.battle.dex, item, 'airballoon');
 		},
 	},
 };

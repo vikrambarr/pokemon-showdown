@@ -24,6 +24,7 @@ import type { RequestState } from './battle';
 import { Pokemon, type EffectState } from './pokemon';
 import { State } from './state';
 import { toID } from './dex';
+import { countedAs, countedCondition, countingHolder, countsAs } from './counts-as';
 import { type Move } from './dex-moves';
 
 /** A single action that can be chosen. Choices will have one Action for each pokemon. */
@@ -263,10 +264,10 @@ export class Side {
 		this.zMoveUsed = false;
 		this.dynamaxUsed = this.battle.gen !== 8;
 
-		this.sideConditions = {};
+		this.sideConditions = countingHolder(this.battle.dex, {});
 		this.slotConditions = [];
 		// Array#fill doesn't work for this
-		for (let i = 0; i < this.active.length; i++) this.slotConditions[i] = {};
+		for (let i = 0; i < this.active.length; i++) this.slotConditions[i] = countingHolder(this.battle.dex, {});
 
 		this.activeRequest = null;
 		this.choice = {
@@ -419,7 +420,7 @@ export class Side {
 		if (!source.getSlot) source = (source as any as Side).active[0];
 
 		status = this.battle.dex.conditions.get(status);
-		if (this.sideConditions[status.id]) {
+		if (Object.hasOwn(this.sideConditions, status.id)) {
 			if (!(status as any).onSideRestart) return false;
 			return this.battle.singleEvent('SideRestart', status, this.sideConditions[status.id], this, source, sourceEffect);
 		}
@@ -443,7 +444,7 @@ export class Side {
 	}
 
 	getSideCondition(status: string | Effect): Effect | null {
-		status = this.battle.dex.conditions.get(status) as Effect;
+		status = countedCondition(this.battle.dex, this.sideConditions, status) as Effect;
 		if (!this.sideConditions[status.id]) return null;
 		return status;
 	}
@@ -455,7 +456,8 @@ export class Side {
 
 	removeSideCondition(status: string | Effect): boolean {
 		status = this.battle.dex.conditions.get(status) as Effect;
-		if (!this.sideConditions[status.id]) return false;
+		const copies: string[] = countedAs(this.battle.dex, status.id).filter(id => this.removeSideCondition(id));
+		if (!this.sideConditions[status.id]) return copies.length > 0;
 		this.battle.singleEvent('SideEnd', status, this.sideConditions[status.id], this);
 		delete this.sideConditions[status.id];
 		return true;
@@ -471,7 +473,7 @@ export class Side {
 		if (!source) throw new Error(`setting sidecond without a source`);
 
 		status = this.battle.dex.conditions.get(status);
-		if (this.slotConditions[target][status.id]) {
+		if (Object.hasOwn(this.slotConditions[target], status.id)) {
 			if (!status.onRestart) return false;
 			return this.battle.singleEvent('Restart', status, this.slotConditions[target][status.id], this, source, sourceEffect);
 		}
@@ -496,7 +498,7 @@ export class Side {
 
 	getSlotCondition(target: Pokemon | number, status: string | Effect) {
 		if (target instanceof Pokemon) target = target.position;
-		status = this.battle.dex.conditions.get(status) as Effect;
+		status = countedCondition(this.battle.dex, this.slotConditions[target], status) as Effect;
 		if (!this.slotConditions[target][status.id]) return null;
 		return status;
 	}
@@ -504,7 +506,8 @@ export class Side {
 	removeSlotCondition(target: Pokemon | number, status: string | Effect) {
 		if (target instanceof Pokemon) target = target.position;
 		status = this.battle.dex.conditions.get(status) as Effect;
-		if (!this.slotConditions[target][status.id]) return false;
+		const copies: string[] = countedAs(this.battle.dex, status.id).filter(id => this.removeSlotCondition(target, id));
+		if (!this.slotConditions[target][status.id]) return copies.length > 0;
 		this.battle.singleEvent('End', status, this.slotConditions[target][status.id], this.active[target]);
 		delete this.slotConditions[target][status.id];
 		return true;
@@ -869,7 +872,7 @@ export class Side {
 				}
 			}
 		}
-		if (req.moves.every(m => m.disabled || m.id === 'struggle')) {
+		if (req.moves.every(m => m.disabled || countsAs(this.battle.dex, m.id, 'struggle'))) {
 			if (req.canMegaEvo) {
 				req.canMegaEvo = false;
 				updated = true;
