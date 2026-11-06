@@ -151,8 +151,47 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 		entries.modified[table] = modified;
 	}
 	entries.names = Object.fromEntries(entries.Conditions.map((id: ID) => [id, loaded.dex.data.Conditions[id].name || id]));
+	entries.choices = choicesOf(loaded, entries);
+	entries.Pokedex = loaded.data.species;
 	entriesCache.set(loaded, entries);
 	return entries;
+}
+
+const CHOICE_FIELDS = ['volatileStatus', 'sideCondition', 'slotCondition', 'pseudoWeather', 'weather', 'terrain'];
+
+function choicesOf(loaded: Dexes.LoadedDex, entries: AnyObject) {
+	const data = loaded.dex.data;
+	const choices: { [field: string]: Set<ID> } = { all: new Set() };
+	for (const field of CHOICE_FIELDS) choices[field] = new Set();
+	const collect = (value: any) => {
+		if (Array.isArray(value)) return value.forEach(collect);
+		if (!value || typeof value !== 'object') return;
+		for (const key in value) {
+			if (CHOICE_FIELDS.includes(key) && typeof value[key] === 'string') choices[key].add(toID(value[key]));
+			else if (['secondary', 'secondaries', 'self', 'fling'].includes(key)) collect(value[key]);
+		}
+	};
+	for (const table of ['Moves', 'Abilities', 'Items'] as const) {
+		for (const id of entries[table]) {
+			collect(data[table][id]);
+			if (data[table][id].condition) choices.all.add(id);
+		}
+	}
+	for (const id of entries.Conditions) {
+		choices.all.add(id);
+		if (data.Conditions[id].effectType === 'Weather') choices.weather.add(id);
+	}
+	const named = (id: ID) => data.Moves[id]?.name || data.Abilities[id]?.name || data.Items[id]?.name ||
+		data.Conditions[id]?.name || id;
+	const names: { [id: string]: string } = {};
+	const result: AnyObject = { names };
+	for (const field in choices) {
+		result[field] = [...choices[field]].filter(id => id && (data.Conditions[id] || data.Moves[id] ||
+			data.Abilities[id] || data.Items[id]));
+		for (const id of result[field]) names[id] = named(id);
+		result[field].sort((a: ID, b: ID) => names[a].localeCompare(names[b]));
+	}
+	return result;
 }
 
 function summary(loaded: Dexes.LoadedDex) {
