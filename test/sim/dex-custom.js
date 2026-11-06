@@ -141,13 +141,20 @@ describe('Custom dexes', () => {
 		const prefixed = buildDex({
 			...DATA, hash: 'simprefixes', effects: {
 				Items: { lifeorb: { data: {}, events: { onModifyDamage: 'onSourceModifyDamage' } } },
-				Abilities: { technician: { data: {}, events: { onBasePower: 'onAllyBasePower' } } },
+				Abilities: {
+					technician: { data: {}, events: { onBasePower: 'onAllyBasePower' } },
+					thickfat: { data: {}, events: { onSourceModifyAtk: 'onModifyAtk', onSourceModifySpA: 'onAllyModifyDef' } },
+				},
 				Moves: { reflect: { data: {}, events: { 'condition.onAnyModifyDamage': 'onFoeModifyDamage' } } },
 			},
 		});
 		assert.equal(prefixed.items.get('lifeorb').onSourceModifyDamage, Dex.data.Items.lifeorb.onModifyDamage);
 		assert.equal(prefixed.items.get('lifeorb').onModifyDamage, undefined);
 		assert.equal(prefixed.abilities.get('technician').onAllyBasePowerPriority, Dex.data.Abilities.technician.onBasePowerPriority);
+		const thickfat = prefixed.abilities.get('thickfat');
+		assert.equal(thickfat.onModifyAtk, Dex.data.Abilities.thickfat.onSourceModifyAtk);
+		assert.equal(thickfat.onAllyModifyDef, Dex.data.Abilities.thickfat.onSourceModifySpA);
+		assert.equal(thickfat.onSourceModifyAtk, undefined);
 		assert.equal(prefixed.conditions.get('reflect').onFoeModifyDamage, Dex.data.Moves.reflect.condition.onAnyModifyDamage);
 		releaseDex(prefixed);
 		const facade = { Moves: { facade: { data: {}, events: { onBasePower: 'onSourceBasePower' } } } };

@@ -247,8 +247,10 @@ export function eventTargets(key: string, fn: Function, held = true) {
 	const match = STAT_EVENT.exec(key);
 	if (!match) return [];
 	const [, prefix, stat] = match;
-	const stats = ['Atk', 'SpA', 'Def', 'SpD', ...(fn.length <= 2 && prefix !== 'Source' ? ['Spe'] : [])];
-	return stats.filter(other => other !== stat).map(other => `on${prefix}Modify${other}`);
+	return (held ? ['', 'Source', 'Ally', 'Foe', 'Any'] : [prefix]).flatMap(other => (
+		['Atk', 'SpA', 'Def', 'SpD', ...(fn.length <= 2 && other !== 'Source' ? ['Spe'] : [])]
+			.filter(next => other !== prefix || next !== stat).map(next => `on${other}Modify${next}`)
+	));
 }
 
 export function checkSlot(slot: Slot, value: unknown, data: AnyObject): string | number {
