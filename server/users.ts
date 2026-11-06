@@ -792,7 +792,7 @@ export class User extends Chat.MessageContext {
 		}
 
 		this.handleRename(name, userid, newlyRegistered, userType);
-		void Punishments.checkIp(this, connection); // namelock enforcement and the like after merge
+		void Punishments.checkIp(connection.user || this, connection); // namelock enforcement and the like after merge
 	}
 
 	handleRename(name: string, userid: ID, newlyRegistered: boolean, userType: string) {
@@ -844,6 +844,7 @@ export class User extends Chat.MessageContext {
 			} else if (userType === '10') {
 				this.autoconfirmed = userid;
 				this.isUserBot = true;
+				this.settings.allowLadderBots = true;
 			}
 		}
 		if (Users.isTrusted(userid)) {
