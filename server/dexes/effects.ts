@@ -285,6 +285,7 @@ export function editOf(
 }
 
 const lastKey = (path: string) => path.slice(path.lastIndexOf('.') + 1);
+const held = (table: EffectTable, path: string) => table !== 'Moves' || path.startsWith('condition.');
 
 export function resolveEdits(dex: ModdedDex, entry: EffectEntry, data: AnyObject, stale: string[]) {
 	const { base } = baseEffect(dex, entry.effecttable, entry.effectid, editOf(entry));
@@ -310,7 +311,8 @@ export function resolveEdits(dex: ModdedDex, entry: EffectEntry, data: AnyObject
 	const events: NonNullable<EffectEdit['events']> = {};
 	for (const path in entry.events || {}) {
 		const fn = getPath(base, path);
-		if (typeof fn === 'function' && eventTargets(lastKey(path), fn).includes(entry.events[path])) {
+		const targets = typeof fn === 'function' ? eventTargets(lastKey(path), fn, held(entry.effecttable, path)) : [];
+		if (targets.includes(entry.events[path])) {
 			events[path] = entry.events[path];
 		} else {
 			stale.push(`${entry.data.name}: ${path} as ${entry.events[path]} (the code changed)`);
@@ -394,7 +396,7 @@ function checkEffect(
 		for (const path in input.events) {
 			const fn = getPath(base, path);
 			const key = lastKey(path);
-			const targets = typeof fn === 'function' ? eventTargets(key, fn) : [];
+			const targets = typeof fn === 'function' ? eventTargets(key, fn, held(table, path)) : [];
 			if (!targets.length) throw new Chat.ErrorMessage(`"${path}" isn't a handler that can work on another stat.`);
 			const value = input.events[path];
 			const suffix = Object.keys(EVENT_STATS).find(other => EVENT_STATS[other] === toID(value));
@@ -522,7 +524,7 @@ export function describeEffect(
 	const handlers = effectSlots(dex, table, effectid, edit, name, data).map(({ path, fn, handler, values }) => ({
 		path,
 		event: edit.events?.[path] || lastKey(path),
-		events: eventTargets(lastKey(path), fn),
+		events: eventTargets(lastKey(path), fn, held(table, path)),
 		editable: !!handler,
 		code: handler?.src,
 		slots: handler?.slots.map((found, index) => ({
@@ -562,8 +564,9 @@ export function describeText(dex: ModdedDex, table: EffectTable, edit: EffectEdi
 	};
 	numbers(edit.data, base);
 	for (const path in edit.events) {
-		const [from, to] = [lastKey(path), edit.events[path]].map(key => STAT_NAMES[EVENT_STATS[STAT_EVENT.exec(key)![2]]]);
-		pairs.push([from, to]);
+		const statOf = (key: string) => STAT_NAMES[EVENT_STATS[STAT_EVENT.exec(key)?.[2] || '']];
+		const [from, to] = [lastKey(path), edit.events[path]].map(statOf);
+		if (from && to) pairs.push([from, to]);
 	}
 	const replace = (description: string | undefined) => {
 		if (!description) return description;

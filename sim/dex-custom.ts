@@ -113,7 +113,7 @@ function replaceAt(effect: AnyObject, path: string, fn: Function, compiled: Func
 	if (effect?.[last] === fn) effect[last] = compiled;
 }
 
-export function moveEvents(effect: AnyObject, base: AnyObject, events: { [path: string]: string }) {
+export function moveEvents(effect: AnyObject, base: AnyObject, events: { [path: string]: string }, held = true) {
 	const moves = new Map<AnyObject, [string, string][]>();
 	for (const path of Object.keys(events)) {
 		const keys = path.split('.');
@@ -126,8 +126,9 @@ export function moveEvents(effect: AnyObject, base: AnyObject, events: { [path: 
 		}
 		const fn = original?.[key];
 		if (!owner || typeof fn !== 'function' || typeof owner[key] !== 'function') continue;
-		if (!eventTargets(key, fn).includes(events[path])) {
-			throw new Error(`${path} can't become ${events[path]}: it can be ${eventTargets(key, fn).join(', ') || 'nothing else'}.`);
+		const targets = eventTargets(key, fn, held || path.startsWith('condition.'));
+		if (!targets.includes(events[path])) {
+			throw new Error(`${path} can't become ${events[path]}: it can be ${targets.join(', ') || 'nothing else'}.`);
 		}
 		if (!moves.has(owner)) moves.set(owner, []);
 		moves.get(owner)!.push([key, events[path]]);
@@ -187,7 +188,7 @@ function resolveEffects(parent: ModdedDex, effects: NonNullable<DexLayer['effect
 			}
 			if (replacements.length) replaceAt(effect, path, fn, compileHandler(handler, replacements));
 		}
-		if (base && isObject(edit.events)) moveEvents(effect, base, edit.events);
+		if (base && isObject(edit.events)) moveEvents(effect, base, edit.events, table !== 'Moves');
 	}
 }
 

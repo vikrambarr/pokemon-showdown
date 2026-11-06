@@ -37,6 +37,7 @@ export const STATUSES = ['brn', 'par', 'slp', 'frz', 'psn', 'tox'];
 export const CATEGORIES = ['Physical', 'Special', 'Status'];
 export const MESSAGE = /^(?:\[(?:from|of)\] )?(?:move|ability|item): /;
 export const STAT_EVENT = /^on(|Source|Ally|Foe|Any)Modify(Atk|SpA|Def|SpD|Spe)$/;
+export const PREFIX_EVENT = /^on(|Source|Ally|Foe|Any)(BasePower|ModifyDamage|ModifyAccuracy|ModifyCritRatio)$/;
 export const EVENT_SUFFIXES = ['Priority', 'Order', 'SubOrder'];
 
 const PROTOCOL = ['add', 'addMove', 'addSplit', 'attrLastMove', 'debug', 'hint', 'retargetLastMove'];
@@ -236,7 +237,13 @@ export function handlersOf(effect: AnyObject, path = '', found: [string, Functio
 	return found;
 }
 
-export function eventTargets(key: string, fn: Function) {
+export function eventTargets(key: string, fn: Function, held = true) {
+	const prefixed = PREFIX_EVENT.exec(key);
+	if (prefixed) {
+		if (!held) return [];
+		const prefixes = ['', 'Source', 'Ally', 'Foe', 'Any'].filter(other => other !== prefixed[1]);
+		return prefixes.map(other => `on${other}${prefixed[2]}`);
+	}
 	const match = STAT_EVENT.exec(key);
 	if (!match) return [];
 	const [, prefix, stat] = match;
