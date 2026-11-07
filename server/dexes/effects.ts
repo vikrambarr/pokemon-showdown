@@ -529,7 +529,7 @@ export function describeEffect(
 		editable: !!handler,
 		code: handler?.src,
 		slots: handler?.slots.map((found, index) => ({
-			index, kind: found.kind, tables: found.tables, value: values[index], original: found.value, start: found.start,
+			index, kind: found.kind, tables: found.tables, condition: found.condition, key: found.key, value: values[index], original: found.value, start: found.start,
 			edited: !!entry?.slots[path]?.[index], length: found.end - found.start, ...lineOf(handler.src, found.start, found.end),
 		})) || [],
 	}));

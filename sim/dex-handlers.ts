@@ -19,6 +19,7 @@ export interface Slot {
 	value: string | number;
 	key?: boolean;
 	tables?: string[];
+	condition?: string;
 	form?: 'id' | 'name';
 	context?: SlotContext;
 }
@@ -40,6 +41,19 @@ export const STAT_EVENT = /^on(|Source|Ally|Foe|Any)Modify(Atk|SpA|Def|SpD|Spe)$
 export const PREFIX_EVENT = /^on(|Source|Ally|Foe|Any)(BasePower|ModifyDamage|ModifyAccuracy|ModifyCritRatio)$/;
 export const EVENT_SUFFIXES = ['Priority', 'Order', 'SubOrder'];
 
+const CONDITION_CALLS: { [method: string]: string } = {
+	addVolatile: 'volatileStatus', removeVolatile: 'volatileStatus', getVolatile: 'volatileStatus',
+	addSideCondition: 'sideCondition', removeSideCondition: 'sideCondition', getSideCondition: 'sideCondition',
+	addSlotCondition: 'slotCondition', removeSlotCondition: 'slotCondition', getSlotCondition: 'slotCondition',
+	addPseudoWeather: 'pseudoWeather', removePseudoWeather: 'pseudoWeather', getPseudoWeather: 'pseudoWeather',
+	setWeather: 'weather', isWeather: 'weather', setTerrain: 'terrain', isTerrain: 'terrain',
+};
+const CONDITION_MEMBERS: { [property: string]: string } = {
+	volatiles: 'volatileStatus', sideConditions: 'sideCondition', slotConditions: 'slotCondition', pseudoWeather: 'pseudoWeather',
+	weather: 'weather', terrain: 'terrain',
+};
+const CONDITION_FIELDS = ['volatileStatus', 'sideCondition', 'slotCondition', 'pseudoWeather', 'weather', 'terrain'];
+const conditionUses = new WeakMap<AnyObject, { [id: string]: Set<string> }>();
 const PROTOCOL = ['add', 'addMove', 'addSplit', 'attrLastMove', 'debug', 'hint', 'retargetLastMove'];
 const parsed = new WeakMap<AnyObject, WeakMap<Function, Handler | null>>();
 
@@ -102,6 +116,77 @@ function comparedWith(node: AnyObject, stack: AnyObject[]) {
 	if (parent.type === 'AssignmentExpression') other = parent.left;
 	if (parent.type === 'SwitchCase') other = stack[stack.length - 2].discriminant;
 	return other?.type === 'MemberExpression' && !other.computed ? other.property.name as string : '';
+}
+
+function usesOf(data: AnyObject) {
+	let uses = conditionUses.get(data);
+	if (uses) return uses;
+	const found: { [id: string]: Set<string> } = {};
+	const collect = (value: any) => {
+		if (Array.isArray(value)) return value.forEach(collect);
+		if (!value || typeof value !== 'object') return;
+		for (const key in value) {
+			if (CONDITION_FIELDS.includes(key) && typeof value[key] === 'string') {
+				(found[toID(value[key])] ||= new Set()).add(key);
+			} else if (['secondary', 'secondaries', 'self'].includes(key)) {
+				collect(value[key]);
+			}
+		}
+	};
+	for (const table of ['Moves', 'Abilities', 'Items']) Object.values(data[table]).forEach(collect);
+	for (const id in data.Conditions) {
+		if (data.Conditions[id].effectType === 'Weather') (found[id] ||= new Set()).add('weather');
+	}
+	uses = found;
+	conditionUses.set(data, uses);
+	return uses;
+}
+
+function calledMethod(node: AnyObject) {
+	if (node?.type === 'ChainExpression') node = node.expression;
+	return node?.type === 'CallExpression' && node.callee.type === 'MemberExpression' && !node.callee.computed ?
+		node.callee.property.name as string : '';
+}
+
+function conditionOf(node: AnyObject, stack: AnyObject[], comparedTo: string, data: AnyObject, handler: string | null) {
+	let parent = stack[stack.length - 1];
+	if (parent.type === 'ArrayExpression') {
+		const grandparent = stack[stack.length - 2];
+		if (!(grandparent.type === 'CallExpression' && grandparent.arguments[0] === parent)) {
+			const uses = usesOf(data);
+			const known = parent.elements.filter((element: AnyObject) => (
+				element?.type === 'Literal' && typeof element.value === 'string' && uses[toID(element.value)]
+			));
+			const fields = new Set(known.flatMap((element: AnyObject) => [...uses[toID(element.value)]]));
+			return fields.size === 1 && known.length * 2 >= parent.elements.length ? [...fields][0] : undefined;
+		}
+		node = parent;
+		parent = grandparent;
+	}
+	if (parent.type === 'CallExpression') {
+		const method = calledMethod(parent);
+		return parent.arguments.indexOf(node) === (method.endsWith('SlotCondition') ? 1 : 0) ? CONDITION_CALLS[method] : undefined;
+	}
+	if (parent.type === 'Property' && parent.value === node && !parent.computed && CONDITION_FIELDS.includes(parent.key.name)) {
+		return parent.key.name;
+	}
+	const other = parent.type === 'SwitchCase' ? stack[stack.length - 2].discriminant :
+		parent.type === 'BinaryExpression' ? (parent.left === node ? parent.right : parent.left) : null;
+	if (calledMethod(other) === 'effectiveWeather') return 'weather';
+	if (other?.type === 'Identifier' && other.name === 'volatile') return 'volatileStatus';
+	if (other?.type === 'MemberExpression' && !other.computed && other.property.name === 'id') {
+		const getter = calledMethod(other.object);
+		if (getter === 'getWeather' || getter === 'getTerrain') return getter === 'getWeather' ? 'weather' : 'terrain';
+	}
+	if (other && ['onWeather', 'onImmunity'].includes(handler!) && usesOf(data)[toID(node.value)]?.has('weather')) {
+		return 'weather';
+	}
+	if (parent.type === 'MemberExpression' && parent.computed && parent.property === node) {
+		let object = parent.object;
+		if (object.type === 'MemberExpression' && object.computed) object = object.object;
+		if (object.type === 'MemberExpression' && !object.computed) return CONDITION_MEMBERS[object.property.name];
+	}
+	return CONDITION_FIELDS.includes(comparedTo) ? comparedTo : undefined;
 }
 
 function contextOf(node: AnyObject, parent: AnyObject, offset: number): Slot['context'] {
@@ -206,6 +291,8 @@ function find(src: string, data: AnyObject): Handler | null {
 		if (comparedTo === 'effectType') return;
 		const kind = classify(node.value, comparedTo, data);
 		if (!kind) return;
+		const condition = kind.kind === 'ref' ? conditionOf(node, stack, comparedTo, data, name) : undefined;
+		if (condition) Object.assign(kind, { tables: ['Conditions', 'Moves', 'Abilities', 'Items'], condition });
 		const context = ['ref', 'status'].includes(kind.kind!) ? contextOf(node, parent, offset) : undefined;
 		slots.push({
 			start: node.start - offset, end: node.end - offset, value: node.value, ...kind, ...(context ? { context } : {}),

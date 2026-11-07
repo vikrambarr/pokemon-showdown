@@ -5,6 +5,7 @@ import * as Dexes from '../dexes';
 import { EFFECT_NAMES, EFFECT_PLURALS } from '../dexes/effects';
 import type { Origin } from '../dexes/species';
 import type { EffectTable } from '../../sim/dex-custom';
+import { STATUSES, handlersOf, parseHandler } from '../../sim/dex-handlers';
 import { MAX_SPRITE_BYTES, SPRITE_KINDS, spriteURL, toKind, toSettings } from '../dexes/sprites';
 
 void Dexes.load().catch(err => Monitor.crashlog(err, 'Loading dexes'));
@@ -185,15 +186,27 @@ function choicesOf(loaded: Dexes.LoadedDex, entries: AnyObject) {
 			else if (['secondary', 'secondaries', 'self', 'fling'].includes(key)) collect(value[key]);
 		}
 	};
+	const collectCode = (entry: AnyObject) => {
+		for (const [, fn] of handlersOf(entry)) {
+			for (const slot of parseHandler(fn, data)?.slots || []) {
+				if (slot.condition) choices[slot.condition].add(toID(slot.value));
+			}
+		}
+	};
 	for (const table of ['Moves', 'Abilities', 'Items'] as const) {
 		for (const id of entries[table]) {
 			collect(data[table][id]);
+			collectCode(data[table][id]);
 			if (data[table][id].condition) choices.all.add(id);
 		}
 	}
 	for (const id of entries.Conditions) {
-		choices.all.add(id);
+		collectCode(data.Conditions[id]);
+		if (!STATUSES.includes(id) && data.Conditions[id].effectType !== 'Status' && !data.Pokedex[id]) choices.all.add(id);
 		if (data.Conditions[id].effectType === 'Weather') choices.weather.add(id);
+	}
+	for (const field of CHOICE_FIELDS) {
+		for (const id of choices[field]) choices.all.delete(id);
 	}
 	const named = (id: ID) => data.Moves[id]?.name || data.Abilities[id]?.name || data.Items[id]?.name ||
 		data.Conditions[id]?.name || id;
