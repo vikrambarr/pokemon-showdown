@@ -145,6 +145,10 @@ const species = slot('ref', { tables: ['Pokedex'], form: 'name' });
 const countsAs = (table: EffectTable) => slot('ref', { tables: [table], form: 'id' });
 const boosts = record(slot('stat', { value: 'atk', key: true }), int(-6, 6));
 const fraction = list(int(1, 100), 2);
+const animation: Check = (value, field) => {
+	if (typeof value !== 'string' || !(Dex.data.Moves as AnyObject)[value]) fail(field, `must be a move ID.`);
+	return value;
+};
 const desc = (short: number) => ({ desc: text(1024), shortDesc: text(short) });
 const nonstandard = oneOf(...used('Moves', entry => entry.isNonstandard), 'Custom');
 const secondaryFields: Fields = {
@@ -165,7 +169,7 @@ export const EDITABLE: { [table in EffectTable]: string[] } = {
 		'overrideDefensiveStat', 'overrideOffensivePokemon', 'overrideDefensivePokemon', 'damage', 'ohko', 'condition',
 		'breaksProtect', 'forceSwitch', 'hasCrashDamage', 'hasSheerForceBoost', 'ignoreAbility', 'ignoreDefensive', 'ignoreEvasion',
 		'infiltrates', 'multiaccuracy', 'sleepUsable', 'stealsBoosts', 'thawsTarget', 'tracksTarget', 'willCrit', 'desc', 'shortDesc',
-		'countsAs',
+		'countsAs', 'animations',
 	],
 	Abilities: ['flags', 'suppressWeather', 'desc', 'shortDesc', 'countsAs'],
 	Items: ['fling', 'naturalGift', 'boosts', 'ignoreKlutz', 'spritenum', 'desc', 'shortDesc', 'countsAs'],
@@ -191,6 +195,7 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		maxMove: object({ basePower: int(0, 1000) }),
 		contestType: oneOf(...used('Moves', entry => entry.contestType)), isNonstandard: nonstandard, gen: int(1, 9),
 		...Object.fromEntries(MOVE_BOOLEANS.map(field => [field, bool])), ...desc(55), countsAs: countsAs('Moves'),
+		animations: list(animation, 2),
 	},
 	Abilities: {
 		rating: num(-1, 5), suppressWeather: bool, isNonstandard: nonstandard, gen: int(1, 9), ...desc(90),
