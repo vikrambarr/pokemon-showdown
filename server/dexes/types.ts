@@ -19,8 +19,6 @@ export interface TypeEntry {
 	locked: boolean;
 }
 
-export const MAX_TYPES = 32;
-
 const CODES: { [multiplier: string]: number } = { 1: 0, 2: 1, 0.5: 2, 0: 3 };
 
 function conditions(dex: ModdedDex) {

@@ -6,7 +6,7 @@ import { EFFECT_NAMES, EFFECT_PLURALS } from '../dexes/effects';
 import type { Origin } from '../dexes/species';
 import type { EffectTable } from '../../sim/dex-custom';
 import { STATUSES, handlersOf, parseHandler } from '../../sim/dex-handlers';
-import { MAX_SPRITE_BYTES, SPRITE_KINDS, spriteURL, toKind, toSettings } from '../dexes/sprites';
+import { MAX_SPRITE_BYTES, SPRITE_KINDS, checkKind, spriteURL, toKind, toSettings } from '../dexes/sprites';
 
 void Dexes.load().catch(err => Monitor.crashlog(err, 'Loading dexes'));
 
@@ -238,6 +238,7 @@ function summary(loaded: Dexes.LoadedDex) {
 		updated: loaded.row.updated,
 		species: loaded.data.species.length,
 		entries: loaded.entries.size,
+		size: Dexes.dataSize(loaded),
 		counts: countsOf(loaded),
 		formats: [...loaded.formats.keys()].map(formatid => ({ id: formatid, name: Dex.formats.get(formatid).name })),
 	};
@@ -250,15 +251,14 @@ function spriteHTML(loaded: Dexes.LoadedDex, images: { [kind: string]: string })
 		const scale = Math.min(boxWidth / image.width, boxHeight / image.height);
 		const [width, height] = [Math.round(image.width * scale), Math.round(image.height * scale)];
 		const title = `${key.replace(':', ' ')}${image.artist ? ` by ${image.artist}` : ''}, uploaded by ${image.uploadername} to ${image.dexname}`;
-		return Utils.html`<img src="${spriteURL(image)}" alt="${key}" title="${title}" width="${width}" height="${height}"` +
-			(image.display.pixelated ? ` class="pixelated" />` : ` />`);
+		return Utils.html`<img src="${spriteURL(image)}" alt="${key}" title="${title}" width="${width}" height="${height}" class="pixelated" />`;
 	}).join(' ');
 }
 
 const UPLOAD_TIME = 5 * 60 * 1000;
 const MAX_UPLOADS = 20;
 const uploads = new Map<string, {
-	userid: ID, dex: string, name: string, kind: string, settings: AnyObject, expires: number,
+	userid: ID, dex: string, name: string, kind: string, settings: AnyObject, official: boolean, expires: number,
 }>();
 
 async function uploadURL(user: User, target: string) {
@@ -268,9 +268,10 @@ async function uploadURL(user: User, target: string) {
 	const loaded = await Dexes.editable(user, dexName);
 	const upload = {
 		userid: user.id, dex: loaded.row.dexid, name, kind: toKind(kind), settings: settings ? parseJSON(settings) : {},
-		expires: Date.now() + UPLOAD_TIME,
+		official: loaded.row.official, expires: Date.now() + UPLOAD_TIME,
 	};
-	toSettings(upload.settings);
+	checkKind(upload.kind, upload.official);
+	toSettings(upload.settings, upload.official);
 	for (const [token, other] of uploads) {
 		if (other.expires < Date.now()) uploads.delete(token);
 	}
@@ -332,7 +333,7 @@ async function receiveUpload(request: http.IncomingMessage, response: http.Serve
 	let size = 0;
 	for await (const chunk of request) {
 		size += chunk.length;
-		if (size > MAX_SPRITE_BYTES) return reply(413, { error: `Sprites can be at most ${MAX_SPRITE_BYTES / 1024}KB.` });
+		if (!upload.official && size > MAX_SPRITE_BYTES) return reply(413, { error: `Sprites can be at most ${MAX_SPRITE_BYTES / 1024}KB.` });
 		chunks.push(chunk);
 	}
 	const user = Users.get(upload.userid);
@@ -695,7 +696,7 @@ export const commands: Chat.ChatCommands = {
 		`/dexes world [dex], [world], [engine mod] - Changes the world of a dex you own, like /dexes create. Its Pokemon go back to the new world's, and custom or edited things that don't work on it are skipped until fixed or cleared.`,
 		`/dexes description [dex], [text] - Sets the description shown on a dex's page, up to ${Dexes.MAX_DESCRIPTION} characters. Leave the text out to remove it.`,
 		`/dexes clear [dex] - Deletes every custom or edited entry in a dex you own and puts back its world's Pokemon. Its formats are kept.`,
-		`/dexes official [dex], [on|off] - Official dexes, like a fangame's, have no limits on their size. Requires: ~`,
+		`/dexes official [dex], [on|off] - Official dexes, like a fangame's, have no limits: on their size, formats, editors, description or sprites. Requires: ~`,
 		`/dexes delete [dex] - Deletes a dex you own.`,
 		`/dexes add [dex], [pokemon], ... - Puts Pokemon from a dex's world into it, with their formes.`,
 		`/dexes remove [dex], [pokemon], ... - Takes Pokemon out of a dex, with their formes.`,
@@ -709,8 +710,8 @@ export const commands: Chat.ChatCommands = {
 		`/dexes type [dex], [JSON] - Makes or edits a type. "damageTaken" sets what it takes from other types, and "attacks" what it deals to them, as multipliers, like {"name": "Cosmic", "damageTaken": {"Dark": 2}, "attacks": {"Steel": 0.5}}. null undoes one. damageTaken can also make it immune (0) to things like sandstorm or par. If both sides set the same matchup, damageTaken wins. "color" (like "#7a5cc9") and "label" (up to 6 characters, like "COSMIC") set how a new type's icon looks.`,
 		`/dexes deletemove [dex], [name] - Deletes a custom move, or undoes edits to an existing one. Also: deleteability, deleteitem, deletecondition, deletetype.`,
 		`/dexes code [dex], [move|ability|item|condition], [name] - Shows the values in its code you can change, and what a copy loses.`,
-		`/dexes sprite [dex], [pokemon or item], [kind], [base64 PNG or GIF], [settings JSON] - Sets a sprite, shown scaled to fit. Kinds: front, back, front-shiny, back-shiny (shown at 96x96, up to 400x400), icon (40x30, up to 64x64), item (24x24, up to 64x64, items only). Add -f for a female sprite, like front-shiny-f or icon-f, and start with afd- for an April Fools' sprite, like afd-front. A cosmetic forme, like Gastrodon-East, gets its own sprites.`,
-		`Optional settings: {"artist": "who drew it", "pixelated": true, "flip": true (mirrored), "y": -16 (moves it up or down), "gen": 3 (placed like that generation's sprites)}. To change them, set the sprite again.`,
+		`/dexes sprite [dex], [pokemon or item], [kind], [base64 PNG or GIF], [settings JSON] - Sets a sprite, shown scaled to fit. Kinds: front, back, front-shiny, back-shiny (made at 96x96, up to 192x192), icon (40x30, up to 64x64), item (24x24, up to 64x64, items only). A cosmetic forme, like Gastrodon-East, gets its own sprites. Official dexes have no limits, and can also add -f for a female sprite, like front-shiny-f or icon-f, or start with afd- for an April Fools' sprite, like afd-front. Sprites you upload count toward your ${Dexes.megabytes(Dexes.MAX_STORAGE_BYTES)} of storage while any dex uses them, unless you upload them to an official dex.`,
+		`Optional settings: {"artist": "who drew it", "flip": true (mirrored)}. Official dexes can also set "y": -16 (moves it up or down) and "gen": 3 (placed like that generation's sprites). To change them, set the sprite again.`,
 		`/dexes upload [dex], [pokemon or item], [kind], [settings JSON] - Gives you a link to send a sprite to, for sprites too big for /dexes sprite, up to ${MAX_SPRITE_BYTES / 1024}KB. It works once, for ${UPLOAD_TIME / 60 / 1000} minutes, while you stay logged in.`,
 		`/dexes clearsprite [dex], [pokemon or item], [kind] - Stops using a sprite here.`,
 		`/dexes deletesprite [dex], [pokemon or item], [kind] - Deletes a sprite you uploaded, everywhere it was forked to.`,
@@ -726,6 +727,10 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		const list = toID(target) ? Dexes.search(target, account) :
 			[...Dexes.dexes.values()].filter(loaded => Dexes.listed(loaded, account));
 		return list.map(summary);
+	},
+	async dexstorage(target, user) {
+		const account = await viewer(user);
+		return { used: account ? Dexes.storageUsed(account) : 0, limit: Dexes.MAX_STORAGE_BYTES, data: Dexes.MAX_DATA_BYTES };
 	},
 	dex(target) {
 		const loaded = Dexes.findDex(target);

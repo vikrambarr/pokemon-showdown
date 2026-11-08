@@ -15,7 +15,7 @@ import { DOUBLES_TIERS, resolveEntries, TIERS, validateEntry, validateName, type
 import {
 	describeEffect, describeText, EDITABLE, EFFECT_NAMES, lookupTables, resolveEdits, validateEffect, type EffectEntry,
 } from './effects';
-import { MAX_TYPES, resolveTypes, validateType, type TypeEntry } from './types';
+import { resolveTypes, validateType, type TypeEntry } from './types';
 
 export type Effects = { [table in EffectTable]: Map<ID, EffectEntry> } & { TypeChart: Map<ID, TypeEntry> };
 export type Table = 'Pokedex' | EffectTable | 'TypeChart';
@@ -51,10 +51,10 @@ export interface LoadedDex {
 }
 
 export const MAX_DEXES = 3;
-export const MAX_ENTRIES = 512;
+export const MAX_BATCH = 512;
 export const MAX_FORMATS = 16;
-export const MAX_EFFECTS = 512;
 export const MAX_DATA_BYTES = 256 * 1024;
+export const MAX_STORAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_ORIGINS = 5;
 export const MAX_DEPTH = 8;
 export const MAX_PARENTS = 8;
@@ -190,23 +190,27 @@ function lockedAbove(loaded: LoadedDex, table: Table, id: ID) {
 	return null;
 }
 
-const ownCount = (maps: Map<ID, Entry>[]) => maps.reduce(
-	(total, map) => total + [...map.values()].filter(entry => !entry.trackdex).length, 0
+const dataSizes = new WeakMap<DexLayer, number>();
+
+export const megabytes = (bytes: number) => (
+	bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1).replace(/\.0$/, '')} MB`
 );
 
-function checkLimits(loaded: LoadedDex, entries: Map<ID, SpeciesEntry>, effects: Effects) {
-	if (loaded.row.official) return;
-	const over = (limit: number, before: Map<ID, Entry>[], after: Map<ID, Entry>[]) =>
-		ownCount(after) > limit && ownCount(after) > ownCount(before);
-	if (over(MAX_ENTRIES, [loaded.entries], [entries])) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_ENTRIES} custom or edited Pokemon, not counting forks that follow their originals.`);
+export function dataSize(loaded: LoadedDex) {
+	let size = dataSizes.get(loaded.data);
+	if (size === undefined) dataSizes.set(loaded.data, size = Buffer.byteLength(json(loaded.data)));
+	return size;
+}
+
+export function storageUsed(account: string, adding?: { sha: string, bytes: number }) {
+	const sizes = new Map<string, number>();
+	for (const loaded of dexes.values()) {
+		for (const image of loaded.uploads.values()) {
+			if (image.accountid === account && !dexes.get(image.dexid)?.row.official) sizes.set(image.sha, image.bytes);
+		}
 	}
-	if (over(MAX_EFFECTS, EFFECT_TABLES.map(table => loaded.effects[table]), EFFECT_TABLES.map(table => effects[table]))) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_EFFECTS} custom or edited moves, abilities, items and conditions, not counting forks that follow their originals.`);
-	}
-	if (over(MAX_TYPES, [loaded.effects.TypeChart], [effects.TypeChart])) {
-		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_TYPES} custom or edited types, not counting forks that follow their originals.`);
-	}
+	if (adding) sizes.set(adding.sha, adding.bytes);
+	return [...sizes.values()].reduce((total, bytes) => total + bytes, 0);
 }
 
 function checkUnlocked(loaded: LoadedDex, table: Table, ids: (ID | null)[]) {
@@ -592,7 +596,7 @@ export function clientData(loaded: LoadedDex) {
 	for (const image of loaded.uploads.values()) {
 		images[image.uploadid] = {
 			file: `${image.sha}.${image.format}`, width: image.width, height: image.height,
-			uploader: image.uploadername, dex: image.dexname, ...(image.artist ? { artist: image.artist } : {}), ...image.display,
+			uploader: image.uploadername, dex: image.dexname, ...(image.artist ? { artist: image.artist } : {}), ...image.display, pixelated: true,
 		};
 	}
 	const origins: { [speciesid: string]: string } = {};
@@ -798,7 +802,7 @@ export async function setBase(loaded: LoadedDex, on: string, engine?: string) {
 }
 
 export async function setDescription(loaded: LoadedDex, description: string) {
-	if (description.length > MAX_DESCRIPTION) {
+	if (!loaded.row.official && description.length > MAX_DESCRIPTION) {
 		throw new Chat.ErrorMessage(`A description can be at most ${MAX_DESCRIPTION} characters.`);
 	}
 	await database().query(SQL`UPDATE dexes SET description = ${description.trim()} WHERE dexid = ${loaded.row.dexid}`);
@@ -815,7 +819,7 @@ export async function setEditor(loaded: LoadedDex, name: string, add: boolean) {
 		await database().query(SQL`DELETE FROM dex_editors WHERE dexid = ${loaded.row.dexid} AND accountid = ${account}`);
 		return save(loaded);
 	}
-	if (!loaded.editors.has(account) && loaded.editors.size >= MAX_EDITORS) {
+	if (!loaded.row.official && !loaded.editors.has(account) && loaded.editors.size >= MAX_EDITORS) {
 		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_EDITORS} editors.`);
 	}
 	await database().query(SQL`INSERT INTO dex_editors (dexid, accountid, name, added) VALUES (
@@ -932,8 +936,8 @@ export async function setSpecies(loaded: LoadedDex, ids: Set<ID>, add: boolean) 
 }
 
 export async function putEntries(loaded: LoadedDex, inputs: unknown[]) {
-	if (!inputs.length || (inputs.length > MAX_ENTRIES && !loaded.row.official)) {
-		throw new Chat.ErrorMessage(`Send 1 to ${MAX_ENTRIES} Pokemon at a time.`);
+	if (!inputs.length || (inputs.length > MAX_BATCH && !loaded.row.official)) {
+		throw new Chat.ErrorMessage(`Send 1 to ${MAX_BATCH} Pokemon at a time.`);
 	}
 	const base = baseOf(loaded.row);
 	const entries = new Map(loaded.entries);
@@ -948,7 +952,6 @@ export async function putEntries(loaded: LoadedDex, inputs: unknown[]) {
 		entries.set(entry.speciesid, entry);
 		changed.set(entry.speciesid, entry);
 	}
-	checkLimits(loaded, entries, loaded.effects);
 	check(compile(loaded.row, entries, loaded.effects));
 	for (const entry of changed.values()) await writeEntry(loaded.row.dexid, 'Pokedex', entry);
 	const updated = await save(loaded);
@@ -995,8 +998,17 @@ export async function setSprite(
 ) {
 	const slot = spriteSlot(loaded, name, kind);
 	const id = toID(slot.name);
-	const decoded = image === null ? null : sprites.decode(kind, image);
-	const options = sprites.toSettings(settings);
+	const official = loaded.row.official;
+	if (image !== null) sprites.checkKind(kind, official);
+	const decoded = image === null ? null : sprites.decode(kind, image, official);
+	const options = sprites.toSettings(settings, official);
+	const account = await accountOf(user);
+	if (decoded && !official) {
+		const used = storageUsed(account, { sha: decoded.sha, bytes: decoded.data.length });
+		if (used > MAX_STORAGE_BYTES) {
+			throw new Chat.ErrorMessage(`That would use ${megabytes(used)} of your ${megabytes(MAX_STORAGE_BYTES)} sprite storage. Remove sprites you don't need first.`);
+		}
+	}
 	if (decoded && !entriesOf(loaded, slot.table).has(id)) {
 		if (slot.table === 'Items' ? !loaded.dex.items.get(id).exists : !loaded.data.species.includes(id)) {
 			throw new Chat.ErrorMessage(`${loaded.row.name} has no ${tableName(slot.table)} called "${name}".`);
@@ -1012,14 +1024,12 @@ export async function setSprite(
 		delete entrySprites[slot.key];
 	} else {
 		entrySprites[slot.key] = await sprites.upload(
-			database(), decoded, kind, await accountOf(user), user.name, loaded.row, options
+			database(), decoded, kind, account, user.name, loaded.row, options
 		);
 	}
 	const detached = { ...entry, sprites: entrySprites, trackdex: null, trackid: null };
 	if (slot.table === 'Items') {
-		checkLimits(loaded, loaded.entries, { ...loaded.effects, Items: new Map([...loaded.effects.Items, [id, detached as EffectEntry]]) });
 	} else {
-		checkLimits(loaded, new Map([...loaded.entries, [id, detached as SpeciesEntry]]), loaded.effects);
 	}
 	await writeEntry(loaded.row.dexid, slot.table, detached);
 	return saved(loaded, slot.table, id);
@@ -1064,7 +1074,6 @@ export async function putEffect(loaded: LoadedDex, table: EffectTable, input: An
 		entry.data.num = entry.num;
 	}
 	const effects = { ...loaded.effects, [table]: new Map([...loaded.effects[table], [entry.effectid, entry]]) };
-	checkLimits(loaded, loaded.entries, effects);
 	const stale: string[] = [];
 	check(compile(loaded.row, loaded.entries, effects, stale));
 	const broken = stale.filter(problem => !loaded.stale.includes(problem));
@@ -1085,7 +1094,6 @@ export async function putType(loaded: LoadedDex, input: AnyObject) {
 	const entry = validateType(input, baseOf(loaded.row), loaded.effects.TypeChart, loaded.dex);
 	checkUnlocked(loaded, 'TypeChart', [entry.effectid]);
 	const effects = { ...loaded.effects, TypeChart: new Map([...loaded.effects.TypeChart, [entry.effectid, entry]]) };
-	checkLimits(loaded, loaded.entries, effects);
 	check(compile(loaded.row, loaded.entries, effects));
 	await writeEntry(loaded.row.dexid, 'TypeChart', entry);
 	return { loaded: await saved(loaded, 'TypeChart', entry.effectid), entry };
@@ -1205,7 +1213,6 @@ async function copyInto(
 		if (table === 'Pokedex' && official) species.add(id);
 		copied.push([table, copy]);
 	}
-	checkLimits(target, entries, effects);
 	const stale: string[] = [];
 	check(compile({ ...target.row, species: [...species] }, entries, effects, stale));
 	const warnings = stale.filter(problem => !target.stale.includes(problem));
@@ -1474,10 +1481,10 @@ export async function putFormat(loaded: LoadedDex, input: AnyObject) {
 		named || newID('f', id => formatDexes.has(id) || Dex.formats.get(id).exists);
 	if (named && named !== formatid) throw new Chat.ErrorMessage(`${loaded.row.name} already has a format called ${input.name}.`);
 	const old = loaded.formats.get(formatid);
-	if (!old && loaded.formats.size >= MAX_FORMATS) {
+	if (!loaded.row.official && !old && loaded.formats.size >= MAX_FORMATS) {
 		throw new Chat.ErrorMessage(`A dex can have at most ${MAX_FORMATS} formats.`);
 	}
-	if (toID(`${loaded.row.name}${input.name}`).length > 40) {
+	if (!loaded.row.official && toID(`${loaded.row.name}${input.name}`).length > 40) {
 		throw new Chat.ErrorMessage(`The dex and format names together can be at most 40 letters and numbers.`);
 	}
 	const data = validateFormat(loaded, input, old);
