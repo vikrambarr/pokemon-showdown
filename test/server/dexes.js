@@ -144,10 +144,19 @@ describe('Dexes', () => {
 		assert.equal(Dexes.clientData(loaded).images[image.uploadid].file, `${image.sha}.png`);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'icon', png(96, 96)), /at most 64x64/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'front', 'bm90IGEgcG5n'), /PNG or GIF/);
+		const used = Dexes.storageUsed(OWNER);
+		assert(used >= image.bytes && image.bytes > 0);
+		let again = await Dexes.setSprite(owner, loaded, 'Voltlet', 'front-shiny', png(96, 96));
+		assert.equal(Dexes.storageUsed(OWNER), used);
+		again = await Dexes.setSprite(owner, again, 'Voltlet', 'back-shiny', png(80, 80));
+		assert(Dexes.storageUsed(OWNER) > used);
+		again = await Dexes.setSprite(owner, again, 'Voltlet', 'back-shiny', null);
+		await Dexes.setSprite(owner, again, 'Voltlet', 'front-shiny', null);
+		assert.equal(Dexes.storageUsed(OWNER), used);
 	});
 
 	it('should keep GIFs of any size up to the limit, with their settings', async () => {
-		const settings = { artist: 'Mocha Artist', pixelated: true, flip: true, y: -16, gen: 3 };
+		const settings = { artist: 'Mocha Artist', flip: true };
 		const loaded = await Dexes.setSprite(owner, Dexes.getDex('mochadex'), 'Voltlet', 'back', gif(160, 150), settings);
 		const uploadid = loaded.entries.get('voltlet').sprites.back;
 		const image = Dexes.clientData(loaded).images[uploadid];
@@ -155,11 +164,10 @@ describe('Dexes', () => {
 		assert.equal(image.width, 160);
 		assert.equal(image.height, 150);
 		assert.equal(image.artist, 'Mocha Artist');
-		assert.equal(image.gen, 3);
-		assert.equal(image.y, -16);
 		assert(image.flip && image.pixelated);
-		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(401, 96)), /at most 400x400/);
-		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { y: 200 }), /"y" must be/);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(193, 96)), /at most 192x192/);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { y: -16 }), /isn't a sprite setting/);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { flip: 'yes' }), /"flip" must be/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { size: 2 }), /isn't a sprite setting/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { constructor: 2 }), /isn't a sprite setting/);
 		const cleared = await Dexes.setSprite(owner, loaded, 'Voltlet', 'back', null);
@@ -168,7 +176,7 @@ describe('Dexes', () => {
 
 	it('should edit base Pokemon and items that get sprites', async () => {
 		let loaded = await Dexes.createDex(owner, 'Sprite Dex', 'gen9');
-		await assert.rejects(Dexes.setSprite(owner, loaded, 'Leftovers', 'item', png(24, 24), { y: 200 }), /"y" must be/);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Leftovers', 'item', png(24, 24), { gen: 3 }), /isn't a sprite setting/);
 		assert(!loaded.effects.Items.has('leftovers'));
 		loaded = await Dexes.setSprite(owner, loaded, 'Leftovers', 'item', png(24, 24));
 		assert.deepEqual(loaded.effects.Items.get('leftovers').data, { name: 'Leftovers' });
@@ -176,6 +184,12 @@ describe('Dexes', () => {
 		loaded = await Dexes.setSprite(owner, loaded, 'Pikachu', 'icon', png(40, 30));
 		assert.deepEqual(loaded.entries.get('pikachu').data, { name: 'Pikachu' });
 		assert.equal(loaded.data.Pokedex.pikachu.baseStats.spe, Dex.species.get('Pikachu').baseStats.spe);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Gastrodon-East', 'front-f', png(96, 96)), /Only official dexes/);
+		loaded = await Dexes.setOfficial(loaded, true);
+		loaded = await Dexes.setSprite(owner, loaded, 'Pikachu', 'front', png(400, 400), { y: -16, gen: 3 });
+		const big = Dexes.clientData(loaded).images[loaded.entries.get('pikachu').sprites.front];
+		assert.deepEqual([big.width, big.y, big.gen], [400, -16, 3]);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Pikachu', 'front', png(96, 96), { y: 200 }), /"y" must be/);
 		loaded = await Dexes.setSprite(owner, loaded, 'Gastrodon-East', 'front-f', png(96, 96));
 		assert.deepEqual(Object.keys(loaded.entries.get('gastrodon').sprites), ['gastrodoneast:front-f']);
 		assert.deepEqual(Object.keys(Dexes.clientData(loaded).sprites.gastrodoneast), ['front-f']);
@@ -563,7 +577,7 @@ describe('Dexes', () => {
 		assert(fork.loaded.data.species.includes('sproutle'));
 		assert(!fork.loaded.data.species.includes('bulbasaur'));
 
-		const bulk = Array.from({ length: Dexes.MAX_ENTRIES + 1 }, (_, i) => ({ name: `Bulk ${i}`, inheritsFrom: 'Bulbasaur' }));
+		const bulk = Array.from({ length: Dexes.MAX_BATCH + 1 }, (_, i) => ({ name: `Bulk ${i}`, inheritsFrom: 'Bulbasaur' }));
 		await assert.rejects(Dexes.putEntries(get('parentdex'), bulk), /at a time/);
 		assert((await Dexes.setOfficial(get('parentdex'), true)).row.official);
 		await Dexes.deleteDex(fork.loaded);

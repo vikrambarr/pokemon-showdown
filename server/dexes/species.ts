@@ -23,8 +23,6 @@ export interface SpeciesEntry {
 	locked: boolean;
 }
 
-export const MAX_LEARNSET = 128;
-
 const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
 const COLORS = ['Green', 'Red', 'Blue', 'White', 'Brown', 'Yellow', 'Purple', 'Pink', 'Gray', 'Black'];
 const EGG_GROUPS = [
@@ -250,9 +248,6 @@ function learnset(input: unknown, dex: ModdedDex, old: AnyObject) {
 			return source;
 		});
 		if (!result[move.id].length) throw new Chat.ErrorMessage(`${move.name} needs at least one source.`);
-	}
-	if (!unlimited && Object.values(result).filter(Boolean).length > MAX_LEARNSET) {
-		throw new Chat.ErrorMessage(`A learnset can have at most ${MAX_LEARNSET} moves.`);
 	}
 	return result;
 }

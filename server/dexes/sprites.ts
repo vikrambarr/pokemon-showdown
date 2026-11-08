@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { FS } from '../../lib';
 import { SQL, type PGDatabase } from '../../lib/database';
 
-const BATTLE_SPRITE = { width: 96, height: 96, max: 400 };
+const BATTLE_SPRITE = { width: 96, height: 96, max: 192 };
 const ICON_SPRITE = { width: 40, height: 30, max: 64 };
 
 export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, max: number } } = {
@@ -23,11 +23,13 @@ export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, ma
 	'item': { width: 24, height: 24, max: 64 },
 };
 
+export const USER_KINDS = ['front', 'back', 'front-shiny', 'back-shiny', 'icon', 'item'];
+const USER_SETTINGS = ['artist', 'flip'];
+
 export const SPRITE_SETTINGS: { [key: string]: [(value: any) => boolean, string] } = {
 	artist: [
 		value => typeof value === 'string' && !!value.trim() && value.trim().length <= 100, 'text up to 100 characters',
 	],
-	pixelated: [value => typeof value === 'boolean', 'true or false'],
 	flip: [value => typeof value === 'boolean', 'true or false'],
 	y: [value => Number.isInteger(value) && Math.abs(value) <= 96, 'a whole number from -96 to 96'],
 	gen: [value => Number.isInteger(value) && value >= 1 && value <= 5, 'a generation from 1 to 5'],
@@ -47,6 +49,7 @@ export interface Upload {
 	format: string;
 	width: number;
 	height: number;
+	bytes: number;
 }
 
 export const MAX_SPRITE_BYTES = 512 * 1024;
@@ -66,12 +69,19 @@ export function toKind(input: string) {
 	return kind;
 }
 
-export function toSettings(input: AnyObject) {
+export function checkKind(kind: string, official: boolean) {
+	if (!official && !USER_KINDS.includes(kind)) {
+		throw new Chat.ErrorMessage(`Only official dexes can set ${kind} sprites. Kinds: ${USER_KINDS.join(', ')}.`);
+	}
+}
+
+export function toSettings(input: AnyObject, official = false) {
 	const display: AnyObject = {};
 	let artist: string | null = null;
+	const allowed = official ? Object.keys(SPRITE_SETTINGS) : USER_SETTINGS;
 	for (const key of Object.keys(input)) {
-		if (!Object.hasOwn(SPRITE_SETTINGS, key)) {
-			throw new Chat.ErrorMessage(`"${key}" isn't a sprite setting. Settings: ${Object.keys(SPRITE_SETTINGS).join(', ')}.`);
+		if (!Object.hasOwn(SPRITE_SETTINGS, key) || !allowed.includes(key)) {
+			throw new Chat.ErrorMessage(`"${key}" isn't a sprite setting. Settings: ${allowed.join(', ')}.`);
 		}
 		const [check, description] = SPRITE_SETTINGS[key];
 		if (!check(input[key])) throw new Chat.ErrorMessage(`"${key}" must be ${description}.`);
@@ -84,13 +94,13 @@ export function toSettings(input: AnyObject) {
 	return { artist, display };
 }
 
-export function decode(kind: string, input: string) {
+export function decode(kind: string, input: string, official = false) {
 	const base64 = input.trim().replace(/^data:image\/(png|gif);base64,/, '').replace(/\s+/g, '');
 	if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
 		throw new Chat.ErrorMessage(`Sprites must be base64-encoded PNG or GIF files.`);
 	}
 	const data = Buffer.from(base64, 'base64');
-	if (data.length > MAX_SPRITE_BYTES) {
+	if (!official && data.length > MAX_SPRITE_BYTES) {
 		throw new Chat.ErrorMessage(`That image is ${Math.ceil(data.length / 1024)}KB; the limit is ${MAX_SPRITE_BYTES / 1024}KB.`);
 	}
 	let format;
@@ -108,7 +118,7 @@ export function decode(kind: string, input: string) {
 		throw new Chat.ErrorMessage(`Sprites must be PNG or GIF files.`);
 	}
 	const { max } = SPRITE_KINDS[kind];
-	if (!width || !height || width > max || height > max) {
+	if (!width || !height || !official && (width > max || height > max)) {
 		throw new Chat.ErrorMessage(`A ${kind} sprite can be at most ${max}x${max}; that image is ${width}x${height}.`);
 	}
 	return { data, format, width, height, sha: crypto.createHash('sha256').update(data).digest('hex') };
@@ -146,7 +156,7 @@ export async function upload(
 
 export async function getUploads(db: PGDatabase, ids: string[]) {
 	if (!ids.length) return new Map<string, Upload>();
-	const rows = await db.query<Upload>(SQL`SELECT uploads.*, images.format, images.width, images.height
+	const rows = await db.query<Upload>(SQL`SELECT uploads.*, images.format, images.width, images.height, octet_length(images.data) AS bytes
 		FROM dex_sprite_uploads AS uploads JOIN dex_sprites AS images ON images.sha = uploads.sha
 		WHERE uploads.uploadid IN (${ids})`);
 	return new Map(rows.map(row => [row.uploadid, { ...row, created: Number(row.created) }]));
