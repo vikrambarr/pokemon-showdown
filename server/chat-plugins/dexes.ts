@@ -168,6 +168,7 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 		entries.originals[entry.speciesid] = id && base.Pokedex[id] ?
 			{ ...base.Pokedex[id], learnset: Object.keys(base.Learnsets[id]?.learnset || {}) } : null;
 	}
+	entries.types = Object.fromEntries([...loaded.effects.TypeChart.keys()].map(id => [id, base.TypeChart[id] ? 'edited' : 'custom']));
 	entriesCache.set(loaded, entries);
 	return entries;
 }
@@ -786,6 +787,8 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 			if (edit[kind]) ({ loaded } = await Dexes.putEffect(loaded, EFFECT_TABLES[kind], edit[kind]));
 			if (edit[`delete${kind}`]) loaded = await Dexes.deleteEffect(loaded, EFFECT_TABLES[kind], `${edit[`delete${kind}`]}`);
 		}
+		if (edit.type) ({ loaded } = await Dexes.putType(loaded, edit.type));
+		if (edit.deletetype) loaded = await Dexes.deleteEffect(loaded, 'TypeChart', `${edit.deletetype}`);
 		if (edit.sprite) {
 			const { name, kind, image, settings } = edit.sprite;
 			loaded = await Dexes.setSprite(user, loaded, `${name}`, toKind(`${kind}`), image ? `${image}` : null, settings || {});
