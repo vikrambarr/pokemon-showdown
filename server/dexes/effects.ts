@@ -39,7 +39,7 @@ export const EFFECT_PLURALS: { [table in EffectTable]: string } = {
 type Check = (value: unknown, field: string, data: AnyObject, old: unknown) => unknown;
 type Fields = { [field: string]: Check };
 
-const CONTROL = ['name', 'inheritsFrom', 'slots', 'replace', 'events', 'spriteFrom'];
+const CONTROL = ['name', 'inheritsFrom', 'slots', 'events', 'spriteFrom'];
 const EVENT_STATS: { [stat: string]: string } = { Atk: 'atk', SpA: 'spa', Def: 'def', SpD: 'spd', Spe: 'spe' };
 const MAX_NUMBER = 1e6;
 const REQUIRED: { [table in EffectTable]: string[] } = {
@@ -233,7 +233,7 @@ function checkFields(
 		const value = input[key];
 		const old = base?.[key];
 		if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(key) || UNSAFE.includes(key)) fail(field, `isn't something you can set.`);
-		if (typeof old === 'function') fail(field, `is code; change the values inside it with "slots" or "replace".`);
+		if (typeof old === 'function') fail(field, `is code; change the values inside it with "slots".`);
 		if (value === null) {
 			result[key] = null;
 		} else if (fields?.[key]) {
@@ -442,22 +442,6 @@ function checkEffect(
 		for (const key in input.slots) {
 			const split = key.lastIndexOf(':');
 			setSlot(key.slice(0, split), Number(key.slice(split + 1)), input.slots[key]);
-		}
-	}
-	if (input.replace !== undefined) {
-		if (!Array.isArray(input.replace) || input.replace.some(pair => !Array.isArray(pair) || pair.length !== 2)) {
-			throw new Chat.ErrorMessage(`"replace" must be a list of [old value, new value] pairs.`);
-		}
-		for (const [from, to] of input.replace) {
-			let count = 0;
-			for (const { path, handler, values } of catalogue) {
-				handler?.slots.forEach((other, index) => {
-					if (own(other) || (!sameValue(other.value, from) && !sameValue(values[index], from))) return;
-					setSlot(path, index, to);
-					count++;
-				});
-			}
-			if (!count) throw new Chat.ErrorMessage(`Nothing in ${entry.data.name}'s code is ${JSON.stringify(from)}.`);
 		}
 	}
 	return entry;

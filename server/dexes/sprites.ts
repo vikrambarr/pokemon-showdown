@@ -25,13 +25,12 @@ export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, ma
 };
 
 export const USER_KINDS = ['front', 'back', 'front-shiny', 'back-shiny', 'icon', 'item', 'type'];
-const USER_SETTINGS = ['artist', 'flip'];
+const USER_SETTINGS = ['artist'];
 
 export const SPRITE_SETTINGS: { [key: string]: [(value: any) => boolean, string] } = {
 	artist: [
 		value => typeof value === 'string' && !!value.trim() && value.trim().length <= 100, 'text up to 100 characters',
 	],
-	flip: [value => typeof value === 'boolean', 'true or false'],
 	y: [value => Number.isInteger(value) && Math.abs(value) <= 96, 'a whole number from -96 to 96'],
 	gen: [value => Number.isInteger(value) && value >= 1 && value <= 5, 'a generation from 1 to 5'],
 };
