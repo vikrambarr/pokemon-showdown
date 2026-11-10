@@ -21,9 +21,10 @@ export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, ma
 	'icon': ICON_SPRITE,
 	'icon-f': ICON_SPRITE,
 	'item': { width: 24, height: 24, max: 64 },
+	'type': { width: 32, height: 14, max: 64 },
 };
 
-export const USER_KINDS = ['front', 'back', 'front-shiny', 'back-shiny', 'icon', 'item'];
+export const USER_KINDS = ['front', 'back', 'front-shiny', 'back-shiny', 'icon', 'item', 'type'];
 const USER_SETTINGS = ['artist', 'flip'];
 
 export const SPRITE_SETTINGS: { [key: string]: [(value: any) => boolean, string] } = {

@@ -55,8 +55,8 @@ export function validateType(input: AnyObject, dex: ModdedDex, entries: Map<ID, 
 		throw new Chat.ErrorMessage(`Type names are one word starting with a capital letter, like "${typeName(id)}".`);
 	}
 	for (const key in input) {
-		if (!['name', 'damageTaken', 'attacks', 'color', 'label'].includes(key)) {
-			throw new Chat.ErrorMessage(`"${key}" isn't something you can set. You can set: name, damageTaken, attacks, color, label.`);
+		if (!['name', 'damageTaken', 'attacks', 'color', 'label', 'removed'].includes(key)) {
+			throw new Chat.ErrorMessage(`"${key}" isn't something you can set. You can set: name, damageTaken, attacks, color, label, removed.`);
 		}
 	}
 	const old = entries.get(id);
@@ -86,9 +86,17 @@ export function validateType(input: AnyObject, dex: ModdedDex, entries: Map<ID, 
 		}
 		data.label = label.toUpperCase();
 	}
+	const removed = input.removed === undefined ? old?.data.removed : input.removed;
+	if (removed !== undefined && removed !== null) {
+		if (removed !== true) throw new Chat.ErrorMessage(`"removed" must be true, or null to bring the type back.`);
+		if (!dex.data.TypeChart[id]) {
+			throw new Chat.ErrorMessage(`Only types from the base dex can be removed. Delete ${name} instead.`);
+		}
+		data.removed = true;
+	}
 	return {
-		effecttable: 'TypeChart', effectid: id, num: 0, inheritsfrom: null, data, slots: {}, events: {}, sprites: {},
-		origin: old?.origin || null, trackdex: null, trackid: null, locked: old?.locked || false,
+		effecttable: 'TypeChart', effectid: id, num: 0, inheritsfrom: null, data, slots: {}, events: {},
+		sprites: { ...old?.sprites }, origin: old?.origin || null, trackdex: null, trackid: null, locked: old?.locked || false,
 	} as TypeEntry;
 }
 
@@ -112,6 +120,17 @@ export function resolveTypes(dex: ModdedDex, entries: Iterable<TypeEntry>) {
 		}
 		if (entry.data.color) (get(entry.effectid) as AnyObject).color = entry.data.color;
 		if (entry.data.label) (get(entry.effectid) as AnyObject).label = entry.data.label;
+	}
+	const isType = (key: string) => !!(dex.data.TypeChart[toID(key)] || TypeChart[toID(key)]);
+	for (const entry of list.filter(type => type.data.removed)) {
+		for (const id of new Set([...Object.keys(dex.data.TypeChart), ...Object.keys(TypeChart)])) {
+			if (entry.data.name in (TypeChart[id] || dex.data.TypeChart[id]).damageTaken) {
+				delete (get(id).damageTaken as AnyObject)[entry.data.name];
+			}
+		}
+		const removed = get(entry.effectid);
+		removed.damageTaken = Object.fromEntries(Object.entries(removed.damageTaken).filter(([key]) => !isType(key)));
+		(removed as AnyObject).isNonstandard = 'Past';
 	}
 	return TypeChart;
 }

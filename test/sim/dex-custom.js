@@ -116,6 +116,24 @@ describe('Custom dexes', () => {
 		releaseDex(stale);
 	});
 
+	it('should never run code smuggled into values, keys or names', () => {
+		const payload = '"});globalThis.dexInjected = 1;({"';
+		const moxie = Dex.data.Abilities.moxie.onSourceAfterFaint;
+		const attempts = [
+			['siminjecttype', { Moves: { soak: { data: {}, slots: { onHit: changes(Dex.data.Moves.soak.onHit, 'Water', payload) } } } }],
+			['siminjectnumber', { Items: { choiceband: { data: {}, slots: { onModifyAtk: changes(Dex.data.Items.choiceband.onModifyAtk, 1.5, `1${payload}`) } } } }],
+			['siminjectkey', { Abilities: { moxie: { data: {}, slots: { onSourceAfterFaint: changes(moxie, 'atk', `atk: 1${payload}`) } } } }],
+		];
+		for (const [hash, effects] of attempts) {
+			assert.throws(() => buildDex({ ...DATA, hash, effects }));
+			assert.equal(Dex.dexes[`dex${hash}`], undefined);
+		}
+		const named = buildDex({ ...DATA, hash: 'siminjectname', effects: { Moves: { shield: { inherit: 'reflect', data: { name: `Shield${payload}` } } } } });
+		assert(named.conditions.get('shield').onSideStart.toString().includes(JSON.stringify(`Shield${payload}`)));
+		releaseDex(named);
+		assert.equal(globalThis.dexInjected, undefined);
+	});
+
 	it('should move stat handlers to other stats', () => {
 		const dex = buildDex({
 			...DATA, hash: 'simevents', effects: {
