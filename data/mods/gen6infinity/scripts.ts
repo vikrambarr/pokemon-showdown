@@ -1,9 +1,3 @@
-import type { MoveData } from '../../../sim/dex-moves';
-import { Moves as Base } from '../../moves';
-import { Abilities } from '../gen9infinity/abilities';
-import { Conditions } from '../gen9infinity/conditions';
-import { Items } from '../gen9infinity/items';
-import { Moves } from '../gen9infinity/moves';
 import { Scripts as Parent } from '../gen9infinity/scripts';
 
 export const Scripts: ModdedBattleScriptsData = {
@@ -11,16 +5,25 @@ export const Scripts: ModdedBattleScriptsData = {
 	gen: 6,
 	init() {
 		Parent.init!.call(this);
-		for (const key in Base) {
-			const id = key as keyof typeof Base;
-			if (!Moves[id]) this.data.Moves[id] = { ...Base[id], gen: 6, isNonstandard: null } as MoveData;
+		const own: AnyObject = this.mod('gen9infinity').data;
+		const base: AnyObject = this.mod('gen9').data;
+		for (const id in base.Moves) {
+			if (own.Moves[id] === base.Moves[id]) this.data.Moves[id] = { ...base.Moves[id], gen: 6, isNonstandard: null };
 		}
-		const tables: { [table: string]: AnyObject } = { Moves, Abilities, Items, Conditions };
-		for (const table in tables) {
-			const data: AnyObject = this.data[table as 'Moves'];
-			for (const id in tables[table]) {
-				const { inherit, ...entry } = tables[table][id];
-				data[id] = inherit ? { ...data[id], ...entry } : entry;
+		for (const table of ['Moves', 'Abilities', 'Items', 'Conditions'] as const) {
+			const data: AnyObject = this.data[table];
+			for (const id in own[table]) {
+				const entry = own[table][id];
+				const original = base[table][id];
+				if (entry === original) continue;
+				if (!original || Object.keys(original).some(key => !(key in entry))) {
+					data[id] = entry;
+					continue;
+				}
+				data[id] = { ...data[id] };
+				for (const key in entry) {
+					if (entry[key] !== original[key]) data[id][key] = entry[key];
+				}
 			}
 		}
 	},

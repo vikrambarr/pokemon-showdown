@@ -2,10 +2,6 @@ import { countedAs, countsAs } from '../../../sim/counts-as';
 import { toID } from '../../../sim/dex';
 import { Field } from '../../../sim/field';
 import { Pokemon } from '../../../sim/pokemon';
-import { Abilities } from '../gen9infinitefusion/abilities';
-import { Conditions } from '../gen9infinitefusion/conditions';
-import { Items } from '../gen9infinitefusion/items';
-import { Moves } from '../gen9infinitefusion/moves';
 import { Scripts as Parent } from '../gen9infinitefusion/scripts';
 
 function removeInnates(pokemon: Pokemon, battle: Battle) {
@@ -282,14 +278,23 @@ export const Scripts: ModdedBattleScriptsData = {
 	gen: 7,
 	init() {
 		Parent.init!.call(this);
-		const tables: { [table: string]: AnyObject } = { Moves, Abilities, Items, Conditions };
-		for (const table in tables) {
-			const data: AnyObject = this.data[table as 'Moves'];
-			const parent: AnyObject = this.mod(this.parentMod).data[table as 'Moves'];
-			for (const id in tables[table]) {
-				if (data[id] !== parent[id]) continue;
-				const { inherit, ...entry } = tables[table][id];
-				data[id] = inherit ? { ...data[id], ...entry } : entry;
+		const own: AnyObject = this.mod('gen9infinitefusion').data;
+		const base: AnyObject = this.mod('gen9').data;
+		for (const table of ['Moves', 'Abilities', 'Items', 'Conditions'] as const) {
+			const data: AnyObject = this.data[table];
+			const parent: AnyObject = this.mod(this.parentMod).data[table];
+			for (const id in own[table]) {
+				const entry = own[table][id];
+				const original = base[table][id];
+				if (entry === original || data[id] !== parent[id]) continue;
+				if (!original || Object.keys(original).some(key => !(key in entry))) {
+					data[id] = entry;
+					continue;
+				}
+				data[id] = { ...data[id] };
+				for (const key in entry) {
+					if (entry[key] !== original[key]) data[id][key] = entry[key];
+				}
 			}
 		}
 		const innates: { [table: string]: AnyObject } = { Abilities: InnateAbilities, Moves: InnateMoves };

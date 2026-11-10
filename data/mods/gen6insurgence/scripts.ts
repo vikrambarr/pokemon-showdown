@@ -1,7 +1,3 @@
-import { Abilities } from '../gen9insurgence/abilities';
-import { Conditions } from '../gen9insurgence/conditions';
-import { Items } from '../gen9insurgence/items';
-import { Moves } from '../gen9insurgence/moves';
 import { Scripts as Parent } from '../gen9insurgence/scripts';
 
 export const Scripts: ModdedBattleScriptsData = {
@@ -9,12 +5,22 @@ export const Scripts: ModdedBattleScriptsData = {
 	gen: 6,
 	init() {
 		Parent.init!.call(this);
-		const tables: { [table: string]: AnyObject } = { Moves, Abilities, Items, Conditions };
-		for (const table in tables) {
-			const data: AnyObject = this.data[table as 'Moves'];
-			for (const id in tables[table]) {
-				const { inherit, ...entry } = tables[table][id];
-				data[id] = inherit ? { ...data[id], ...entry } : entry;
+		const own: AnyObject = this.mod('gen9insurgence').data;
+		const base: AnyObject = this.mod('gen9').data;
+		for (const table of ['Moves', 'Abilities', 'Items', 'Conditions'] as const) {
+			const data: AnyObject = this.data[table];
+			for (const id in own[table]) {
+				const entry = own[table][id];
+				const original = base[table][id];
+				if (entry === original) continue;
+				if (!original || Object.keys(original).some(key => !(key in entry))) {
+					data[id] = entry;
+					continue;
+				}
+				data[id] = { ...data[id] };
+				for (const key in entry) {
+					if (entry[key] !== original[key]) data[id][key] = entry[key];
+				}
 			}
 		}
 	},

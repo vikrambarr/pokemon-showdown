@@ -1,23 +1,27 @@
-import { Abilities } from '../gen9uranium/abilities';
-import { Conditions } from '../gen9uranium/conditions';
-import { Items } from '../gen9uranium/items';
-import { Moves } from '../gen9uranium/moves';
 import { Scripts as Parent } from '../gen9uranium/scripts';
-import { TypeChart } from '../gen9uranium/typechart';
 
 export const Scripts: ModdedBattleScriptsData = {
 	inherit: 'gen6',
 	gen: 6,
 	init() {
 		Parent.init!.call(this);
-		const tables: { [table: string]: AnyObject } = { Moves, Abilities, Items, Conditions, TypeChart };
-		for (const table in tables) {
-			const data: AnyObject = this.data[table as 'Moves'];
-			const parent: AnyObject = this.mod(this.parentMod).data[table as 'Moves'];
-			for (const id in tables[table]) {
-				if (data[id] !== parent[id]) continue;
-				const { inherit, ...entry } = tables[table][id];
-				data[id] = inherit ? { ...data[id], ...entry } : entry;
+		const own: AnyObject = this.mod('gen9uranium').data;
+		const base: AnyObject = this.mod('gen9').data;
+		for (const table of ['Moves', 'Abilities', 'Items', 'Conditions', 'TypeChart'] as const) {
+			const data: AnyObject = this.data[table];
+			const parent: AnyObject = this.mod(this.parentMod).data[table];
+			for (const id in own[table]) {
+				const entry = own[table][id];
+				const original = base[table][id];
+				if (entry === original || data[id] !== parent[id]) continue;
+				if (!original || Object.keys(original).some(key => !(key in entry))) {
+					data[id] = entry;
+					continue;
+				}
+				data[id] = { ...data[id] };
+				for (const key in entry) {
+					if (entry[key] !== original[key]) data[id][key] = entry[key];
+				}
 			}
 		}
 	},
