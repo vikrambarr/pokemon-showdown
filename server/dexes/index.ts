@@ -341,7 +341,10 @@ function compile(row: DexRow, entries: Map<ID, SpeciesEntry>, effects: Effects, 
 	const speciesSprites = sorted(entries).map(([, entry]) => [entry.speciesid, entry.sprites]);
 	const itemSprites = sorted(effects.Items).map(([, entry]) => entry).filter(entry => entry.sprites.item)
 		.map(entry => [entry.effectid, entry.sprites]);
-	const hashed = itemSprites.length ? [content, speciesSprites, itemSprites] : [content, speciesSprites];
+	const typeSprites = sorted(effects.TypeChart).map(([, entry]) => entry).filter(entry => entry.sprites.type)
+		.map(entry => [entry.effectid, entry.sprites]);
+	const hashed = typeSprites.length ? [content, speciesSprites, itemSprites, typeSprites] :
+		itemSprites.length ? [content, speciesSprites, itemSprites] : [content, speciesSprites];
 	const hash = crypto.createHash('sha256').update(json(hashed)).digest('hex').slice(0, 20);
 	const data = { hash, ...content };
 	if (!row.official && Buffer.byteLength(json(data)) > MAX_DATA_BYTES) {
@@ -622,11 +625,17 @@ export function clientData(loaded: LoadedDex) {
 			if (uploadid) itemSprites[id] = uploadid;
 		}
 	}
+	const typeSprites: { [typeid: string]: string } = {};
+	for (const [id, entry] of loaded.effects.TypeChart) {
+		const uploadid = usedSprites(loaded, entry.sprites).type;
+		if (uploadid) typeSprites[id] = uploadid;
+	}
 	return {
 		hash, dexid: loaded.row.dexid, name: loaded.row.name, mod, ...(parents ? { parents } : {}), species,
 		Pokedex, Learnsets, FormatsData,
 		sprites: speciesSprites, ...effects, ...(TypeChart ? { TypeChart } : {}),
 		...(Object.keys(itemSprites).length ? { itemSprites } : {}),
+		...(Object.keys(typeSprites).length ? { typeSprites } : {}),
 		...(Object.keys(images).length ? { images } : {}),
 		...(Object.keys(origins).length ? { origins } : {}),
 	};
@@ -985,6 +994,10 @@ export function spriteSlot(loaded: LoadedDex, name: string, kind: string) {
 		const item = loaded.dex.items.get(name);
 		return { table: 'Items' as const, name: item.exists ? item.name : name, key: kind };
 	}
+	if (kind === 'type') {
+		const type = loaded.dex.types.get(name);
+		return { table: 'TypeChart' as const, name: type.exists ? type.name : name, key: kind };
+	}
 	const species = loaded.dex.species.get(name);
 	if (!species.exists) return { table: 'Pokedex' as const, name, key: kind };
 	if (species.isCosmeticForme) {
@@ -1010,14 +1023,14 @@ export async function setSprite(
 		}
 	}
 	if (decoded && !entriesOf(loaded, slot.table).has(id)) {
-		if (slot.table === 'Items' ? !loaded.dex.items.get(id).exists : !loaded.data.species.includes(id)) {
-			throw new Chat.ErrorMessage(`${loaded.row.name} has no ${tableName(slot.table)} called "${name}".`);
-		}
-		const edited = slot.table === 'Items' ?
-			await putEffect(loaded, 'Items', { name: slot.name }) : await putEntry(loaded, { name: slot.name });
+		const exists = slot.table === 'Items' ? loaded.dex.items.get(id).exists :
+			slot.table === 'TypeChart' ? loaded.dex.types.get(id).exists : loaded.data.species.includes(id);
+		if (!exists) throw new Chat.ErrorMessage(`${loaded.row.name} has no ${tableName(slot.table)} called "${name}".`);
+		const edited = slot.table === 'Items' ? await putEffect(loaded, 'Items', { name: slot.name }) :
+			slot.table === 'TypeChart' ? await putType(loaded, { name: slot.name }) : await putEntry(loaded, { name: slot.name });
 		loaded = edited.loaded;
 	}
-	const entry = slot.table === 'Items' ? getEffect(loaded, 'Items', slot.name) : getEntry(loaded, slot.name);
+	const entry = slot.table === 'Pokedex' ? getEntry(loaded, slot.name) : getEffect(loaded, slot.table, slot.name);
 	const entrySprites = { ...entry.sprites };
 	if (!decoded) {
 		if (!entrySprites[slot.key]) throw new Chat.ErrorMessage(`${name} has no ${kind} sprite.`);
@@ -1028,9 +1041,6 @@ export async function setSprite(
 		);
 	}
 	const detached = { ...entry, sprites: entrySprites, trackdex: null, trackid: null };
-	if (slot.table === 'Items') {
-	} else {
-	}
 	await writeEntry(loaded.row.dexid, slot.table, detached);
 	return saved(loaded, slot.table, id);
 }

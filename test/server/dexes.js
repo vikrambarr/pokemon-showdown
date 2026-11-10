@@ -413,6 +413,33 @@ describe('Dexes', () => {
 		assert.equal(Dexes.clientData(loaded).TypeChart.cosmic.color, '#3b3f8f');
 		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', color: 'blue' }), /hex color/);
 		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', label: 'TOOLONG' }), /1 to 6/);
+		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', removed: true }), /Delete Cosmic instead/);
+
+		({ loaded } = await Dexes.putType(loaded, { name: 'Fire', color: '#112233', label: 'BLAZE' }));
+		assert.deepEqual([loaded.dex.types.get('Fire').color, loaded.dex.types.get('Fire').label], ['#112233', 'BLAZE']);
+		({ loaded } = await Dexes.putType(loaded, { name: 'Fairy', attacks: { Cosmic: 2 }, removed: true }));
+		assert(!loaded.dex.types.names().includes('Fairy'));
+		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Dragon'), 0);
+		assert.equal(loaded.dex.getEffectiveness('Dragon', 'Fairy'), 0);
+		assert.equal(loaded.dex.getImmunity('Dragon', 'Fairy'), true);
+		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Cosmic'), 0);
+		assert(!('Cosmic' in loaded.dex.types.get('Fairy').damageTaken));
+		({ loaded } = await Dexes.putType(loaded, { name: 'Fairy', removed: null }));
+		assert(loaded.dex.types.names().includes('Fairy'));
+		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Dragon'), 1);
+		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Cosmic'), 1);
+		loaded = await Dexes.deleteEffect(loaded, 'TypeChart', 'Fairy');
+		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Cosmic'), 0);
+
+		loaded = await Dexes.setSprite(owner, loaded, 'water', 'type', png(32, 14));
+		const water = Dexes.clientData(loaded);
+		assert(water.images[water.typeSprites.water]);
+		({ loaded } = await Dexes.putType(loaded, { name: 'Water', color: '#123456' }));
+		assert(Dexes.clientData(loaded).typeSprites.water);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Shadow', 'type', png(32, 14)), /has no type called/);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Water', 'type', png(65, 14)), /at most 64x64/);
+		loaded = await Dexes.setSprite(owner, loaded, 'Water', 'type', null);
+		assert(!Dexes.clientData(loaded).typeSprites);
 		await Dexes.deleteDex(Dexes.getDex('olddex'));
 	});
 

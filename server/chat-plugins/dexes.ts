@@ -264,7 +264,7 @@ const uploads = new Map<string, {
 
 async function uploadURL(user: User, target: string) {
 	checkEnabled(user);
-	const [dexName, name, rest] = args(target, 3, `/dexes upload [dex], [pokemon or item], [kind], [settings JSON]`);
+	const [dexName, name, rest] = args(target, 3, `/dexes upload [dex], [pokemon, item or type], [kind], [settings JSON]`);
 	const [kind, settings] = Utils.splitFirst(rest, ',').map(part => part.trim());
 	const loaded = await Dexes.editable(user, dexName);
 	const upload = {
@@ -626,14 +626,14 @@ export const commands: Chat.ChatCommands = {
 		async sprite(target, room, user) {
 			checkEnabled(user);
 			const [dexName, name, kind, rest] = args(
-				target, 4, `/dexes sprite [dex], [pokemon or item], [kind], [base64 PNG or GIF], [settings JSON]`
+				target, 4, `/dexes sprite [dex], [pokemon, item or type], [kind], [base64 PNG or GIF], [settings JSON]`
 			);
 			const [image, settings] = Utils.splitFirst(rest, ',').map(part => part.trim());
 			const loaded = await Dexes.setSprite(
 				user, await Dexes.editable(user, dexName), name, toKind(kind), image, settings ? parseJSON(settings) : {}
 			);
 			const slot = Dexes.spriteSlot(loaded, name, toKind(kind));
-			const entry = slot.table === 'Items' ? Dexes.getEffect(loaded, 'Items', slot.name) : Dexes.getEntry(loaded, slot.name);
+			const entry = slot.table === 'Pokedex' ? Dexes.getEntry(loaded, slot.name) : Dexes.getEffect(loaded, slot.table, slot.name);
 			this.sendReplyBox(Utils.html`Set the ${toKind(kind)} sprite of ${name}: ` +
 				spriteHTML(loaded, { [slot.key]: entry.sprites[slot.key] }));
 		},
@@ -644,16 +644,16 @@ export const commands: Chat.ChatCommands = {
 		},
 		async clearsprite(target, room, user) {
 			checkEnabled(user);
-			const [dexName, name, kind] = args(target, 3, `/dexes clearsprite [dex], [pokemon or item], [kind]`);
+			const [dexName, name, kind] = args(target, 3, `/dexes clearsprite [dex], [pokemon, item or type], [kind]`);
 			await Dexes.setSprite(user, await Dexes.editable(user, dexName), name, toKind(kind), null);
 			this.sendReply(`Removed the ${toKind(kind)} sprite of ${name}.`);
 		},
 		async deletesprite(target, room, user) {
 			checkEnabled(user);
-			const [dexName, name, kind] = args(target, 3, `/dexes deletesprite [dex], [pokemon or item], [kind]`);
+			const [dexName, name, kind] = args(target, 3, `/dexes deletesprite [dex], [pokemon, item or type], [kind]`);
 			const loaded = Dexes.getDex(dexName);
 			const slot = Dexes.spriteSlot(loaded, name, toKind(kind));
-			const entry = slot.table === 'Items' ? Dexes.getEffect(loaded, 'Items', slot.name) : Dexes.getEntry(loaded, slot.name);
+			const entry = slot.table === 'Pokedex' ? Dexes.getEntry(loaded, slot.name) : Dexes.getEffect(loaded, slot.table, slot.name);
 			if (!entry.sprites[slot.key]) throw new Chat.ErrorMessage(`${name} has no ${toKind(kind)} sprite.`);
 			const { image, uses } = await Dexes.deleteSprite(user, entry.sprites[slot.key]);
 			this.sendReply(`Deleted ${image.uploadername}'s ${image.kind} sprite from everywhere it was used (${uses}).`);
@@ -708,14 +708,14 @@ export const commands: Chat.ChatCommands = {
 		`/dexes ability [dex], [JSON] - Makes or edits an ability, like /dexes move.`,
 		`/dexes item [dex], [JSON] - Makes or edits an item, like /dexes move. "spriteFrom" uses another item's icon.`,
 		`/dexes condition [dex], [JSON] - Makes or edits a condition, like a status or weather, like /dexes move.`,
-		`/dexes type [dex], [JSON] - Makes or edits a type. "damageTaken" sets what it takes from other types, and "attacks" what it deals to them, as multipliers, like {"name": "Cosmic", "damageTaken": {"Dark": 2}, "attacks": {"Steel": 0.5}}. null undoes one. damageTaken can also make it immune (0) to things like sandstorm or par. If both sides set the same matchup, damageTaken wins. "color" (like "#7a5cc9") and "label" (up to 6 characters, like "COSMIC") set how a new type's icon looks.`,
+		`/dexes type [dex], [JSON] - Makes or edits a type. "damageTaken" sets what it takes from other types, and "attacks" what it deals to them, as multipliers, like {"name": "Cosmic", "damageTaken": {"Dark": 2}, "attacks": {"Steel": 0.5}}. null undoes one. damageTaken can also make it immune (0) to things like sandstorm or par. If both sides set the same matchup, damageTaken wins. "color" (like "#7a5cc9") and "label" (up to 6 characters, like "COSMIC") set how a type's icon looks. "removed": true takes a type from the main games out of this dex, making its matchups neutral; null brings it back.`,
 		`/dexes deletemove [dex], [name] - Deletes a custom move, or undoes edits to an existing one. Also: deleteability, deleteitem, deletecondition, deletetype.`,
 		`/dexes code [dex], [move|ability|item|condition], [name] - Shows the values in its code you can change, and what a copy loses.`,
-		`/dexes sprite [dex], [pokemon or item], [kind], [base64 PNG or GIF], [settings JSON] - Sets a sprite, shown scaled to fit. Kinds: front, back, front-shiny, back-shiny (made at 96x96, up to 192x192), icon (40x30, up to 64x64), item (24x24, up to 64x64, items only). A cosmetic forme, like Gastrodon-East, gets its own sprites. Official dexes have no limits, and can also add -f for a female sprite, like front-shiny-f or icon-f, or start with afd- for an April Fools' sprite, like afd-front. Sprites you upload count toward your ${Dexes.megabytes(Dexes.MAX_STORAGE_BYTES)} of storage while any dex uses them, unless you upload them to an official dex.`,
+		`/dexes sprite [dex], [pokemon, item or type], [kind], [base64 PNG or GIF], [settings JSON] - Sets a sprite, shown scaled to fit. Kinds: front, back, front-shiny, back-shiny (made at 96x96, up to 192x192), icon (40x30, up to 64x64), item (24x24, up to 64x64, items only), type (32x14, up to 64x64, types only, used instead of the type's drawn icon). A cosmetic forme, like Gastrodon-East, gets its own sprites. Official dexes have no limits, and can also add -f for a female sprite, like front-shiny-f or icon-f, or start with afd- for an April Fools' sprite, like afd-front. Sprites you upload count toward your ${Dexes.megabytes(Dexes.MAX_STORAGE_BYTES)} of storage while any dex uses them, unless you upload them to an official dex.`,
 		`Optional settings: {"artist": "who drew it", "flip": true (mirrored)}. Official dexes can also set "y": -16 (moves it up or down) and "gen": 3 (placed like that generation's sprites). To change them, set the sprite again.`,
-		`/dexes upload [dex], [pokemon or item], [kind], [settings JSON] - Gives you a link to send a sprite to, for sprites too big for /dexes sprite, up to ${MAX_SPRITE_BYTES / 1024}KB. It works once, for ${UPLOAD_TIME / 60 / 1000} minutes, while you stay logged in.`,
-		`/dexes clearsprite [dex], [pokemon or item], [kind] - Stops using a sprite here.`,
-		`/dexes deletesprite [dex], [pokemon or item], [kind] - Deletes a sprite you uploaded, everywhere it was forked to.`,
+		`/dexes upload [dex], [pokemon, item or type], [kind], [settings JSON] - Gives you a link to send a sprite to, for sprites too big for /dexes sprite, up to ${MAX_SPRITE_BYTES / 1024}KB. It works once, for ${UPLOAD_TIME / 60 / 1000} minutes, while you stay logged in.`,
+		`/dexes clearsprite [dex], [pokemon, item or type], [kind] - Stops using a sprite here.`,
+		`/dexes deletesprite [dex], [pokemon, item or type], [kind] - Deletes a sprite you uploaded, everywhere it was forked to.`,
 		`/dexes format [dex], [JSON] - Makes or edits a format. Fields: name, from, gameType, ruleset, banlist, unbanlist, restricted, bestOfDefault, teraPreviewDefault, debug. "debug" makes a Custom Game: debug messages, and stats that can go past 65535. "from" copies the rules and bans of a format on this server, like "gen9ou", before the other fields apply.`,
 		`/dexes deleteformat [dex], [format] - Deletes a format.`,
 		`/dexes rebuildfiles - Rewrites missing snapshot and sprite files from the database. Requires: ~`,
