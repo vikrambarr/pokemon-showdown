@@ -28,6 +28,9 @@ function gif(width, height) {
 
 const id = name => Dexes.getDex(name).row.dexid;
 const formatOf = (dex, name) => [...Dexes.getDex(dex).formats].find(([, data]) => toID(data.name) === toID(name))[0];
+const slotsOf = (loaded, table, name, from, to) => Object.fromEntries(Dexes.effectEditor(loaded, table, name).handlers.flatMap(
+	handler => handler.slots.filter(slot => slot.value === from).map(slot => [`${handler.path}:${slot.index}`, to])
+));
 
 const team = species => Teams.pack([{
 	species, ability: 'Static', moves: ['thunderbolt', 'protect'],
@@ -156,7 +159,7 @@ describe('Dexes', () => {
 	});
 
 	it('should keep GIFs of any size up to the limit, with their settings', async () => {
-		const settings = { artist: 'Mocha Artist', flip: true };
+		const settings = { artist: 'Mocha Artist' };
 		const loaded = await Dexes.setSprite(owner, Dexes.getDex('mochadex'), 'Voltlet', 'back', gif(160, 150), settings);
 		const uploadid = loaded.entries.get('voltlet').sprites.back;
 		const image = Dexes.clientData(loaded).images[uploadid];
@@ -164,10 +167,10 @@ describe('Dexes', () => {
 		assert.equal(image.width, 160);
 		assert.equal(image.height, 150);
 		assert.equal(image.artist, 'Mocha Artist');
-		assert(image.flip && image.pixelated);
+		assert(image.pixelated);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(193, 96)), /at most 192x192/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { y: -16 }), /isn't a sprite setting/);
-		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { flip: 'yes' }), /"flip" must be/);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { flip: true }), /isn't a sprite setting/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { size: 2 }), /isn't a sprite setting/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'back', gif(96, 96), { constructor: 2 }), /isn't a sprite setting/);
 		const cleared = await Dexes.setSprite(owner, loaded, 'Voltlet', 'back', null);
@@ -213,9 +216,8 @@ describe('Dexes', () => {
 
 	it('should make and edit moves, abilities and items, including values in their code', async () => {
 		let loaded = Dexes.getDex('mochadex');
-		({ loaded } = await Dexes.putEffect(loaded, 'Moves', {
-			name: 'Scorch Soak', inheritsFrom: 'Soak', type: 'Fire', replace: [['Water', 'Fire']],
-		}));
+		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', inheritsFrom: 'Soak', type: 'Fire' }));
+		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', slots: slotsOf(loaded, 'Moves', 'Scorch Soak', 'Water', 'Fire') }));
 		let editor = Dexes.effectEditor(loaded, 'Moves', 'Scorch Soak');
 		const onHit = editor.handlers.find(handler => handler.path === 'onHit');
 		assert(onHit.slots.length && onHit.slots.every(slot => slot.value === 'Fire' && slot.original === 'Water' && slot.edited));
@@ -224,9 +226,8 @@ describe('Dexes', () => {
 
 		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Choice Band', slots: { 'onModifyAtk:1': 3 } }));
 		assert(Dexes.effectEditor(loaded, 'Items', 'Choice Band').data.shortDesc.startsWith(`Holder's Attack is 1.5×`));
-		({ loaded } = await Dexes.putEffect(loaded, 'Items', {
-			name: 'Volt Orb', inheritsFrom: 'Light Ball', replace: [['Pikachu', 'Voltlet']],
-		}));
+		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Volt Orb', inheritsFrom: 'Light Ball' }));
+		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Volt Orb', slots: slotsOf(loaded, 'Items', 'Volt Orb', 'Pikachu', 'Voltlet') }));
 		assert.equal(Dexes.effectEditor(loaded, 'Items', 'Volt Orb').data.shortDesc,
 			'If held by a Pikachu, its Attack and Sp. Atk are doubled.');
 		({ loaded } = await Dexes.putEffect(loaded, 'Moves', {
@@ -244,7 +245,6 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', onHit: 1 }), /is code/);
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', basePower: 'lots' }), /whole number/);
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', speed: 1 }), /isn't something you can set/);
-		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', replace: [['Grass', 'Fire']] }), /Nothing/);
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', type: null }), /can't be removed/);
 
 		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Choice Scarf', events: { onModifySpe: 'atk' } }));
