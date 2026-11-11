@@ -75,6 +75,63 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.createDex(owner, 'Other', 'nosuchmod'), /isn't a world/);
 	});
 
+	it('should take Pokemon out of a dex and put them back from its world, with their formes', async () => {
+		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
+		const mocha = id('Mocha Dex');
+		const entries = await crqHandlers.dexentries.call(null, mocha, owner);
+		assert(entries.world.includes('rotomwash') && !entries.world.includes('charizardmegax'));
+		assert(entries.needed.includes('par') && entries.needed.includes('raindance') && entries.needed.length < entries.Conditions.length);
+		const edit = input => crqHandlers.dexedit.call(null, `${mocha}, ${JSON.stringify(input)}`, owner);
+		assert.equal((await edit({ deletepokemon: ['Rotom', 'Charizard', 'Pikachu-Alola'] })).error, undefined);
+		const removed = Dexes.getDex('mochadex').data.species;
+		assert(!removed.includes('rotom') && !removed.includes('rotomwash') && !removed.includes('pikachualola'));
+		assert(removed.includes('pikachu'));
+		assert.match((await edit({ addpokemon: { names: ['Nosuchmon'] } })).skipped[0], /isn't in/);
+		assert.deepEqual((await edit({ addpokemon: { names: ['Rotom', 'Pikachu-Alola', 'Pikachu'] } })).skipped, ['Pikachu is already in Mocha Dex']);
+		const added = Dexes.getDex('mochadex').data.species;
+		assert(added.includes('rotomwash') && added.includes('pikachualola') && !added.includes('charizard'));
+		assert.equal((await edit({ addpokemon: { from: 'gen1', names: ['Charizard'] } })).error, undefined);
+		const charizard = Dexes.getDex('mochadex').dex.species.get('Charizard');
+		assert.equal(charizard.baseStats.spa, 85);
+		assert(Dexes.getDex('mochadex').data.species.includes('charizard') && !Dexes.getDex('mochadex').data.species.includes('charizardmegax'));
+		assert.equal((await edit({ resetpokemon: 'Charizard' })).error, undefined);
+		assert.equal(Dexes.getDex('mochadex').dex.species.get('Charizard').baseStats.spa, 109);
+		assert.match((await edit({ addpokemon: { from: 'mochadex', names: ['Pikachu'] } })).error, /main games and official dexes/);
+		assert.match((await edit({ pokemon: { name: 'Pikachu', evos: ['Pikachu'] } })).error, /Pikachu can't evolve into itself/);
+		assert.equal((await edit({ deletemove: ['Thunderbolt'], deleteitem: 'Leftovers' })).error, undefined);
+		assert.deepEqual(Dexes.getDex('mochadex').data.lists, { Moves: { added: [], removed: ['thunderbolt'] }, Items: { added: [], removed: ['leftovers'] } });
+		const listed = await crqHandlers.dexentries.call(null, mocha, owner);
+		assert(!listed.Moves.includes('thunderbolt') && listed.Moves.includes('thundershock'));
+		assert.match((await edit({ deletecondition: 'par' })).error, /comes with/);
+		assert.deepEqual((await edit({ addmove: { names: ['Thunderbolt', 'Hidden Power', 'Tackle'] }, additem: { names: ['Leftovers'] } })).skipped,
+			['Tackle is already in Mocha Dex']);
+		assert.deepEqual(Dexes.getDex('mochadex').data.lists, { Moves: { added: ['hiddenpower'], removed: [] } });
+		assert.equal(Dexes.getDex('mochadex').dex.moves.get('Hidden Power').isNonstandard, null);
+		assert.deepEqual((await edit({ addmove: { from: 'gen1', names: ['Bite'] } })).skipped, ['Bite is already in Mocha Dex']);
+		assert.equal((await edit({ deletemove: 'Bite' })).error, undefined);
+		assert.equal((await edit({ addmove: { from: 'gen1', names: ['Bite'] } })).error, undefined);
+		assert.equal(Dexes.getDex('mochadex').dex.moves.get('Bite').type, 'Normal');
+		assert.equal((await edit({ resetmove: 'Bite', deletemove: 'Hidden Power' })).error, undefined);
+		assert.equal(Dexes.getDex('mochadex').data.lists, undefined);
+		assert.deepEqual((await crqHandlers.dexsource.call(null, `${mocha}, gen1, move`, owner)).species.length, 165);
+		const uranium = await Dexes.createDex(editor, 'Uranium Test', 'gen9uranium');
+		const geiger = await Dexes.forkEntry(Dexes.getDex('mochadex'), uranium, 'Abilities', 'Geiger Sense');
+		assert.deepEqual(geiger.copied, ['ability Geiger Sense']);
+		const wind = await Dexes.forkEntry(Dexes.getDex('mochadex'), uranium, 'Moves', 'Nuclear Wind');
+		assert.deepEqual(wind.copied, ['move Nuclear Wind', 'condition Fallout']);
+		const forked = Dexes.getDex('mochadex');
+		assert.equal(forked.effects.Abilities.get('geigersense').inheritsfrom, 'gen9uranium:geigersense');
+		assert.equal(typeof forked.dex.abilities.get('Geiger Sense').onSwitchIn, 'function');
+		assert.equal(forked.dex.conditions.get('fallout').effectType, 'Weather');
+		await Dexes.deleteEffects(forked, 'Moves', ['Nuclear Wind']);
+		await Dexes.deleteEffects(Dexes.getDex('mochadex'), 'Abilities', ['Geiger Sense']);
+		await Dexes.deleteEffects(Dexes.getDex('mochadex'), 'Conditions', ['Fallout']);
+		await Dexes.deleteDex(Dexes.getDex('uraniumtest'));
+		assert.match((await edit({ pokemon: { name: 'Pichu', prevo: 'Raichu' } })).error, /evolve into each other in a loop/);
+		assert.deepEqual((await crqHandlers.dexsource.call(null, `${mocha}, gen1`, owner)).species.length, 151);
+		assert.match((await crqHandlers.dexedit.call(null, `${mocha}, ${JSON.stringify({ addpokemon: { names: ['Charizard'] } })}`, editor)).error, /edit/);
+	});
+
 	it('should make custom Pokemon, edit existing ones, and play them in its formats', async () => {
 		let loaded = await Dexes.editable(owner, 'mochadex');
 		({ loaded } = await Dexes.putEntry(loaded, {
@@ -111,6 +168,11 @@ describe('Dexes', () => {
 		await Dexes.setSpecies(Dexes.getDex('mochadex'), Dexes.findSpecies(loaded, ['Pikachu']), false);
 		const result = await TeamValidatorAsync.get(formatid).validateTeam(team('Pikachu'));
 		assert(result.startsWith('0') && result.includes(`isn't in this dex`), result);
+		await Dexes.deleteEffects(Dexes.getDex('mochadex'), 'Moves', ['Thunderbolt']);
+		const removed = await TeamValidatorAsync.get(formatid).validateTeam(team('Voltlet'));
+		assert(removed.startsWith('0') && removed.includes(`Thunderbolt isn't in this dex`), removed);
+		await Dexes.addEffects(Dexes.getDex('mochadex'), 'Moves', '', ['Thunderbolt']);
+		assert.equal((await TeamValidatorAsync.get(formatid).validateTeam(team('Voltlet'))).charAt(0), '1');
 	});
 
 	it('should let only its owner and editors change it', async () => {

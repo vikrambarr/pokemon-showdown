@@ -1,7 +1,7 @@
 import { FS } from '../../lib';
 import { Dex, type ModdedDex } from '../../sim/dex';
 import {
-	baseEffect, effectSlots, isObject, REPLACED, UNSAFE, type EffectEdit, type EffectTable,
+	baseEffect, effectSlots, inheritedEffect, isObject, REPLACED, UNSAFE, type EffectEdit, type EffectTable,
 } from '../../sim/dex-custom';
 import {
 	classify, checkSlot, eventTargets, handlersOf, parseHandler, STAT_EVENT, type Slot,
@@ -353,7 +353,7 @@ function checkEffect(
 		}
 		inheritsfrom = baseid;
 	}
-	const base = official || (inheritsfrom ? dex.data[table][inheritsfrom] : undefined);
+	const base = official || inheritedEffect(dex, table, inheritsfrom).base;
 	const fields: AnyObject = {};
 	for (const key in input) {
 		if (!CONTROL.includes(key)) fields[key] = input[key];
@@ -370,7 +370,7 @@ function checkEffect(
 		if (fields.countsAs && !inheritsfrom) {
 			throw new Chat.ErrorMessage(`Only copies can count as something: ${name} isn't copied from another ${what}.`);
 		}
-		fields.countsAs = fields.countsAs ? inheritsfrom : null;
+		fields.countsAs = fields.countsAs ? inheritedEffect(dex, table, inheritsfrom).baseid : null;
 	}
 	const keep = old?.inheritsfrom === inheritsfrom;
 	const start = keep ? old!.data : !base ? BLANK[table] : {};
@@ -413,7 +413,8 @@ function checkEffect(
 	}
 
 	const catalogue = effectSlots(dex, table, effectid, editOf(entry), entry.data.name, data);
-	const own = (found: Slot) => found.kind === 'ref' && [effectid, inheritsfrom].includes(toID(found.value));
+	const inheritedid = inheritedEffect(dex, table, inheritsfrom).baseid;
+	const own = (found: Slot) => found.kind === 'ref' && [effectid, inheritedid].includes(toID(found.value));
 	const setSlot = (path: string, index: number, value: unknown) => {
 		const found = catalogue.find(other => other.path === path);
 		const target = found?.handler?.slots[index];
