@@ -571,6 +571,28 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 			bans.other.push({ name: label, state, ...rule?.desc ? { desc: rule.desc } : {}, ...source ? { source } : {} });
 		}
 	}
+	const details = {
+		id, name: data.name, dex: loaded.row.name, dexid: loaded.row.dexid, mod: loaded.row.mod,
+		gameType: data.gameType || 'singles', ruleset: data.ruleset || [],
+		banlist: data.banlist || [], unbanlist: data.unbanlist || [], restricted: data.restricted || [],
+		tiers: (data as AnyObject).tiers || {},
+		rules: [...ruleTable.keys()].filter(rule => !/^[-+*!]/.test(rule) && !rule.includes(':')),
+		sources: Object.fromEntries([...ruleTable].filter(([rule, source]) => source && !/^[-+*!]/.test(rule) && !rule.includes(':'))),
+		bans, legal, banned, outright,
+	};
+	if (!draft) formatDetailsCache.set(id, { key, details });
+	return details;
+}
+
+const formatRulesCache = new Map<string, AnyObject>();
+
+export function formatRules(name: string) {
+	const formatid = toID(name);
+	const loaded = dexes.get(formatDexes.get(formatid)!);
+	if (!loaded?.formats.has(formatid)) return null;
+	const key = `${loaded.data.hash}:${formatid}`;
+	if (formatRulesCache.get(formatid)?.key === key) return formatRulesCache.get(formatid)!.rules;
+	const dex = Dex.forFormat(Dex.formats.get(formatid));
 	const rulesets = [];
 	for (const ruleid in dex.data.Rulesets) {
 		if (['dexpokemon', 'dexsnapshot'].includes(ruleid)) continue;
@@ -595,17 +617,9 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 			id: tagid, name: tag.name, kind: tag.speciesFilter ? 'pokemon' : tag.moveFilter ? 'move' : 'other', ...desc ? { desc } : {},
 		});
 	}
-	const details = {
-		id, name: data.name, dex: loaded.row.name, dexid: loaded.row.dexid, mod: loaded.row.mod,
-		gameType: data.gameType || 'singles', ruleset: data.ruleset || [],
-		banlist: data.banlist || [], unbanlist: data.unbanlist || [], restricted: data.restricted || [],
-		tiers: (data as AnyObject).tiers || {},
-		rules: [...ruleTable.keys()].filter(rule => !/^[-+*!]/.test(rule) && !rule.includes(':')),
-		sources: Object.fromEntries([...ruleTable].filter(([rule, source]) => source && !/^[-+*!]/.test(rule) && !rule.includes(':'))),
-		bans, legal, banned, outright, rulesets: Utils.sortBy(rulesets, rule => rule.name), tags: Utils.sortBy(tags, tag => [tag.kind, tag.name]),
-	};
-	if (!draft) formatDetailsCache.set(id, { key, details });
-	return details;
+	const rules = { rulesets: Utils.sortBy(rulesets, rule => rule.name), tags: Utils.sortBy(tags, tag => [tag.kind, tag.name]) };
+	formatRulesCache.set(formatid, { key, rules });
+	return rules;
 }
 
 export function battleData(formatid: string) {
