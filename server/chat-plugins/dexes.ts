@@ -792,12 +792,22 @@ export const commands: Chat.ChatCommands = {
 	],
 };
 
+const sentSummaries = new WeakMap<Connection, Map<ID, string>>();
+
 export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 	async dexes(target, user) {
 		const account = await viewer(user);
 		const list = toID(target) ? Dexes.search(target, account) :
 			[...Dexes.dexes.values()].filter(loaded => Dexes.listed(loaded, account));
-		return list.map(summary);
+		const sent = sentSummaries.get(this.connection);
+		const digests = new Map<ID, string>();
+		sentSummaries.set(this.connection, digests);
+		return list.map(loaded => {
+			const data = summary(loaded);
+			const digest = crypto.createHash('sha1').update(JSON.stringify(data)).digest('base64');
+			digests.set(data.id, digest);
+			return sent?.get(data.id) === digest ? { id: data.id } : data;
+		});
 	},
 	async dexstorage(target, user) {
 		const account = await viewer(user);
@@ -892,6 +902,9 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		const details = Dexes.formatDetails(formatid);
 		if (details) await Dexes.editable(user, details.dexid);
 		return Dexes.formatDetails(formatid, parseJSON(draft));
+	},
+	dexrules(target) {
+		return Dexes.formatRules(target);
 	},
 	dexsource(target) {
 		const [dexid, from, kind] = Utils.splitFirst(target, ',', 2).map(part => part.trim());
