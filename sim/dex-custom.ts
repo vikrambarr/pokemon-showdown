@@ -32,6 +32,7 @@ export interface DexLayer {
 	FormatsData: DexTable<SpeciesFormatsData>;
 	TypeChart?: DexTable<TypeData>;
 	effects?: { [table in EffectTable]?: DexTable<EffectEdit> };
+	lists?: { [table in 'Moves' | 'Abilities' | 'Items']?: { added: string[], removed: string[] } };
 	format?: FormatData;
 }
 
@@ -76,10 +77,18 @@ function renameSelf(value: any, from: string, id: string, name: string): any {
 	return value;
 }
 
+export function inheritedEffect(parent: ModdedDex, table: EffectTable, inherit: string | null | undefined) {
+	const [mod, id] = `${inherit || ''}`.includes(':') ? `${inherit}`.split(':') : ['', `${inherit || ''}`];
+	const source = mod ? (parent.dexes[toID(mod)] && !isBuiltDex(toID(mod)) ? parent.mod(toID(mod)) : null) : parent;
+	const baseid = toID(id);
+	return { baseid, base: baseid && source ? source.data[table][baseid] as AnyObject | undefined : undefined };
+}
+
 export function baseEffect(parent: ModdedDex, table: EffectTable, id: string, edit: EffectEdit) {
 	const official = parent.data[table][id];
-	const baseid = official ? id : toID(edit.inherit);
-	const base: AnyObject | undefined = official || (baseid ? parent.data[table][baseid] : undefined);
+	const inherited = official ? { baseid: id, base: undefined } : inheritedEffect(parent, table, edit.inherit);
+	const baseid = inherited.baseid;
+	const base: AnyObject | undefined = official || inherited.base;
 	const renames = !official && !!base && (table === 'Conditions' || !parent.data.Conditions[baseid]);
 	return { official: !!official, baseid, base, renames };
 }
@@ -347,6 +356,10 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 	}
 	const parent = buildBase(data, base, engine || data.mod);
 	const species = new Set(data.species);
+	const removed = (table: 'Moves' | 'Abilities' | 'Items') => new Set(data.lists?.[table]?.removed || []);
+	const removedMoves = removed('Moves');
+	const removedAbilities = removed('Abilities');
+	const removedItems = removed('Items');
 	const dex = new base.ModdedDex(id);
 	dex.parentMod = parent.currentMod;
 	dex.gen = parent.gen;
@@ -369,7 +382,7 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 			dexpokemon: {
 				effectType: 'ValidatorRule',
 				name: 'Dex Pokemon',
-				desc: "Only Pok&eacute;mon in this dex can be used",
+				desc: "Only Pok&eacute;mon, moves, abilities and items in this dex can be used",
 				onValidateSet(set) {
 					const { outOfBattleSpecies, tierSpecies } = this.getValidationSpecies(set);
 					const fusion = this.ruleTable.has('infinitefusionmod') && set.fusion ? [this.dex.species.get(set.fusion)] : [];
@@ -378,6 +391,11 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 							return [`${forme.name} isn't in this dex.`];
 						}
 					}
+					const problems = set.moves.filter(move => removedMoves.has(toID(move)))
+						.map(move => `${this.dex.moves.get(move).name} isn't in this dex.`);
+					if (removedAbilities.has(toID(set.ability))) problems.push(`${this.dex.abilities.get(set.ability).name} isn't in this dex.`);
+					if (removedItems.has(toID(set.item))) problems.push(`${this.dex.items.get(set.item).name} isn't in this dex.`);
+					if (problems.length) return problems;
 				},
 			},
 			officialteratypes: {
@@ -400,6 +418,15 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 		},
 	};
 	if (data.effects) resolveEffects(parent, data.effects, dex.dataCache);
+	for (const table of ['Moves', 'Abilities', 'Items'] as const) {
+		const added = data.lists?.[table]?.added || [];
+		if (!added.length) continue;
+		const entries: AnyObject = { ...dex.dataCache[table] };
+		for (const id of added) {
+			if (entries[id]?.isNonstandard) entries[id] = { ...entries[id], isNonstandard: null };
+		}
+		(dex.dataCache as AnyObject)[table] = entries;
+	}
 	countCopies(dex.dataCache);
 	const cosmetic = new Map(Object.entries(data.Pokedex).flatMap(([speciesid, entry]) => (
 		(entry.cosmeticFormes || []).map(forme => [toID(forme), speciesid as ID] as const)

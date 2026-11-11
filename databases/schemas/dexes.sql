@@ -10,11 +10,13 @@ CREATE TABLE IF NOT EXISTS dexes (
 	official BOOLEAN NOT NULL,
 	visibility TEXT NOT NULL,
 	description TEXT NOT NULL DEFAULT '',
+	effectlists JSONB NOT NULL DEFAULT '{}',
 	created BIGINT NOT NULL,
 	updated BIGINT NOT NULL
 );
 
 ALTER TABLE dexes ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+ALTER TABLE dexes ADD COLUMN IF NOT EXISTS effectlists JSONB NOT NULL DEFAULT '{}';
 
 CREATE INDEX IF NOT EXISTS dexes_ownerid ON dexes (ownerid);
 

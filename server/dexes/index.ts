@@ -34,9 +34,13 @@ export interface DexRow {
 	official: boolean;
 	visibility: Visibility;
 	description: string;
+	effectlists: { [table in ListTable]?: { added?: ID[], removed?: ID[] } };
 	created: number;
 	updated: number;
 }
+
+export type ListTable = 'Moves' | 'Abilities' | 'Items';
+export const LIST_TABLES: ListTable[] = ['Moves', 'Abilities', 'Items'];
 
 export interface LoadedDex {
 	row: DexRow;
@@ -333,10 +337,26 @@ function compile(row: DexRow, entries: Map<ID, SpeciesEntry>, effects: Effects, 
 	const species = parents.length ? [...new Set([
 		...parents.flatMap(parent => parent.species).filter(id => !row.removed.includes(id as ID)), ...row.species, ...custom,
 	])] : [...row.species, ...custom];
+	const lists: NonNullable<DexLayer['lists']> = {};
+	for (const table of LIST_TABLES) {
+		const inherited = parents.map(parent => parent.lists?.[table] || { added: [], removed: [] });
+		const added = new Set(inherited.flatMap(list => list.added));
+		const removed = new Set(inherited.length ? inherited[0].removed.filter(id => inherited.every(list => list.removed.includes(id))) : []);
+		for (const id of row.effectlists?.[table]?.removed || []) {
+			removed.add(id);
+			added.delete(id);
+		}
+		for (const id of row.effectlists?.[table]?.added || []) {
+			added.add(id);
+			removed.delete(id);
+		}
+		if (added.size || removed.size) lists[table] = { added: [...added].sort(), removed: [...removed].sort() };
+	}
 	const content = {
 		mod: row.mod, ...(parents.length ? { parents: parents.map(parent => parent.hash) } : {}), species, ...resolved,
 		...(Object.keys(TypeChart).length ? { TypeChart } : {}),
 		...(Object.keys(edits).length ? { effects: edits } : {}),
+		...(Object.keys(lists).length ? { lists } : {}),
 	};
 	const speciesSprites = sorted(entries).map(([, entry]) => [entry.speciesid, entry.sprites]);
 	const itemSprites = sorted(effects.Items).map(([, entry]) => entry).filter(entry => entry.sprites.item)
@@ -354,10 +374,45 @@ function compile(row: DexRow, entries: Map<ID, SpeciesEntry>, effects: Effects, 
 }
 
 function check(data: DexLayer) {
+	let built: ModdedDex;
 	try {
-		releaseDex(buildDex(data, Dex));
+		built = buildDex(data, Dex);
 	} catch (e: any) {
 		throw new Chat.ErrorMessage(`That doesn't work: ${e.message}`);
+	}
+	try {
+		checkEvolutions(built);
+	} finally {
+		releaseDex(built);
+	}
+}
+
+export function checkEvolutions(dex: ModdedDex) {
+	const children = new Map<ID, Set<ID>>();
+	const link = (from: string | undefined, to: string) => {
+		if (!from) return;
+		if (!children.has(toID(from))) children.set(toID(from), new Set());
+		children.get(toID(from))!.add(toID(to));
+	};
+	for (const id in dex.data.Pokedex) {
+		const species: AnyObject = dex.data.Pokedex[id];
+		link(species.prevo, id);
+		for (const evo of species.evos || []) link(id, evo);
+	}
+	const done = new Set<ID>();
+	const visit = (path: ID[]) => {
+		for (const next of children.get(path[path.length - 1]) || []) {
+			if (path.includes(next)) {
+				const names = path.slice(path.indexOf(next)).map(id => (dex.data.Pokedex[id] as AnyObject | undefined)?.name || id);
+				throw new Chat.ErrorMessage(names.length === 1 ? `${names[0]} can't evolve into itself.` :
+					`${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} evolve into each other in a loop.`);
+			}
+			if (!done.has(next)) visit([...path, next]);
+		}
+		done.add(path[path.length - 1]);
+	};
+	for (const id of children.keys()) {
+		if (!done.has(id)) visit([id]);
 	}
 }
 
@@ -755,9 +810,17 @@ function resolveBase(on: string, engine?: string, height = 0) {
 	if (parents.some(parent => depthOf(parent) + 1 + height >= MAX_DEPTH)) {
 		throw new Chat.ErrorMessage(`Dexes can only be each other's worlds ${MAX_DEPTH} deep.`);
 	}
-	const species = parents.length ? [] : base.includeData().species.all()
-		.filter(entry => entry.exists && !entry.isNonstandard).map(entry => entry.id);
+	const species = parents.length ? [] : standardSpecies(base);
 	return { parents, modid, base, species };
+}
+
+function standardSpecies(base: ModdedDex) {
+	return base.includeData().species.all().filter(entry => entry.exists && !entry.isNonstandard).map(entry => entry.id);
+}
+
+export function worldSpecies(loaded: LoadedDex) {
+	const parents = parentsOf(loaded);
+	return parents.length ? [...new Set(parents.flatMap(parent => parent.data.species))] : standardSpecies(Dex.mod(loaded.row.mod));
 }
 
 export async function createDex(user: User, name: string, on: string, engine?: string) {
@@ -859,7 +922,7 @@ export async function clearDex(loaded: LoadedDex) {
 		.filter(entry => entry.exists && !entry.isNonstandard).map(entry => entry.id);
 	await database().query(SQL`DELETE FROM dex_species WHERE dexid = ${dexid}`);
 	await database().query(SQL`DELETE FROM dex_effects WHERE dexid = ${dexid}`);
-	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = '[]' WHERE dexid = ${dexid}`);
+	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = '[]', effectlists = '{}' WHERE dexid = ${dexid}`);
 	const updated = await save(loaded);
 	await unfollow(dexid);
 	return updated;
@@ -917,6 +980,7 @@ async function save(loaded: LoadedDex) {
 
 export function findSpecies(loaded: LoadedDex, names: string[]) {
 	const base = baseOf(loaded.row);
+	const shown = new Set([...worldSpecies(loaded), ...loaded.data.species]);
 	const ids = new Set<ID>();
 	for (const name of names) {
 		const species = base.species.get(name);
@@ -925,7 +989,8 @@ export function findSpecies(loaded: LoadedDex, names: string[]) {
 		}
 		const formes = species.baseSpecies === species.name ? species.formeOrder || [species.name] : [species.name];
 		for (const forme of formes) {
-			if (base.data.Pokedex[toID(forme)]) ids.add(toID(forme));
+			const id = toID(forme);
+			if (base.data.Pokedex[id] && (id === species.id || shown.has(id))) ids.add(id);
 		}
 	}
 	return ids;
@@ -987,6 +1052,227 @@ export async function deleteEntry(loaded: LoadedDex, name: string) {
 	await database().query(SQL`DELETE FROM dex_species
 		WHERE dexid = ${loaded.row.dexid} AND speciesid = ${entry.speciesid}`);
 	return saved(loaded, 'Pokedex', entry.speciesid);
+}
+
+export async function deletePokemon(loaded: LoadedDex, names: string[]) {
+	const base = baseOf(loaded.row);
+	const ids = new Set<ID>();
+	for (const name of names) {
+		const id = toID(name);
+		if (base.data.Pokedex[id]) {
+			for (const each of findSpecies(loaded, [name])) ids.add(each);
+		} else if (loaded.entries.has(id)) {
+			ids.add(id);
+		} else {
+			throw new Chat.ErrorMessage(`${loaded.row.name} has no Pokemon called "${name}".`);
+		}
+	}
+	const entries = new Map(loaded.entries);
+	const deleted = [...ids].filter(id => entries.delete(id));
+	const inherited = new Set(parentsOf(loaded).flatMap(parent => parent.data.species));
+	const species = loaded.row.species.filter(id => !ids.has(id));
+	const removed = [...new Set([...loaded.row.removed, ...[...ids].filter(id => inherited.has(id))])];
+	check(compile({ ...loaded.row, species, removed }, entries, loaded.effects));
+	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = ${json(removed)}
+		WHERE dexid = ${loaded.row.dexid}`);
+	for (const id of deleted) {
+		await database().query(SQL`DELETE FROM dex_species WHERE dexid = ${loaded.row.dexid} AND speciesid = ${id}`);
+	}
+	const updated = await save(loaded);
+	for (const id of deleted) await propagate(loaded.row.dexid, 'Pokedex', id);
+	return dexes.get(updated.row.dexid) || updated;
+}
+
+export function sourceSpecies(loaded: LoadedDex, from: string) {
+	const gen = /^gen([1-9])$/.exec(toID(from));
+	if (!toID(from)) return worldSpecies(loaded);
+	if (gen) return standardSpecies(Dex.mod(`gen${gen[1]}`));
+	const source = getDex(from);
+	if (!source.row.official) throw new Chat.ErrorMessage(`Pokemon can only be added from the main games and official dexes.`);
+	return source.data.species as ID[];
+}
+
+const LIST_GETTERS = { Moves: 'moves', Abilities: 'abilities', Items: 'items' } as const;
+
+export function effectListed(loaded: LoadedDex, table: ListTable, id: ID) {
+	const data = loaded.dex.data[table][id] as AnyObject | undefined;
+	if (!data || loaded.data.lists?.[table]?.removed.includes(id)) return false;
+	return !data.isNonstandard || ancestorsOf(loaded).some(layer => entriesOf(layer, table).has(id));
+}
+
+export function sourceIds(loaded: LoadedDex, table: 'Pokedex' | ListTable, from: string) {
+	if (table === 'Pokedex') return sourceSpecies(loaded, from);
+	const gen = /^gen([1-9])$/.exec(toID(from));
+	const playable = (effect: AnyObject) => !effect.isZ && !effect.isMax;
+	if (gen) {
+		return ([...Dex.mod(`gen${gen[1]}`)[LIST_GETTERS[table]].all()] as AnyObject[])
+			.filter(effect => effect.exists && !effect.isNonstandard && playable(effect)).map(effect => effect.id as ID);
+	}
+	if (!toID(from)) {
+		const base = baseOf(loaded.row);
+		return Object.keys(base.data[table]).filter(id => playable(base.data[table][id] as AnyObject)) as ID[];
+	}
+	const source = getDex(from);
+	if (!source.row.official) throw new Chat.ErrorMessage(`Things can only be added from the main games and official dexes.`);
+	return Object.keys(source.dex.data[table]).filter(id => effectListed(source, table, id as ID)) as ID[];
+}
+
+async function setListed(loaded: LoadedDex, table: ListTable, ids: ID[]) {
+	const base = baseOf(loaded.row);
+	const lists = JSON.parse(json(loaded.row.effectlists || {}));
+	const list = lists[table] ||= {};
+	list.removed = (list.removed || []).filter((id: ID) => !ids.includes(id));
+	list.added = [...new Set([...list.added || [], ...ids.filter(id => (base.data[table][id] as AnyObject)?.isNonstandard)])];
+	compile({ ...loaded.row, effectlists: lists }, loaded.entries, loaded.effects);
+	await database().query(SQL`UPDATE dexes SET effectlists = ${json(lists)} WHERE dexid = ${loaded.row.dexid}`);
+	return save(loaded);
+}
+
+export async function addEffects(target: LoadedDex, table: ListTable, from: string, names: string[]) {
+	const base = baseOf(target.row);
+	const gen = /^gen([1-9])$/.exec(toID(from));
+	const source = toID(from) && !gen ? getDex(from) : null;
+	if (source && !source.row.official) throw new Chat.ErrorMessage(`Things can only be added from the main games and official dexes.`);
+	const game = gen && Number(gen[1]) !== base.gen ? Dex.mod(`gen${gen[1]}`) : null;
+	const skipped: string[] = [];
+	const listed: ID[] = [];
+	const inputs: AnyObject[] = [];
+	let loaded = target;
+	for (const name of names) {
+		const id = toID(name);
+		if (effectListed(loaded, table, id)) {
+			skipped.push(`${name} is already in ${loaded.row.name}`);
+			continue;
+		}
+		if (source && (ancestorsOf(source).some(layer => entriesOf(layer, table).has(id)) || !base.data[table][id])) {
+			try {
+				({ loaded } = await forkEntry(loaded, source, table, name));
+				if (base.data[table][id]) listed.push(id);
+			} catch (e: any) {
+				if (!(e instanceof Chat.ErrorMessage)) throw e;
+				skipped.push(`${name}: ${e.message}`);
+			}
+			continue;
+		}
+		const original = base.data[table][id] as AnyObject | undefined;
+		if (!original) {
+			skipped.push(`${name} isn't in ${baseName(loaded.row)}`);
+			continue;
+		}
+		if (game) {
+			const effect = game[LIST_GETTERS[table]].get(id) as AnyObject;
+			if (!effect.exists || effect.isNonstandard) {
+				skipped.push(`${name} isn't in Gen ${game.gen}`);
+				continue;
+			}
+			const fields = table === 'Moves' ? ['type', 'category', 'basePower', 'accuracy', 'pp', 'priority']
+				.filter(field => effect[field] !== original[field]) : [];
+			if (fields.length) inputs.push({ name: effect.name, ...Object.fromEntries(fields.map(field => [field, effect[field]])) });
+		}
+		listed.push(id);
+	}
+	for (const input of inputs) {
+		try {
+			({ loaded } = await putEffect(loaded, 'Moves', input));
+		} catch (e: any) {
+			if (!(e instanceof Chat.ErrorMessage)) throw e;
+			skipped.push(`${input.name}: ${e.message}`);
+		}
+	}
+	if (listed.length) loaded = await setListed(loaded, table, listed);
+	return { loaded, skipped };
+}
+
+export async function deleteEffects(loaded: LoadedDex, table: EffectTable, names: string[]) {
+	const base = baseOf(loaded.row);
+	const effects = { ...loaded.effects, [table]: new Map(entriesOf(loaded, table)) } as Effects;
+	const lists = JSON.parse(json(loaded.row.effectlists || {}));
+	const deleted: ID[] = [];
+	for (const name of names) {
+		const id = toID(name);
+		if (base.data[table][id]) {
+			if (!LIST_TABLES.includes(table as ListTable)) {
+				throw new Chat.ErrorMessage(`${name} comes with the moves, abilities and items that need it, so it can't be deleted.`);
+			}
+			const list = lists[table] ||= {};
+			if (!(base.data[table][id] as AnyObject).isNonstandard) list.removed = [...new Set([...list.removed || [], id])];
+			list.added = (list.added || []).filter((other: ID) => other !== id);
+		} else if (!effects[table].has(id)) {
+			throw new Chat.ErrorMessage(`${loaded.row.name} has no ${tableName(table)} called "${name}".`);
+		}
+		if (effects[table].delete(id)) deleted.push(id);
+	}
+	check(compile({ ...loaded.row, effectlists: lists }, loaded.entries, effects));
+	await database().query(SQL`UPDATE dexes SET effectlists = ${json(lists)} WHERE dexid = ${loaded.row.dexid}`);
+	for (const id of deleted) {
+		await database().query(SQL`DELETE FROM dex_effects
+			WHERE dexid = ${loaded.row.dexid} AND effecttable = ${table} AND effectid = ${id}`);
+	}
+	const updated = await save(loaded);
+	for (const id of deleted) await propagate(loaded.row.dexid, table, id);
+	return dexes.get(updated.row.dexid) || updated;
+}
+
+function vanillaInput(target: LoadedDex, game: ModdedDex, id: ID) {
+	const species = game.species.get(id);
+	const gen = baseOf(target.row).gen;
+	const learnset: { [move: string]: string[] } = {};
+	for (const [move, sources] of Object.entries(game.data.Learnsets[id]?.learnset || {})) {
+		const kept = [...new Set(sources.filter(source => Number(source.charAt(0)) <= game.gen && /^\d[LMTER]/.test(source))
+			.map(source => gen + source.slice(1)))];
+		if (kept.length) learnset[move] = kept;
+	}
+	return {
+		name: species.name, types: species.types, baseStats: species.baseStats, eggGroups: species.eggGroups, weightkg: species.weightkg,
+		...(game.gen >= 3 ? { abilities: species.abilities } : {}),
+		...(Object.keys(learnset).length ? { learnset } : {}),
+	};
+}
+
+export async function addPokemon(target: LoadedDex, from: string, names: string[]) {
+	const base = baseOf(target.row);
+	const gen = /^gen([1-9])$/.exec(toID(from));
+	const skipped: string[] = [];
+	const plain = new Set<ID>();
+	const inputs: AnyObject[] = [];
+	let loaded = target;
+	const source = toID(from) && !gen ? getDex(from) : null;
+	if (source && !source.row.official) throw new Chat.ErrorMessage(`Pokemon can only be added from the main games and official dexes.`);
+	const game = gen && Number(gen[1]) !== base.gen ? Dex.mod(`gen${gen[1]}`) : null;
+	for (const name of names) {
+		const id = toID(name);
+		if (loaded.entries.has(id) || loaded.data.species.includes(id)) {
+			skipped.push(`${name} is already in ${loaded.row.name}`);
+			continue;
+		}
+		if (source && ancestorsOf(source).some(layer => layer.entries.has(id))) {
+			try {
+				({ loaded } = await forkEntry(loaded, source, 'Pokedex', name));
+			} catch (e: any) {
+				if (!(e instanceof Chat.ErrorMessage)) throw e;
+				skipped.push(`${name}: ${e.message}`);
+			}
+			continue;
+		}
+		if (game) {
+			const species = game.species.get(id);
+			if (!species.exists || species.isNonstandard) {
+				skipped.push(`${name} isn't in Gen ${game.gen}`);
+				continue;
+			}
+			inputs.push(vanillaInput(loaded, game, id));
+			if (base.data.Pokedex[id]) plain.add(id);
+			continue;
+		}
+		if (base.data.Pokedex[id]) {
+			for (const each of findSpecies(loaded, [name])) plain.add(each);
+		} else {
+			skipped.push(`${name} isn't in ${baseName(loaded.row)}`);
+		}
+	}
+	if (inputs.length) ({ loaded } = await putEntries(loaded, inputs));
+	if (plain.size) loaded = await setSpecies(loaded, plain, true);
+	return { loaded, skipped };
 }
 
 export function spriteSlot(loaded: LoadedDex, name: string, kind: string) {
@@ -1129,29 +1415,41 @@ function originOf(source: LoadedDex, entry: Entry): Origin {
 	};
 }
 
+type Fork = [Table, ID, LoadedDex, (string | null)?];
+
+const serialize = (value: unknown) => JSON.stringify(value, (key, each) => (typeof each === 'function' ? String(each) : each));
+
+function engineOf(source: LoadedDex, table: Table, id: ID) {
+	if (table === 'Pokedex' || table === 'TypeChart') return null;
+	return ancestorsOf(source).map(layer => layer.row.mod).find(mod => Dex.mod(mod).data[table][id]) || null;
+}
+
 export function dependencies(
 	source: LoadedDex, table: Table, id: ID, target: LoadedDex,
-	found = new Map<string, [Table, ID, LoadedDex]>(), missing: string[] = []
+	found = new Map<string, Fork>(), missing: string[] = []
 ) {
 	const layers = ancestorsOf(source);
 	const owner = layers.find(layer => entriesOf(layer, table).has(id));
-	if (!owner) {
+	const world = baseOf(target.row);
+	const engine = !owner && !isBase(world, table, id) ? engineOf(source, table, id) : null;
+	if (!owner && !engine) {
 		throw new Chat.ErrorMessage(`${source.row.name} has no custom or edited ${tableName(table)} called "${id}".`);
 	}
 	if (found.has(`${table}:${id}`)) return found;
-	found.set(`${table}:${id}`, [table, id, owner]);
-	const entry = entriesOf(owner, table).get(id)!;
-	const world = baseOf(target.row);
-	const visit = (value: unknown) => {
-		if (Array.isArray(value)) return value.forEach(visit);
-		if (isObject(value)) return Object.values(value).forEach(visit);
+	found.set(`${table}:${id}`, [table, id, owner || source, engine]);
+	const visit = (value: unknown, tables: readonly Table[] = TABLES): void => {
+		if (Array.isArray(value)) return value.forEach(each => visit(each, tables));
+		if (isObject(value)) return Object.values(value).forEach(each => visit(each, tables));
 		const ref = toID(value);
 		if (typeof value !== 'string' || !ref) return;
-		for (const other of TABLES) {
+		for (const other of tables) {
 			if ((other === table && ref === id) || isBase(world, other, ref) || found.has(`${other}:${ref}`)) continue;
 			const layer: LoadedDex | undefined = layers.find(each => entriesOf(each, other).has(ref));
 			const dep = layer && entriesOf(layer, other).get(ref)!;
-			if (dep && !isBase(baseOf(layer.row), other, ref) && (!dep.inheritsfrom || isBase(world, other, dep.inheritsfrom))) {
+			const inherited = dep?.inheritsfrom && (dep.inheritsfrom.includes(':') || isBase(world, other, dep.inheritsfrom));
+			if (dep && !isBase(baseOf(layer.row), other, ref) && (!dep.inheritsfrom || inherited)) {
+				dependencies(source, other, ref, target, found, missing);
+			} else if (!dep && other === 'Conditions' && engineOf(source, other, ref)) {
 				dependencies(source, other, ref, target, found, missing);
 			} else if ((dep || isBase(source.dex, other, ref)) && !isBase(target.dex, other, ref)) {
 				const what = `the ${tableName(other)} ${dep?.data.name || (source.dex.data[other][ref] as AnyObject).name || ref}`;
@@ -1159,12 +1457,17 @@ export function dependencies(
 			}
 		}
 	};
+	if (engine) {
+		visit([...serialize(Dex.mod(engine).data[table][id]).matchAll(/(['"`])([^'"`\n]{1,40})\1/g)].map(match => match[2]), ['Conditions', 'TypeChart']);
+		return found;
+	}
+	const entry = entriesOf(owner!, table).get(id)!;
 	visit(entry.data);
 	if (table === 'Pokedex') {
 		const { learnset } = entry as SpeciesEntry;
 		visit(Object.keys(learnset).filter(move => learnset[move]));
 	} else if (table === 'TypeChart') {
-		visit([...Object.keys(entry.data.damageTaken), ...Object.keys(entry.data.attacks)]);
+		visit([...Object.keys(entry.data.damageTaken), ...Object.keys(entry.data.attacks)], ['TypeChart', 'Conditions']);
 	} else {
 		visit(Object.values((entry as EffectEntry).slots).flatMap(edits => Object.values(edits).map(edit => edit.to)));
 	}
@@ -1172,7 +1475,7 @@ export function dependencies(
 }
 
 async function copyInto(
-	target: LoadedDex, keys: [Table, ID, LoadedDex][],
+	target: LoadedDex, keys: Fork[],
 	options: { overwrite?: boolean, update?: boolean, seen?: Set<string> } = {}
 ) {
 	const base = baseOf(target.row);
@@ -1180,16 +1483,21 @@ async function copyInto(
 	const effects = Object.fromEntries(TABLES.slice(1).map(table => [table, new Map(entriesOf(target, table))])) as Effects;
 	const species = new Set(target.row.species);
 	const copied: [Table, Entry][] = [];
-	for (const [table, id, source] of keys) {
+	for (const [table, id, source, engine] of keys) {
 		if (target.row.dexid === source.row.dexid) throw new Chat.ErrorMessage(`That's the same dex.`);
 		const sourceBase = baseOf(source.row);
-		const entry = entriesOf(source, table).get(id)!;
+		const entry: Entry = engine ? {
+			effecttable: table as EffectTable, effectid: id, num: 0, inheritsfrom: `${engine}:${id}` as ID,
+			data: { name: (Dex.mod(engine).data[table as EffectTable][id] as AnyObject).name }, slots: {}, events: {}, sprites: {},
+			origin: null, trackdex: null, trackid: null, locked: false,
+		} as EffectEntry : entriesOf(source, table).get(id)!;
 		const into: Map<ID, Entry> = table === 'Pokedex' ? entries : effects[table];
 		const existing = into.get(id);
 		const what = `the ${tableName(table)} ${entry.data.name}`;
 		if (entry.locked && source.row.ownerid !== target.row.ownerid) {
 			throw new Chat.ErrorMessage(`${what} in ${source.row.name} is locked, so only its creator can fork it.`);
 		}
+		if (engine && existing?.inheritsfrom === `${engine}:${id}`) continue;
 		if (existing && !(existing.trackdex === source.row.dexid && existing.trackid === id)) {
 			if (options.update) continue;
 			checkUnlocked(target, table, [id]);
@@ -1198,12 +1506,12 @@ async function copyInto(
 			}
 		}
 		const official = isBase(base, table, id);
-		if (official !== isBase(sourceBase, table, id)) {
+		if (!engine && official !== isBase(sourceBase, table, id)) {
 			throw new Chat.ErrorMessage(official ?
 				`${what} is custom in ${source.row.name}, but ${baseName(target.row)} already has one.` :
 				`${what} is an edit of something ${baseName(target.row)} doesn't have.`);
 		}
-		if (entry.inheritsfrom && !isBase(base, table, entry.inheritsfrom)) {
+		if (entry.inheritsfrom && !entry.inheritsfrom.includes(':') && !isBase(base, table, entry.inheritsfrom)) {
 			throw new Chat.ErrorMessage(`${what} copies ${entry.inheritsfrom}, which ${baseName(target.row)} doesn't have.`);
 		}
 		checkUnlocked(target, table, [id, entry.inheritsfrom]);
@@ -1215,7 +1523,9 @@ async function copyInto(
 			const next = dexes.get(link.trackdex);
 			link = next && entriesOf(next, table).get(link.trackid!);
 		}
-		const copy = { ...JSON.parse(json(entry)), origin: originOf(source, entry), trackdex: source.row.dexid, trackid: id };
+		const copy = {
+			...JSON.parse(json(entry)), origin: originOf(source, entry), trackdex: engine ? null : source.row.dexid, trackid: engine ? null : id,
+		};
 		copy.locked = (existing ? existing.locked : entry.locked) && copy.origin.creator === target.row.ownerid;
 		copy.num = official ? existing?.num || 0 : existing?.num || newNum(table, into.values());
 		if (table !== 'Pokedex' && table !== 'TypeChart' && !official) copy.data.num = copy.num;
@@ -1325,7 +1635,7 @@ export function evoLine(loaded: LoadedDex, name: string) {
 export async function forkLine(target: LoadedDex, source: LoadedDex, name: string, overwrite = false) {
 	const line = evoLine(source, name);
 	const custom = (id: ID) => ancestorsOf(source).some(layer => layer.entries.has(id));
-	const found = new Map<string, [Table, ID, LoadedDex]>();
+	const found = new Map<string, Fork>();
 	const missing: string[] = [];
 	for (const species of line) {
 		if (custom(species.id)) dependencies(source, 'Pokedex', species.id, target, found, missing);
