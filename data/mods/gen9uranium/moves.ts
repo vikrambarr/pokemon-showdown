@@ -51,6 +51,24 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Fighting",
 		contestType: "Cool",
 	},
+	halflife: {
+		num: 0,
+		accuracy: 90,
+		basePower: 0,
+		damageCallback(pokemon, target) {
+			return this.clampIntRange(Math.floor(target.getUndynamaxedHP() / 2), 1);
+		},
+		category: "Special",
+		name: "Half-Life",
+		desc: "Deals damage to the target equal to half of its current HP, rounded down, but not less than 1 HP.",
+		shortDesc: "Does damage equal to 1/2 target's current HP.",
+		pp: 10,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, metronome: 1 },
+		target: "normal",
+		type: "Nuclear",
+		contestType: "Tough",
+	},
 	infernalblade: {
 		accuracy: 95,
 		basePower: 90,
@@ -141,6 +159,37 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Water",
 		contestType: "Tough",
 	},
+	quantumleap: {
+		num: 0,
+		accuracy: 100,
+		basePower: 100,
+		category: "Physical",
+		name: "Quantum Leap",
+		desc: "If this move is successful, it breaks through the target's Baneful Bunker, Detect, King's Shield, Protect, or Spiky Shield for this turn, allowing other Pokemon to attack the target normally. If the target's side is protected by Crafty Shield, Mat Block, Quick Guard, or Wide Guard, that protection is also broken for this turn and other Pokemon may attack the target's side normally. This attack charges on the first turn and executes on the second. On the first turn, the user avoids all attacks. If the user is holding a Power Herb, the move completes in one turn.",
+		shortDesc: "Disappears turn 1. Hits turn 2. Breaks protection.",
+		pp: 5,
+		priority: 0,
+		flags: { contact: 1, charge: 1, mirror: 1, metronome: 1, nosleeptalk: 1, noassist: 1, failinstruct: 1 },
+		breaksProtect: true,
+		onTryMove(attacker, defender, move) {
+			if (attacker.removeVolatile(move.id)) {
+				return;
+			}
+			this.add('-prepare', attacker, move.name);
+			if (!this.runEvent('ChargeMove', attacker, defender, move)) {
+				return;
+			}
+			attacker.addVolatile('twoturnmove', defender);
+			return null;
+		},
+		condition: {
+			duration: 2,
+			onInvulnerability: false,
+		},
+		target: "normal",
+		type: "Nuclear",
+		contestType: "Cool",
+	},
 	stickyterrain: {
 		accuracy: true,
 		basePower: 0,
@@ -214,6 +263,50 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		target: "normal",
 		type: "Ground",
 		contestType: "Tough",
+	},
+	divinelight: {
+		num: 0,
+		accuracy: 100,
+		basePower: 100,
+		category: "Physical",
+		name: "Divine Light",
+		desc: "Power doubles if the last move used by any Pokemon this turn was Sacred Shade.",
+		shortDesc: "Power doubles if used after Sacred Shade this turn.",
+		pp: 15,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, defrost: 1, metronome: 1 },
+		onBasePower(basePower, pokemon) {
+			if (this.lastSuccessfulMoveThisTurn === 'sacredshade') {
+				this.debug('double power');
+				return this.chainModify(2);
+			}
+		},
+		target: "normal",
+		type: "Fire",
+		zMove: { boost: { spe: 1 } },
+		contestType: "Beautiful",
+	},
+	sacredshade: {
+		num: 0,
+		accuracy: 100,
+		basePower: 100,
+		category: "Special",
+		name: "Sacred Shade",
+		desc: "Power doubles if the last move used by any Pokemon this turn was Divine Light.",
+		shortDesc: "Power doubles if used after Divine Light this turn.",
+		pp: 15,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, metronome: 1 },
+		onBasePower(basePower, pokemon) {
+			if (this.lastSuccessfulMoveThisTurn === 'divinelight') {
+				this.debug('double power');
+				return this.chainModify(2);
+			}
+		},
+		target: "normal",
+		type: "Ghost",
+		zMove: { boost: { spe: 1 } },
+		contestType: "Beautiful",
 	},
 	vaporize: {
 		accuracy: 95,

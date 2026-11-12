@@ -117,6 +117,30 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "After an attack, holder gains 1/6 of the damage in HP dealt to other Pokemon.",
 		rating: 3.5,
 	},
+	chernobyl: {
+		onStart(source) {
+			this.field.setWeather('fallout');
+		},
+		flags: {},
+		name: "Chernobyl",
+		shortDesc: "On switch-in, this Pokemon summons Fallout.",
+		rating: 4,
+		num: 0,
+	},
+	deepfreeze: {
+		onDamagingHit(damage, target, source, move) {
+			if (this.checkMoveMakesContact(move, source, target)) {
+				if (this.randomChance(3, 10)) {
+					source.trySetStatus('frz', target);
+				}
+			}
+		},
+		flags: {},
+		name: "Deep Freeze",
+		shortDesc: "30% chance a Pokemon making contact with this Pokemon will be frozen.",
+		rating: 2,
+		num: 0,
+	},
 	disenchant: {
 		onTryHit(target, source, move) {
 			if (target !== source && move.type === 'Fairy') {
@@ -289,6 +313,16 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "Sound-based moves are boosted by 1.3x.",
 		rating: 3.5,
 	},
+	stormbringer: {
+		onStart(source) {
+			this.field.setWeather('thunderstorm');
+		},
+		flags: {},
+		name: "Stormbringer",
+		shortDesc: "On switch-in, this Pokemon summons Thunderstorm.",
+		rating: 4,
+		num: 0,
+	},
 	tentaclesnare: {
 		onSourceDamagingHit(damage, target, source, move) {
 			if (this.checkMoveMakesContact(move, source, target, true)) {
@@ -300,6 +334,18 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Tentacle Snare",
 		rating: 4,
 		shortDesc: "This Pokemon's contact moves lower the foe's Speed by 1 stage.",
+	},
+	colossalresilience: {
+		onSourceModifyDamage(damage, source, target, move) {
+			if (move.category === 'Special') {
+				return this.chainModify(0.5);
+			}
+		},
+		flags: { breakable: 1 },
+		name: "Colossal Resilience",
+		rating: 4,
+		num: 0,
+		shortDesc: "This Pokemon receives 1/2 damage from special attacks.",
 	},
 	scaleburst: {
 		onDamage(damage, target, source, effect) {

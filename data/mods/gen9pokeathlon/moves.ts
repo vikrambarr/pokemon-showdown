@@ -733,6 +733,24 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 			},
 		},
 	},
+	boxin: {
+		num: 0,
+		accuracy: 100,
+		basePower: 70,
+		category: "Physical",
+		name: "Box In",
+		desc: "Prevents the user and the target from switching out. The user and the target can still switch out if either of them is holding Shed Shell or uses Baton Pass, Flip Turn, Parting Shot, Teleport, U-turn, or Volt Switch. The effect ends if either the user or the target leaves the field.",
+		shortDesc: "Prevents both user and target from switching out.",
+		pp: 10,
+		priority: 0,
+		flags: { contact: 1, protect: 1, mirror: 1, metronome: 1, bite: 1 },
+		onHit(target, source, move) {
+			source.addVolatile('trapped', target, move, 'trapper');
+			target.addVolatile('trapped', source, move, 'trapper');
+		},
+		target: "normal",
+		type: "Ghost",
+	},
 	runtimeexception: {
 		accuracy: true,
 		basePower: 0,
@@ -752,6 +770,26 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		target: "self",
 		type: "Steel",
 		contestType: "Cute",
+	},
+	bloomsday: {
+		num: 0,
+		accuracy: 100,
+		basePower: 150,
+		basePowerCallback(pokemon, target, move) {
+			const bp = move.basePower * pokemon.hp / pokemon.maxhp;
+			this.debug(`BP: ${bp}`);
+			return bp;
+		},
+		category: "Special",
+		name: "Bloom's Day",
+		desc: "Power is equal to (user's current HP * 150 / user's maximum HP), rounded down, but not less than 1.",
+		shortDesc: "Less power as user's HP decreases. Hits foe(s).",
+		pp: 5,
+		priority: 0,
+		flags: { protect: 1, mirror: 1 },
+		target: "allAdjacentFoes",
+		type: "Grass",
+		contestType: "Beautiful",
 	},
 	deserttempest: {
 		accuracy: 90,
@@ -1148,6 +1186,34 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		zMove: { effect: 'clearnegativeboost' },
 		contestType: "Beautiful",
 	},
+	moltenglaze: {
+		num: 0,
+		accuracy: 100,
+		basePower: 70,
+		category: "Special",
+		name: "Molten Glaze",
+		desc: "Hits both foes. Until the target switches out, the effectiveness of Fire-type moves is doubled against it.",
+		shortDesc: "Hits both foes. Makes foes weaker to fire.",
+		pp: 10,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, defrost: 1 },
+		volatileStatus: 'moltenglaze',
+		condition: {
+			onStart(pokemon) {
+				if (pokemon.terastallized) return false;
+				this.add('-start', pokemon, 'Molten Glaze');
+			},
+			onEffectivenessPriority: -2,
+			onEffectiveness(typeMod, target, type, move) {
+				if (move.type !== 'Fire') return;
+				if (!target) return;
+				if (type !== target.getTypes()[0]) return;
+				return typeMod + 1;
+			},
+		},
+		target: "allAdjacentFoes",
+		type: "Fire",
+	},
 	psychobarrage: {
 		accuracy: 100,
 		basePower: 120,
@@ -1348,6 +1414,38 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Electric",
 		zMove: { effect: 'healreplacement' },
 	},
+	superheatedcrash: {
+		num: 0,
+		accuracy: 100,
+		basePower: 100,
+		category: "Physical",
+		name: "Superheated Crash",
+		desc: "If the user is hit by a contact move this turn before it can execute this move, the attacker is burned.",
+		shortDesc: "Burns on contact with the user before it moves.",
+		priorityChargeCallback(pokemon) {
+			pokemon.addVolatile('superheatedcrash');
+		},
+		condition: {
+			duration: 1,
+			onStart(pokemon) {
+				this.add('-singleturn', pokemon, 'move: Superheated Crash');
+			},
+			onHit(target, source, move) {
+				if (this.checkMoveMakesContact(move, source, target)) {
+					source.trySetStatus('brn', target);
+				}
+			},
+		},
+
+		onAfterMove(pokemon) {
+			pokemon.removeVolatile('superheatedcrash');
+		},
+		pp: 10,
+		priority: -3,
+		flags: { protect: 1, failmefirst: 1, nosleeptalk: 1, noassist: 1, failcopycat: 1, failinstruct: 1, contact: 1 },
+		target: "normal",
+		type: "Fire",
+	},
 	groundingstomp: {
 		accuracy: 100,
 		basePower: 85,
@@ -1396,6 +1494,74 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		target: "normal",
 		type: "Fighting",
 		contestType: "Tough",
+	},
+	cometstrike: {
+		num: 0,
+		accuracy: 90,
+		basePower: 130,
+		category: "Special",
+		name: "Comet Strike",
+		desc: "Lowers the user's Special Attack by 2 stages. This move's power is x1.3 in gravity",
+		shortDesc: "Lowers the user's Sp. Atk by 2. x1.3 power in gravity.",
+		pp: 5,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, metronome: 1 },
+		onBasePower(basePower) {
+			if (this.field.getPseudoWeather('gravity')) {
+				return this.chainModify(1.3);
+			}
+		},
+		self: {
+			boosts: {
+				spa: -2,
+			},
+		},
+		target: "normal",
+		type: "Rock",
+		contestType: "Beautiful",
+	},
+	jaggedshot: {
+		num: 0,
+		accuracy: 100,
+		basePower: 70,
+		category: "Special",
+		name: "Jagged Shot",
+		desc: "This move becomes a physical attack if the user's Attack is greater than its Special Attack, including stat stage changes. Always results in a critical hit.",
+		shortDesc: "Physical if user's Atk > Sp. Atk. Always crits.",
+		pp: 10,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, metronome: 1, bullet: 1 },
+		onModifyMove(move, pokemon) {
+			if (pokemon.getStat('atk', false, true) > pokemon.getStat('spa', false, true)) move.category = 'Physical';
+		},
+		willCrit: true,
+		target: "normal",
+		type: "Rock",
+	},
+	voidtentacle: {
+		num: 0,
+		accuracy: 100,
+		basePower: 80,
+		category: "Physical",
+		name: "Void Tentacle",
+		pp: 10,
+		priority: 0,
+		flags: { protect: 1, mirror: 1 },
+		onBasePower(basePower) {
+			if (this.field.getPseudoWeather('gravity')) {
+				return this.chainModify(1.5);
+			}
+		},
+		secondary: {
+			chance: 100,
+			boosts: {
+				def: -1,
+			},
+		},
+		target: "normal",
+		type: "Poison",
+		desc: "Has a 100% chance to lower the target's Defense by 1 stage. Power is multiplied by 1.5 during Gravity's effect.",
+		shortDesc: "Target: 100% -1 Def. During Gravity: 1.5x power.",
 	},
 	flameaxe: {
 		accuracy: 100,
@@ -1471,6 +1637,24 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		shortDesc: "Raises highest stat by 2 stages.",
 		zMove: { effect: 'crit2' },
 		contestType: "Tough",
+	},
+	meltingaroma: {
+		num: 0,
+		accuracy: true,
+		basePower: 0,
+		category: "Status",
+		name: "Melting Aroma",
+		pp: 10,
+		priority: 0,
+		flags: { heal: 1, bypasssub: 1, allyanim: 1 },
+		onHit(pokemon) {
+			const success = !!this.heal(this.modify(pokemon.maxhp, 0.25));
+			return pokemon.cureStatus() || success;
+		},
+		desc: "Each Pokemon on the user's side restores 1/4 of its maximum HP, rounded half up, and has its status condition cured.",
+		shortDesc: "User and allies: healed 1/4 max HP, status cured.",
+		target: "allies",
+		type: "Fairy",
 	},
 	mistbarrage: {
 		accuracy: 95,
@@ -1659,6 +1843,52 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Water",
 		contestType: "Cool",
 		shortDesc: "Sets Aqua Ring for every Pokemon on user's side.",
+	},
+	pyropounce: {
+		num: 0,
+		accuracy: 100,
+		basePower: 85,
+		category: "Physical",
+		name: "Pyro Pounce",
+		pp: 5,
+		priority: 0,
+		flags: {
+			contact: 1, charge: 1, protect: 1, mirror: 1, gravity: 1, distance: 1,
+			metronome: 1, nosleeptalk: 1, noassist: 1, failinstruct: 1,
+		},
+		onTryMove(attacker, defender, move) {
+			if (attacker.removeVolatile(move.id)) {
+				return;
+			}
+			this.add('-prepare', attacker, move.name);
+			if (!this.runEvent('ChargeMove', attacker, defender, move)) {
+				return;
+			}
+			attacker.addVolatile('twoturnmove', defender);
+			return null;
+		},
+		condition: {
+			duration: 2,
+			onInvulnerability(target, source, move) {
+				if (['gust', 'twister', 'skyuppercut', 'thunder', 'hurricane', 'smackdown', 'thousandarrows'].includes(move.id)) {
+					return;
+				}
+				return false;
+			},
+			onSourceBasePower(basePower, target, source, move) {
+				if (move.id === 'gust' || move.id === 'twister') {
+					return this.chainModify(2);
+				}
+			},
+		},
+		secondary: {
+			chance: 100,
+			status: 'brn',
+		},
+		target: "any",
+		type: "Fire",
+		contestType: "Cute",
+		shortDesc: "Bounces turn 1. Hits turn 2. 100% Chance to Burn.",
 	},
 	deadsilence: {
 		accuracy: 100,
@@ -2215,5 +2445,62 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Psychic",
 		contestType: "Tough",
 		shortDesc: "Sets Psychic Terrain on hit.",
+	},
+	corrode: {
+		num: 0,
+		accuracy: 100,
+		basePower: 70,
+		category: "Special",
+		name: "Corrode",
+		desc: "This move's type effectiveness against Steel is changed to be super effective no matter what this move's type is.",
+		shortDesc: "Super effective on Steel.",
+		pp: 10,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, metronome: 1 },
+		ignoreImmunity: { 'Poison': true },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Steel') return 1;
+		},
+		target: "normal",
+		type: "Poison",
+		contestType: "Beautiful",
+	},
+	dragonify: {
+		num: 0,
+		accuracy: 100,
+		basePower: 0,
+		category: "Status",
+		name: "Dragonify",
+		desc: "Causes the target to become a Dragon type. Fails if the target is an Arceus, or if the target is already purely Dragon type.",
+		shortDesc: "Changes the target's type to Dragon.",
+		pp: 20,
+		priority: 0,
+		flags: { protect: 1, reflectable: 1, mirror: 1, allyanim: 1, metronome: 1 },
+		onHit(target) {
+			if (target.getTypes().join() === 'Dragon' || !target.setType('Dragon')) return false;
+			this.add('-start', target, 'typechange', 'Dragon');
+		},
+		target: "normal",
+		type: "Dragon",
+		zMove: { boost: { spa: 1 } },
+	},
+	medusaray: {
+		num: 0,
+		accuracy: 100,
+		basePower: 0,
+		category: "Status",
+		name: "Medusa Ray",
+		desc: "Causes the target to become a Rock type. Fails if the target is an Arceus, or if the target is already purely Rock type.",
+		shortDesc: "Changes the target's type to Rock.",
+		pp: 20,
+		priority: 0,
+		flags: { protect: 1, reflectable: 1, mirror: 1, allyanim: 1, metronome: 1 },
+		onHit(target) {
+			if (target.getTypes().join() === 'Rock' || !target.setType('Rock')) return false;
+			this.add('-start', target, 'typechange', 'Rock');
+		},
+		target: "normal",
+		type: "Rock",
+		zMove: { boost: { spa: 1 } },
 	},
 };

@@ -724,6 +724,32 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		rating: 3.5,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Ground-type attack.",
 	},
+	cacophony: {
+		onTryHit(target, source, move) {
+			if (target !== source && move.type === 'Sound') {
+				if (!this.boost({ spa: 1 })) {
+					this.add('-immune', target, '[from] ability: Cacophony');
+				}
+				return null;
+			}
+		},
+		onAnyRedirectTarget(target, source, source2, move) {
+			if (move.type !== 'Sound' || move.flags['pledgecombo']) return;
+			const redirectTarget = ['randomNormal', 'adjacentFoe'].includes(move.target) ? 'normal' : move.target;
+			if (this.validTarget(this.effectState.target, source, redirectTarget)) {
+				if (move.smartTarget) move.smartTarget = false;
+				if (this.effectState.target !== target) {
+					this.add('-activate', this.effectState.target, 'ability: Cacophony');
+				}
+				return this.effectState.target;
+			}
+		},
+		flags: { breakable: 1 },
+		name: "Cacophony",
+		rating: 3,
+		num: 0,
+		shortDesc: "This Pokemon draws Sound-type moves to itself to raise Sp. Atk by 1; Sound-type immunity.",
+	},
 	virtuoso: {
 		onModifyAtkPriority: 5,
 		onModifyAtk(atk, attacker, defender, move) {
@@ -743,6 +769,20 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Virtuoso",
 		rating: 3.5,
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Sound-type attack.",
+	},
+	cannonfire: {
+		onBasePowerPriority: 19,
+		onBasePower(basePower, attacker, defender, move) {
+			if (move.flags['bullet']) {
+				return this.chainModify(1.5);
+			}
+		},
+		flags: { breakable: 1 },
+		name: "Cannon Fire",
+		desc: "This Pokemon's bomb-based attacks have their power multiplied by 1.5.",
+		shortDesc: "This Pokemon's bomb-based attacks have 1.5x power.",
+		rating: 3,
+		num: 0,
 	},
 	charisma: {
 		onSourceAfterFaint(length, target, source, effect) {
@@ -821,6 +861,42 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Dark Matter",
 		rating: 4,
 		shortDesc: "This Pokemon's Normal-type moves become Cosmic-type and have 1.2x power.",
+	},
+	darkswarm: {
+		onSwitchInPriority: -1,
+		onStart(pokemon) {
+			if (pokemon.baseSpecies.baseSpecies !== 'Wishiwashi-Orion' || pokemon.level < 20 || pokemon.transformed) return;
+			if (pokemon.hp > pokemon.maxhp / 4) {
+				if (pokemon.species.id === 'wishiwashiorion') {
+					pokemon.formeChange('Wishiwashi-Orion-Swarm');
+				}
+			} else {
+				if (pokemon.species.id === 'wishiwashiorion') {
+					pokemon.formeChange('Wishiwashi-Orion');
+				}
+			}
+		},
+		onResidualOrder: 29,
+		onResidual(pokemon) {
+			if (
+				pokemon.baseSpecies.baseSpecies !== 'Wishiwashi-Orion' || pokemon.level < 20 ||
+				pokemon.transformed || !pokemon.hp
+			) return;
+			if (pokemon.hp > pokemon.maxhp / 4) {
+				if (pokemon.species.id === 'wishiwashiorion') {
+					pokemon.formeChange('Wishiwashi-Orion-Swarm');
+				}
+			} else {
+				if (pokemon.species.id === 'wishiwashiorionswarm') {
+					pokemon.formeChange('Wishiwashi-Orion');
+				}
+			}
+		},
+		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, cantsuppress: 1 },
+		name: "Dark Swarm",
+		rating: 3,
+		num: 0,
+		shortDesc: "If user is Wishiwashi-Orion, changes to Symphny Form if it has > 1/4 max HP.",
 	},
 	destructivecore: {
 		onSwitchInPriority: -1,
@@ -1100,6 +1176,24 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "After making contact with a biting move, holder gains 1/8 of the max HP.",
 		rating: 3.5,
 	},
+	lightaura: {
+		onStart(pokemon) {
+			if (this.suppressingAbility(pokemon)) return;
+			this.add('-ability', pokemon, 'Light Aura');
+		},
+		onAnyBasePowerPriority: 20,
+		onAnyBasePower(basePower, source, target, move) {
+			if (target === source || move.category === 'Status' || move.type !== 'Light') return;
+			if (!move.auraBooster?.hasAbility('Light Aura')) move.auraBooster = this.effectState.target;
+			if (move.auraBooster !== this.effectState.target) return;
+			return this.chainModify([move.hasAuraBreak ? 3072 : 5448, 4096]);
+		},
+		flags: {},
+		name: "Light Aura",
+		rating: 3,
+		num: 0,
+		shortDesc: "While this Pokemon is active, a Light move used by any Pokemon has 1.33x power.",
+	},
 	lightbulb: {
 		onSourceModifyAtkPriority: 6,
 		onSourceModifyAtk(atk, attacker, defender, move) {
@@ -1219,6 +1313,26 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Nebula Cloud",
 		rating: 0,
 		shortDesc: "This side's Cosmic types can't have stats lowered or status inflicted by other Pokemon.",
+	},
+	nobility: {
+		onFoeTryMove(target, source, move) {
+			const targetAllExceptions = ['perishsong', 'flowershield', 'rototiller'];
+			if (move.target === 'foeSide' || (move.target === 'all' && !targetAllExceptions.includes(move.id))) {
+				return;
+			}
+
+			const dazzlingHolder = this.effectState.target;
+			if ((source.isAlly(dazzlingHolder) || move.target === 'all') && move.priority > 0.1) {
+				this.attrLastMove('[still]');
+				this.add('cant', dazzlingHolder, 'ability: Nobility', move, `[of] ${target}`);
+				return false;
+			}
+		},
+		flags: { breakable: 1 },
+		name: "Nobility",
+		rating: 2.5,
+		num: 0,
+		shortDesc: "This Pokemon and its allies are protected from opposing priority moves.",
 	},
 	opaqueness: {
 		onTryHit(target, source, move) {
@@ -1427,6 +1541,42 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Starstruck",
 		rating: 2,
 		shortDesc: "At 1/3 or less of its max HP, this Pokemon's offensive stat is 1.5x with Cosmic attacks.",
+	},
+	symphony: {
+		onSwitchInPriority: -1,
+		onStart(pokemon) {
+			if (pokemon.baseSpecies.baseSpecies !== 'Unown-Orion' || pokemon.level < 20 || pokemon.transformed) return;
+			if (pokemon.hp > pokemon.maxhp / 4) {
+				if (pokemon.species.id === 'unownorion') {
+					pokemon.formeChange('Unown-Orion-Symphony');
+				}
+			} else {
+				if (pokemon.species.id === 'unownorionsymphony') {
+					pokemon.formeChange('Unown-Orion');
+				}
+			}
+		},
+		onResidualOrder: 29,
+		onResidual(pokemon) {
+			if (
+				pokemon.baseSpecies.baseSpecies !== 'Unown-Orion' || pokemon.level < 20 ||
+				pokemon.transformed || !pokemon.hp
+			) return;
+			if (pokemon.hp > pokemon.maxhp / 4) {
+				if (pokemon.species.id === 'unownorion') {
+					pokemon.formeChange('Unown-Orion-Symphony');
+				}
+			} else {
+				if (pokemon.species.id === 'unownorionsymphony') {
+					pokemon.formeChange('Unown-Orion');
+				}
+			}
+		},
+		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, cantsuppress: 1 },
+		name: "Symphony",
+		rating: 3,
+		num: 0,
+		shortDesc: "If user is Unown-Orion, changes to Symphony Form if it has > 1/4 max HP.",
 	},
 	synthesize: {
 		onResidual(target, source, effect) {
@@ -1824,6 +1974,19 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Orbit",
 		rating: 4.5,
 		shortDesc: "On Switch-in, this Pokemon summons Gravity.",
+	},
+	lightswitch: {
+		onResidualOrder: 29,
+		onResidual(pokemon) {
+			if (pokemon.species.baseSpecies !== 'Morpeko-Orion' || pokemon.terastallized) return;
+			const targetForme = pokemon.species.name === 'Morpeko-Orion' ? 'Morpeko-Orion-Unpowered' : 'Morpeko-Orion';
+			pokemon.formeChange(targetForme);
+		},
+		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, notransform: 1 },
+		name: "Light Switch",
+		rating: 1,
+		num: 0,
+		shortDesc: "If Morpeko-Orion, it changes between Powered and Unpowered Mode at the end of each turn.",
 	},
 	flexible: {
 		onBasePower(basePower, source, target, move) {

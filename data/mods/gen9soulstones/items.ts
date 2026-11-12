@@ -431,6 +431,65 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		desc: "Holder does not take recoil damage.",
 	},
+	cosmicgem: {
+		name: "Cosmic Gem",
+		spritenum: -6,
+		isGem: true,
+		onSourceTryPrimaryHit(target, source, move) {
+			if (target === source || move.category === 'Status') return;
+			if (move.type === 'Cosmic' && source.useItem()) {
+				source.addVolatile('gem');
+			}
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "Holder's first successful Cosmic-type attack will have 1.4x power. Single use.",
+	},
+	soundgem: {
+		name: "Sound Gem",
+		spritenum: -6,
+		isGem: true,
+		onSourceTryPrimaryHit(target, source, move) {
+			if (target === source || move.category === 'Status') return;
+			if (move.type === 'Sound' && source.useItem()) {
+				source.addVolatile('gem');
+			}
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "Holder's first successful Sound-type attack will have 1.4x power. Single use.",
+	},
+	lightgem: {
+		name: "Light Gem",
+		spritenum: -6,
+		isGem: true,
+		onSourceTryPrimaryHit(target, source, move) {
+			if (target === source || move.category === 'Status') return;
+			if (move.type === 'Light' && source.useItem()) {
+				source.addVolatile('gem');
+			}
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "Holder's first successful Light-type attack will have 1.4x power. Single use.",
+	},
+	sharpcoral: {
+		name: "Sharp Coral",
+		spritenum: -6,
+		fling: {
+			basePower: 90,
+		},
+		onModifyAtkPriority: 1,
+		onModifyAtk(atk, pokemon) {
+			if (pokemon.baseSpecies.baseSpecies === 'Cubone-Orion' || pokemon.baseSpecies.baseSpecies === 'Marowak-Orion') {
+				return this.chainModify(2);
+			}
+		},
+		itemUser: ["Cubone-Orion", "Marowak-Orion"],
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Cubone-Orion or Marowak-Orion, its Attack is doubled.",
+	},
 	arcanespellbook: {
 		name: "Arcane Spellbook",
 		spritenum: -6,
@@ -602,6 +661,54 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		gen: 9,
 		shortDesc: "Holder's Light-type attacks have 1.2x power. Judgment is Light type.",
 	},
+	cosmicdust: {
+		name: "Cosmic Dust",
+		spritenum: -6,
+		fling: {
+			basePower: 10,
+		},
+		onBasePowerPriority: 15,
+		onBasePower(basePower, user, target, move) {
+			if (move.type === 'Cosmic') {
+				return this.chainModify([4915, 4096]);
+			}
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "Holder's Cosmic-type attacks have 1.2x power.",
+	},
+	musicbox: {
+		name: "Music Box",
+		spritenum: -6,
+		fling: {
+			basePower: 10,
+		},
+		onBasePowerPriority: 15,
+		onBasePower(basePower, user, target, move) {
+			if (move.type === 'Sound') {
+				return this.chainModify([4915, 4096]);
+			}
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "Holder's Sound-type attacks have 1.2x power.",
+	},
+	clearmirror: {
+		name: "Clear Mirror",
+		spritenum: -6,
+		fling: {
+			basePower: 10,
+		},
+		onBasePowerPriority: 15,
+		onBasePower(basePower, user, target, move) {
+			if (move.type === 'Light') {
+				return this.chainModify([4915, 4096]);
+			}
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "Holder's Light-type attacks have 1.2x power.",
+	},
 	dandelight: {
 		name: "Dandelight",
 		spritenum: -6,
@@ -656,6 +763,1602 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		gen: 9,
 		shortDesc: "Holder's Def is 1.1x.",
+	},
+	gengarites: {
+		name: "Gengarite-S",
+		spritenum: -6,
+		megaStone: { "Gengar-Orion": "Gengar-Orion-Mega" },
+		itemUser: ["Gengar-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Gengar-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	dodrinites: {
+		name: "Dodrinite-S",
+		spritenum: -6,
+		megaStone: { "Dodrio-Orion": "Dodrio-Orion-Mega" },
+		itemUser: ["Dodrio-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Dodrio-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	arbokinites: {
+		name: "Arbokinite-S",
+		spritenum: -6,
+		megaStone: { "Arbok-Orion": "Arbok-Orion-Mega" },
+		itemUser: ["Arbok-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Arbok-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	starmites: {
+		name: "Starmite-S",
+		spritenum: -6,
+		megaStone: { "Starmie-Orion": "Starmie-Orion-Mega" },
+		itemUser: ["Starmie-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Starmie-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	steelixites: {
+		name: "Steelixite-S",
+		spritenum: -6,
+		megaStone: { "Steelix-Orion": "Steelix-Orion-Mega" },
+		itemUser: ["Steelix-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Steelix-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	xatunites: {
+		name: "Xatunite-S",
+		spritenum: -6,
+		megaStone: { "Xatu-Orion": "Xatu-Orion-Mega" },
+		itemUser: ["Xatu-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Xatu-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	seismitoadites: {
+		name: "Seismitoadite-S",
+		spritenum: -6,
+		megaStone: { "Seismitoad-Orion": "Seismitoad-Orion-Mega" },
+		itemUser: ["Seismitoad-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Seismitoad-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	golites: {
+		name: "Golite-S",
+		spritenum: -6,
+		megaStone: { "Golurk-Orion": "Golurk-Orion-Mega" },
+		itemUser: ["Golurk-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Golurk-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	gyaradosites: {
+		name: "Gyaradosite-S",
+		spritenum: -6,
+		megaStone: { "Gyarados-Orion": "Gyarados-Orion-Mega" },
+		itemUser: ["Gyarados-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Gyarados-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	avaluggites: {
+		name: "Avaluggite-S",
+		spritenum: -6,
+		megaStone: { "Avalugg-Orion": "Avalugg-Orion-Mega" },
+		itemUser: ["Avalugg-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Avalugg-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	rapidashinites: {
+		name: "Rapidashinite-S",
+		spritenum: -6,
+		megaStone: { "Rapidash-Orion": "Rapidash-Orion-Mega" },
+		itemUser: ["Rapidash-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Rapidash-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	aerodactylites: {
+		name: "Aerodactylite-S",
+		spritenum: -6,
+		megaStone: { "Aerodactyl-Orion": "Aerodactyl-Orion-Mega" },
+		itemUser: ["Aerodactyl-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Aerodactyl-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	giganites: {
+		name: "Giganite-S",
+		spritenum: -6,
+		megaStone: { "Gigalith-Orion": "Gigalith-Orion-Mega" },
+		itemUser: ["Gigalith-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Gigalith-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	gliscites: {
+		name: "Gliscite-S",
+		spritenum: -6,
+		megaStone: { "Gliscor-Orion": "Gliscor-Orion-Mega" },
+		itemUser: ["Gliscor-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Gliscor-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	sudowooditex: {
+		name: "Sudowoodite-X",
+		spritenum: -6,
+		megaStone: { "Sudowoodo-Orion": "Sudowoodo-Orion-Mega-X" },
+		itemUser: ["Sudowoodo-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Sudowoodo-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	sudowooditey: {
+		name: "Sudowoodite-Y",
+		spritenum: -6,
+		megaStone: { "Sudowoodo-Orion": "Sudowoodo-Orion-Mega-Y" },
+		itemUser: ["Sudowoodo-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Sudowoodo-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	noctowlites: {
+		name: "Noctowlite-S",
+		spritenum: -6,
+		megaStone: { "Noctowl-Orion": "Noctowl-Orion-Mega" },
+		itemUser: ["Noctowl-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Noctowl-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	electronites: {
+		name: "Electronite-S",
+		spritenum: -6,
+		megaStone: { "Electrode-Orion": "Electrode-Orion-Mega" },
+		itemUser: ["Electrode-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Electrode-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	beedrillites: {
+		name: "Beedrillite-S",
+		spritenum: -6,
+		megaStone: { "Beedrill-Orion": "Beedrill-Orion-Mega" },
+		itemUser: ["Beedrill-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Beedrill-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	machampites: {
+		name: "Machampite-S",
+		spritenum: -6,
+		megaStone: { "Machamp-Orion": "Machamp-Orion-Mega" },
+		itemUser: ["Machamp-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Machamp-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	venusaurites: {
+		name: "Venusaurite-S",
+		spritenum: -6,
+		megaStone: { "Venusaur-Orion": "Venusaur-Orion-Mega" },
+		itemUser: ["Venusaur-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Venusaur-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	sharpedonites: {
+		name: "Sharpedonite-S",
+		spritenum: -6,
+		megaStone: { "Sharpedo-Orion": "Sharpedo-Orion-Mega" },
+		itemUser: ["Sharpedo-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Sharpedo-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	chandelites: {
+		name: "Chandelite-S",
+		spritenum: -6,
+		megaStone: { "Chandelure-Orion": "Chandelure-Orion-Mega" },
+		itemUser: ["Chandelure-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Chandelure-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	glalitites: {
+		name: "Glalitite-S",
+		spritenum: -6,
+		megaStone: { "Glalie-Orion": "Glalie-Orion-Mega" },
+		itemUser: ["Glalie-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Glalie-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	froslassites: {
+		name: "Froslassite-S",
+		spritenum: -6,
+		megaStone: { "Froslass-Orion": "Froslass-Orion-Mega" },
+		itemUser: ["Froslass-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Froslass-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	infernapinites: {
+		name: "Infernapinite-S",
+		spritenum: -6,
+		megaStone: { "Infernape-Orion": "Infernape-Orion-Mega" },
+		itemUser: ["Infernape-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Infernape-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	sablenites: {
+		name: "Sablenite-S",
+		spritenum: -6,
+		megaStone: { "Sableye-Orion": "Sableye-Orion-Mega" },
+		itemUser: ["Sableye-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Sableye-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	bearticites: {
+		name: "Bearticite-S",
+		spritenum: -6,
+		megaStone: { "Beartic-Orion": "Beartic-Orion-Mega" },
+		itemUser: ["Beartic-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Beartic-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	sceptilites: {
+		name: "Sceptilite-S",
+		spritenum: -6,
+		megaStone: { "Sceptile-Orion": "Sceptile-Orion-Mega" },
+		itemUser: ["Sceptile-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Sceptile-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	tyranitarites: {
+		name: "Tyranitarite-S",
+		spritenum: -6,
+		megaStone: { "Tyranitar-Orion": "Tyranitar-Orion-Mega" },
+		itemUser: ["Tyranitar-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Tyranitar-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	hippowdonites: {
+		name: "Hippowdonite-S",
+		spritenum: -6,
+		megaStone: { "Hippowdon-Orion": "Hippowdon-Orion-Mega" },
+		itemUser: ["Hippowdon-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Hippowdon-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	ampharosites: {
+		name: "Ampharosite-S",
+		spritenum: -6,
+		megaStone: { "Ampharos-Orion": "Ampharos-Orion-Mega" },
+		itemUser: ["Ampharos-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Ampharos-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	altarianites: {
+		name: "Altarianite-S",
+		spritenum: -6,
+		megaStone: { "Altaria-Orion": "Altaria-Orion-Mega" },
+		itemUser: ["Altaria-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Altaria-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	heracronites: {
+		name: "Heracronite-S",
+		spritenum: -6,
+		megaStone: { "Heracross-Orion": "Heracross-Orion-Mega" },
+		itemUser: ["Heracross-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Heracross-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	sawsbuckites: {
+		name: "Sawsbuckite-S",
+		spritenum: -6,
+		megaStone: { "Sawsbuck-Orion": "Sawsbuck-Orion-Mega" },
+		itemUser: ["Sawsbuck-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Sawsbuck-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	aggronites: {
+		name: "Aggronite-S",
+		spritenum: -6,
+		megaStone: { "Aggron-Orion": "Aggron-Orion-Mega" },
+		itemUser: ["Aggron-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Aggron-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	slowkingites: {
+		name: "Slowkingite-S",
+		spritenum: -6,
+		megaStone: { "Slowking-Orion": "Slowking-Orion-Mega" },
+		itemUser: ["Slowking-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Slowking-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	corvinites: {
+		name: "Corvinite-S",
+		spritenum: -6,
+		megaStone: { "Corviknight-Orion": "Corviknight-Orion-Mega" },
+		itemUser: ["Corviknight-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Corviknight-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	kingdranites: {
+		name: "Kingdranite-S",
+		spritenum: -6,
+		megaStone: { "Kingdra-Orion": "Kingdra-Orion-Mega" },
+		itemUser: ["Kingdra-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Kingdra-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	butterfrites: {
+		name: "Butterfrite-S",
+		spritenum: -6,
+		megaStone: { "Butterfree-Orion": "Butterfree-Orion-Mega" },
+		itemUser: ["Butterfree-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Butterfree-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	furretites: {
+		name: "Furretite-S",
+		spritenum: -6,
+		megaStone: { "Furret-Orion": "Furret-Orion-Mega" },
+		itemUser: ["Furret-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Furret-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	gardevoirites: {
+		name: "Gardevoirite-S",
+		spritenum: -6,
+		megaStone: { "Gardevoir-Orion": "Gardevoir-Orion-Mega" },
+		itemUser: ["Gardevoir-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Gardevoir-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	galladites: {
+		name: "Galladite-S",
+		spritenum: -6,
+		megaStone: { "Gallade-Orion": "Gallade-Orion-Mega" },
+		itemUser: ["Gallade-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Gallade-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	dugtrioites: {
+		name: "Dugtrioite-S",
+		spritenum: -6,
+		megaStone: { "Dugtrio-Orion": "Dugtrio-Orion-Mega" },
+		itemUser: ["Dugtrio-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Dugtrio-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	azumarillites: {
+		name: "Azumarillite-S",
+		spritenum: -6,
+		megaStone: { "Azumarill-Orion": "Azumarill-Orion-Mega" },
+		itemUser: ["Azumarill-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Azumarill-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	meloettites: {
+		name: "Meloettite-S",
+		spritenum: -6,
+		megaStone: { "Meloetta-Orion": "Meloetta-Orion-Mega" },
+		itemUser: ["Meloetta-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Meloetta-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	absolites: {
+		name: "Absolite-S",
+		spritenum: -6,
+		megaStone: { "Absol-Orion": "Absol-Orion-Mega" },
+		itemUser: ["Absol-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Absol-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	metagrossites: {
+		name: "Metagrossite-S",
+		spritenum: -6,
+		megaStone: { "Metagross-Orion": "Metagross-Orion-Mega" },
+		itemUser: ["Metagross-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Metagross-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	medichamites: {
+		name: "Medichamite-S",
+		spritenum: -6,
+		megaStone: { "Medicham-Orion": "Medicham-Orion-Mega" },
+		itemUser: ["Medicham-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Medicham-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	pidgeotites: {
+		name: "Pidgeotite-S",
+		spritenum: -6,
+		megaStone: { "Pidgeot-Orion": "Pidgeot-Orion-Mega" },
+		itemUser: ["Pidgeot-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Pidgeot-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	blissites: {
+		name: "Blissite-S",
+		spritenum: -6,
+		megaStone: { "Blissey-Orion": "Blissey-Orion-Mega" },
+		itemUser: ["Blissey-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Blissey-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	tentacruelites: {
+		name: "Tentacruelite-S",
+		spritenum: -6,
+		megaStone: { "Tentacruel-Orion": "Tentacruel-Orion-Mega" },
+		itemUser: ["Tentacruel-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Tentacruel-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	tsareenitex: {
+		name: "Tsareenite-X",
+		spritenum: -6,
+		megaStone: { "Tsareena-Orion": "Tsareena-Orion-Mega-X" },
+		itemUser: ["Tsareena-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Tsareena-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	tsareenitey: {
+		name: "Tsareenite-Y",
+		spritenum: -6,
+		megaStone: { "Tsareena-Orion": "Tsareena-Orion-Mega-Y" },
+		itemUser: ["Tsareena-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Tsareena-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	beheeyemites: {
+		name: "Beheeyemite-S",
+		spritenum: -6,
+		megaStone: { "Beheeyem-Orion": "Beheeyem-Orion-Mega" },
+		itemUser: ["Beheeyem-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Beheeyem-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	sandaconites: {
+		name: "Sandaconite-S",
+		spritenum: -6,
+		megaStone: { "Sandaconda-Orion": "Sandaconda-Orion-Mega" },
+		itemUser: ["Sandaconda-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Sandaconda-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	raichunites: {
+		name: "Raichunite-S",
+		spritenum: -6,
+		megaStone: { "Raichu-Orion": "Raichu-Orion-Mega" },
+		itemUser: ["Raichu-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Raichu-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	cofagrinites: {
+		name: "Cofagrinite-S",
+		spritenum: -6,
+		megaStone: { "Cofagrigus-Orion": "Cofagrigus-Orion-Mega" },
+		itemUser: ["Cofagrigus-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Cofagrigus-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	swampertites: {
+		name: "Swampertite-S",
+		spritenum: -6,
+		megaStone: { "Swampert-Orion": "Swampert-Orion-Mega" },
+		itemUser: ["Swampert-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Swampert-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	gothitellites: {
+		name: "Gothitellite-S",
+		spritenum: -6,
+		megaStone: { "Gothitelle-Orion": "Gothitelle-Orion-Mega" },
+		itemUser: ["Gothitelle-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Gothitelle-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	charizardites: {
+		name: "Charizardite-S",
+		spritenum: -6,
+		megaStone: { "Charizard-Orion": "Charizard-Orion-Mega" },
+		itemUser: ["Charizard-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Charizard-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	wiggnites: {
+		name: "Wiggnite-S",
+		spritenum: -6,
+		megaStone: { "Wigglytuff-Orion": "Wigglytuff-Orion-Mega" },
+		itemUser: ["Wigglytuff-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Wigglytuff-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	manectites: {
+		name: "Manectite-S",
+		spritenum: -6,
+		megaStone: { "Manectric-Orion": "Manectric-Orion-Mega" },
+		itemUser: ["Manectric-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Manectric-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	mamoswinites: {
+		name: "Mamoswinite-S",
+		spritenum: -6,
+		megaStone: { "Mamoswine-Orion": "Mamoswine-Orion-Mega" },
+		itemUser: ["Mamoswine-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Mamoswine-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	torterranites: {
+		name: "Torterranite-S",
+		spritenum: -6,
+		megaStone: { "Torterra-Orion": "Torterra-Orion-Mega" },
+		itemUser: ["Torterra-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Torterra-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	lopunnites: {
+		name: "Lopunnite-S",
+		spritenum: -6,
+		megaStone: { "Lopunny-Orion": "Lopunny-Orion-Mega" },
+		itemUser: ["Lopunny-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Lopunny-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	gothitellitetemporal: {
+		name: "Gothitellite-Temporal",
+		spritenum: -6,
+		megaStone: { "Gothitelle-Temporal": "Gothitelle-Temporal-Mega" },
+		itemUser: ["Gothitelle-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.GOthitelle, this item allows it to Mega Evolve in battle.",
+	},
+	donphanites: {
+		name: "Donphanite-S",
+		spritenum: -6,
+		megaStone: { "Donphan-Orion": "Donphan-Orion-Mega" },
+		itemUser: ["Donphan-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Donphan-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	garchompites: {
+		name: "Garchompite-S",
+		spritenum: -6,
+		megaStone: { "Garchomp-Orion": "Garchomp-Orion-Mega" },
+		itemUser: ["Garchomp-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Garchomp-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	ninetalites: {
+		name: "Ninetalite-S",
+		spritenum: -6,
+		megaStone: { "Ninetales-Orion": "Ninetales-Orion-Mega" },
+		itemUser: ["Ninetales-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Ninetales-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	toxtricites: {
+		name: "Toxtricite-S",
+		spritenum: -6,
+		megaStone: { "Toxtricity-Orion": "Toxtricity-Orion-Mega" },
+		itemUser: ["Toxtricity-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Toxtricity-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	dugtrioitetemporal: {
+		name: "Dugtrioite-Temporal",
+		spritenum: -6,
+		megaStone: { "Dugtrio-Temporal": "Dugtrio-Temporal-Mega" },
+		itemUser: ["Dugtrio-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Dugtrio, this item allows it to Mega Evolve in battle.",
+	},
+	luvdiscites: {
+		name: "Luvdiscite-S",
+		spritenum: -6,
+		megaStone: { "Luvdisc-Orion": "Luvdisc-Orion-Mega" },
+		itemUser: ["Luvdisc-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Luvdisc-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	absolitetemporal: {
+		name: "Absolite-Temporal",
+		spritenum: -6,
+		megaStone: { "Absol-Temporal": "Absol-Temporal-Mega" },
+		itemUser: ["Absol-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Absol, this item allows it to Mega Evolve in battle.",
+	},
+	abomasites: {
+		name: "Abomasite-S",
+		spritenum: -6,
+		megaStone: { "Abomasnow-Orion": "Abomasnow-Orion-Mega" },
+		itemUser: ["Abomasnow-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Abomasnow-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	sablenitetemporal: {
+		name: "Sablenite-Temporal",
+		spritenum: -6,
+		megaStone: { "Sableye-Temporal": "Sableye-Temporal-Mega" },
+		itemUser: ["Sableye-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Sableye, this item allows it to Mega Evolve in battle.",
+	},
+	garbodinites: {
+		name: "Garbodinite-S",
+		spritenum: -6,
+		megaStone: { "Garbodor-Orion": "Garbodor-Orion-Mega" },
+		itemUser: ["Garbodor-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Garbodor-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	altarianitetemporal: {
+		name: "Altarianite-Temporal",
+		spritenum: -6,
+		megaStone: { "Altaria-Temporal": "Altaria-Temporal-Mega" },
+		itemUser: ["Altaria-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Altaria, this item allows it to Mega Evolve in battle.",
+	},
+	swampertitetemporal: {
+		name: "Swampertite-Temporal",
+		spritenum: -6,
+		megaStone: { "Swampert-Temporal": "Swampert-Temporal-Mega" },
+		itemUser: ["Swampert-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Swampert, this item allows it to Mega Evolve in battle.",
+	},
+	masqueritetemporal: {
+		name: "Masquerite-Temporal",
+		spritenum: -6,
+		megaStone: { "Masquerain-Temporal": "Masquerain-Temporal-Mega" },
+		itemUser: ["Masquerain-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Masquerain, this item allows it to Mega Evolve in battle.",
+	},
+	barbaraclites: {
+		name: "Barbaraclite-S",
+		spritenum: -6,
+		megaStone: { "Barbaracle-Orion": "Barbaracle-Orion-Mega" },
+		itemUser: ["Barbaracle-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Barbaracle-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	falinkites: {
+		name: "Falinkite-S",
+		spritenum: -6,
+		megaStone: { "Falinks-Orion": "Falinks-Orion-Mega" },
+		itemUser: ["Falinks-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Falinks-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	mismagites: {
+		name: "Mismagite-S",
+		spritenum: -6,
+		megaStone: { "Mismagius-Orion": "Mismagius-Orion-Mega" },
+		itemUser: ["Mismagius-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Mismagius-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	scizorites: {
+		name: "Scizorite-S",
+		spritenum: -6,
+		megaStone: { "Scizor-Orion": "Scizor-Orion-Mega" },
+		itemUser: ["Scizor-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Scizor-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	coalossalites: {
+		name: "Coalossalite-S",
+		spritenum: -6,
+		megaStone: { "Coalossal-Orion": "Coalossal-Orion-Mega" },
+		itemUser: ["Coalossal-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Coalossal-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	giganitetemporal: {
+		name: "Giganite-Temporal",
+		spritenum: -6,
+		megaStone: { "Gigalith-Temporal": "Gigalith-Temporal-Mega" },
+		itemUser: ["Gigalith-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Gigalith, this item allows it to Mega Evolve in battle.",
+	},
+	dragites: {
+		name: "Dragite-S",
+		spritenum: -6,
+		megaStone: { "Dragonite-Orion": "Dragonite-Orion-Mega" },
+		itemUser: ["Dragonite-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Dragonite-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	dragapultites: {
+		name: "Dragapultite-S",
+		spritenum: -6,
+		megaStone: { "Dragapult-Orion": "Dragapult-Orion-Mega" },
+		itemUser: ["Dragapult-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Dragapult-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	banettites: {
+		name: "Banettite-S",
+		spritenum: -6,
+		megaStone: { "Banette-Orion": "Banette-Orion-Mega" },
+		itemUser: ["Banette-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Banette-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	houndoominites: {
+		name: "Houndoominite-S",
+		spritenum: -6,
+		megaStone: { "Houndoom-Orion": "Houndoom-Orion-Mega" },
+		itemUser: ["Houndoom-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Houndoom-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	empoleonites: {
+		name: "Empoleonite-S",
+		spritenum: -6,
+		megaStone: { "Empoleon-Orion": "Empoleon-Orion-Mega" },
+		itemUser: ["Empoleon-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Empoleon-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	jumpinitetemporal: {
+		name: "Jumpinite-Temporal",
+		spritenum: -6,
+		megaStone: { "Jumpluff-Temporal": "Jumpluff-Temporal-Mega" },
+		itemUser: ["Jumpluff-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Jumpluff, this item allows it to Mega Evolve in battle.",
+	},
+	exploudinites: {
+		name: "Exploudinite-S",
+		spritenum: -6,
+		megaStone: { "Exploud-Orion": "Exploud-Orion-Mega" },
+		itemUser: ["Exploud-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Exploud-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	centiskorites: {
+		name: "Centiskorite-S",
+		spritenum: -6,
+		megaStone: { "Centiskorch-Orion": "Centiskorch-Orion-Mega" },
+		itemUser: ["Centiskorch-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Centiskorch-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	salamencites: {
+		name: "Salamencite-S",
+		spritenum: -6,
+		megaStone: { "Salamence-Orion": "Salamence-Orion-Mega" },
+		itemUser: ["Salamence-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Salamence-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	grapploctites: {
+		name: "Grapploctite-S",
+		spritenum: -6,
+		megaStone: { "Grapploct-Orion": "Grapploct-Orion-Mega" },
+		itemUser: ["Grapploct-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Grapploct-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	hatterenites: {
+		name: "Hatterenite-S",
+		spritenum: -6,
+		megaStone: { "Hatterene-Orion": "Hatterene-Orion-Mega" },
+		itemUser: ["Hatterene-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Hatterene-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	chimechites: {
+		name: "Chimechite-S",
+		spritenum: -6,
+		megaStone: { "Chimecho-Orion": "Chimecho-Orion-Mega" },
+		itemUser: ["Chimecho-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Chimecho-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	grimmsnarlitetemporal: {
+		name: "Grimmsnarlite-Temporal",
+		spritenum: -6,
+		megaStone: { "Grimmsnarl-Temporal": "Grimmsnarl-Temporal-Mega" },
+		itemUser: ["Grimmsnarl-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Grimmsnarl, this item allows it to Mega Evolve in battle.",
+	},
+	wyrdeeritetemporal: {
+		name: "Wyrdeerite-Temporal",
+		spritenum: -6,
+		megaStone: { "Wyrdeer-Temporal": "Wyrdeer-Temporal-Mega" },
+		itemUser: ["Wyrdeer-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Wyrdeer, this item allows it to Mega Evolve in battle.",
+	},
+	ursalunites: {
+		name: "Ursalunite-S",
+		spritenum: -6,
+		megaStone: { "Ursaluna-Orion": "Ursaluna-Orion-Mega" },
+		itemUser: ["Ursaluna-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a URsaluna-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	emolgites: {
+		name: "Emolgite-S",
+		spritenum: -6,
+		megaStone: { "Emolga-Orion": "Emolga-Orion-Mega" },
+		itemUser: ["Emolga-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Emolga-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	vespiquenites: {
+		name: "Vespiquenite-S",
+		spritenum: -6,
+		megaStone: { "Vespiquen-Orion": "Vespiquen-Orion-Mega" },
+		itemUser: ["Vespiquen-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Vespiquen-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	blazikenites: {
+		name: "Blazikenite-S",
+		spritenum: -6,
+		megaStone: { "Blaziken-Orion": "Blaziken-Orion-Mega" },
+		itemUser: ["Blaziken-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Blaziken-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	garganaclites: {
+		name: "Garganaclite-S",
+		spritenum: -6,
+		megaStone: { "Garganacl-Orion": "Garganacl-Orion-Mega" },
+		itemUser: ["Garganacl-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Garganacl-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	wobbnites: {
+		name: "Wobbnite-S",
+		spritenum: -6,
+		megaStone: { "Wobbuffet-Orion": "Wobbuffet-Orion-Mega" },
+		itemUser: ["Wobbuffet-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Wobbuffet-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	plusites: {
+		name: "Plusite-S",
+		spritenum: -6,
+		megaStone: { "Plusle-Orion": "Plusle-Orion-Mega" },
+		itemUser: ["Plusle-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Plusle-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	minunites: {
+		name: "Minunite-S",
+		spritenum: -6,
+		megaStone: { "Minun-Orion": "Minun-Orion-Mega" },
+		itemUser: ["Minun-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Minun-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	blastoisinites: {
+		name: "Blastoisinite-S",
+		spritenum: -6,
+		megaStone: { "Blastoise-Orion": "Blastoise-Orion-Mega" },
+		itemUser: ["Blastoise-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Blastoise-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	cacturnitetemporal: {
+		name: "Cacturnite-Temporal",
+		spritenum: -6,
+		megaStone: { "Cacturne-Temporal": "Cacturne-Temporal-Mega" },
+		itemUser: ["Cacturne-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Cacturne-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	ursalunitetemporal: {
+		name: "Ursalunite-Temporal",
+		spritenum: -6,
+		megaStone: { "Ursaluna-Temporal": "Ursaluna-Temporal-Mega" },
+		itemUser: ["Ursaluna-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Ursaluna, this item allows it to Mega Evolve in battle.",
+	},
+	drednites: {
+		name: "Drednite-S",
+		spritenum: -6,
+		megaStone: { "Drednaw-Orion": "Drednaw-Orion-Mega" },
+		itemUser: ["Drednaw-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Drednaw-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	whimsicottitetemporal: {
+		name: "Whimsicottite-Temporal",
+		spritenum: -6,
+		megaStone: { "Whimsicott-Temporal": "Whimsicott-Temporal-Mega" },
+		itemUser: ["Whimsicott-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Whimsicott, this item allows it to Mega Evolve in battle.",
+	},
+	charizarditetemporal: {
+		name: "Charizardite-Temporal",
+		spritenum: -6,
+		megaStone: { "Charizard-Temporal": "Charizard-Temporal-Mega" },
+		itemUser: ["Charizard-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Charizard, this item allows it to Mega Evolve in battle.",
+	},
+	victreebelites: {
+		name: "Victreebelite-S",
+		spritenum: -6,
+		megaStone: { "Victreebel-Orion": "Victreebel-Orion-Mega" },
+		itemUser: ["Victreebel-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Victreebel-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	delibirdites: {
+		name: "Delibirdite-S",
+		spritenum: -6,
+		megaStone: { "Delibird-Orion": "Delibird-Orion-Mega" },
+		itemUser: ["Delibird-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Delibird-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	scizoritetemporal: {
+		name: "Scizorite-Temporal",
+		spritenum: -6,
+		megaStone: { "Scizor-Temporal": "Scizor-Temporal-Mega" },
+		itemUser: ["Scizor-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Scizor, this item allows it to Mega Evolve in battle.",
+	},
+	kleavoritetemporal: {
+		name: "Kleavorite-Temporal",
+		spritenum: -6,
+		megaStone: { "Kleavor-Temporal": "Kleavor-Temporal-Mega" },
+		itemUser: ["Kleavor-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Kleavor, this item allows it to Mega Evolve in battle.",
+	},
+	kangaskhanites: {
+		name: "Kangaskhanite-S",
+		spritenum: -6,
+		megaStone: { "Kangaskhan-Orion": "Kangaskhan-Orion-Mega" },
+		itemUser: ["Kangaskhan-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Kangaskhan-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	pyukumites: {
+		name: "Pyukumite-S",
+		spritenum: -6,
+		megaStone: { "Pyukumuku-Orion": "Pyukumuku-Orion-Mega" },
+		itemUser: ["Pyukumuku-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Pyukumuku-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	venusauritetemporal: {
+		name: "Venusaurite-Temporal",
+		spritenum: -6,
+		megaStone: { "Venusaur-Temporal": "Venusaur-Temporal-Mega" },
+		itemUser: ["Venusaur-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Venusaur, this item allows it to Mega Evolve in battle.",
+	},
+	mawilites: {
+		name: "Mawilite-S",
+		spritenum: -6,
+		megaStone: { "Mawile-Orion": "Mawile-Orion-Mega" },
+		itemUser: ["Mawile-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Mawile-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	ampharositetemporal: {
+		name: "Ampharosite-Temporal",
+		spritenum: -6,
+		megaStone: { "Ampharos-Temporal": "Ampharos-Temporal-Mega" },
+		itemUser: ["Ampharos-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Ampharos, this item allows it to Mega Evolve in battle.",
+	},
+	snorlaxitetemporal: {
+		name: "Snorlaxite-Temporal",
+		spritenum: -6,
+		megaStone: { "Snorlax-Temporal": "Snorlax-Temporal-Mega" },
+		itemUser: ["Snorlax-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Snorlax, this item allows it to Mega Evolve in battle.",
+	},
+	furretitetemporal: {
+		name: "Furretite-Temporal",
+		spritenum: -6,
+		megaStone: { "Furret-Temporal": "Furret-Temporal-Mega" },
+		itemUser: ["Furret-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Furret, this item allows it to Mega Evolve in battle.",
+	},
+	magcargitetemporal: {
+		name: "Magcargite-Temporal",
+		spritenum: -6,
+		megaStone: { "Magcargo-Temporal": "Magcargo-Temporal-Mega" },
+		itemUser: ["Magcargo-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Magcargo, this item allows it to Mega Evolve in battle.",
+	},
+	reuniclites: {
+		name: "Reuniclite-S",
+		spritenum: -6,
+		megaStone: { "Reuniclus-Orion": "Reuniclus-Orion-Mega" },
+		itemUser: ["Reuniclus-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Reuniclus-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	meowsticites: {
+		name: "Meowsticite-S",
+		spritenum: -6,
+		megaStone: { "Meowstic-Orion": "Meowstic-Orion-Mega" },
+		itemUser: ["Meowstic-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Meowstic-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	staraptites: {
+		name: "Staraptite-S",
+		spritenum: -6,
+		megaStone: { "Staraptor-Orion": "Staraptor-Orion-Mega" },
+		itemUser: ["Staraptor-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Staraptor-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	raticatites: {
+		name: "Raticatite-S",
+		spritenum: -6,
+		megaStone: { "Raticate-Orion": "Raticate-Orion-Mega" },
+		itemUser: ["Raticate-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Raticate-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	baxcalibrites: {
+		name: "Baxcalibrite-S",
+		spritenum: -6,
+		megaStone: { "Baxcalibur-Orion": "Baxcalibur-Orion-Mega" },
+		itemUser: ["Baxcalibur-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Baxcalibur-Orion, this item allows it to Mega Evolve in battle.",
+	},
+	wiggnitetemporal: {
+		name: "Wiggnite-Temporal",
+		spritenum: -6,
+		megaStone: { "Wigglytuff-Temporal": "Wigglytuff-Temporal-Mega" },
+		itemUser: ["Wigglytuff-Temporal"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a T.Wigglytuff, this item allows it to Mega Evolve in battle.",
+	},
+	eelektrossites: {
+		name: "Eelektrossite-S",
+		spritenum: -6,
+		megaStone: { "Eelektross-Orion": "Eelektross-Orion-Mega" },
+		itemUser: ["Eelektross-Orion"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "If held by a Eelektross-Orion, this item allows it to Mega Evolve in battle.",
 	},
 	normalshield: {
 		name: "Normal Shield",
@@ -912,6 +2615,22 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		gen: 9,
 		shortDesc: "Halves damage taken from a supereffective Sound-type attack.",
+	},
+	frostorb: {
+		name: "Frost Orb",
+		spritenum: -6,
+		fling: {
+			basePower: 30,
+			status: 'frb',
+		},
+		onResidualOrder: 28,
+		onResidualSubOrder: 3,
+		onResidual(pokemon) {
+			pokemon.trySetStatus('frb', pokemon);
+		},
+		num: 0,
+		gen: 9,
+		shortDesc: "At the end of every turn, this item attempts to frostbite the holder.",
 	},
 	hivisjacket: {
 		name: "Hi-Vis Jacket",

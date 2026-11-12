@@ -170,6 +170,103 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		target: "normal",
 		type: "Fighting",
 	},
+	deathnail: {
+		num: 0,
+		accuracy: 95,
+		basePower: 85,
+		category: "Physical",
+		name: "Death Nail",
+		desc: "The user slashes at its foe with dark matter. This move obliterates any barrier such as Light Screen and Reflect.",
+		shortDesc: "Destroys screens, unless the target is immune.",
+		pp: 10,
+		priority: 0,
+		flags: { contact: 1, protect: 1, mirror: 1 },
+		onTryHit(pokemon) {
+
+			pokemon.side.removeSideCondition('reflect');
+			pokemon.side.removeSideCondition('lightscreen');
+			pokemon.side.removeSideCondition('auroraveil');
+		},
+		secondary: undefined,
+		target: "normal",
+		type: "Ghost",
+	},
+	iceblast: {
+		num: 0,
+		accuracy: 100,
+		basePower: 70,
+		category: "Special",
+		name: "Ice Blast",
+		desc: "The target is hit with a sudden blast of freezing energy. This move is strong against Water types.",
+		shortDesc: "10% chance to freeze. Super effective on Water.",
+		pp: 20,
+		priority: 0,
+		flags: { protect: 1, mirror: 1 },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Water') return 1;
+		},
+		secondary: {
+			chance: 10,
+			status: 'frz',
+		},
+		target: "normal",
+		type: "Ice",
+	},
+	beamshield: {
+		num: 0,
+		accuracy: 0,
+		basePower: 0,
+		category: "Status",
+		name: "Beam Shield",
+		desc: "The user protects itself. This move also damages attackers who make direct contact.",
+		shortDesc: "Protects from moves. Contact: loses 1/8 max HP.",
+		pp: 10,
+		priority: 4,
+		flags: { snatch: 1, noassist: 1, failcopycat: 1 },
+		stallingMove: true,
+		volatileStatus: 'beamshield',
+		onPrepareHit(pokemon) {
+			return !!this.queue.willAct() && this.runEvent('StallMove', pokemon);
+		},
+		onHit(pokemon) {
+			pokemon.addVolatile('stall');
+		},
+		condition: {
+			duration: 1,
+			onStart(target) {
+				this.add('-singleturn', target, 'move: Protect');
+			},
+			onTryHitPriority: 3,
+			onTryHit(target, source, move) {
+				if (this.checkMoveBypassesProtect(move, source, target)) return;
+				if (move.smartTarget) {
+					move.smartTarget = false;
+				} else {
+					this.add('-activate', target, 'move: Protect');
+				}
+				const lockedmove = source.getVolatile('lockedmove');
+				if (lockedmove) {
+
+					if (source.volatiles['lockedmove'].duration === 2) {
+						delete source.volatiles['lockedmove'];
+					}
+				}
+				if (this.checkMoveMakesContact(move, source, target)) {
+					this.damage(source.baseMaxhp / 8, source, target);
+				}
+				return this.NOT_FAIL;
+			},
+			onHit(target, source, move) {
+				if (move.isZOrMaxPowered && this.checkMoveMakesContact(move, source, target)) {
+					this.damage(source.baseMaxhp / 8, source, target);
+				}
+			},
+		},
+		secondary: undefined,
+		target: "self",
+		type: "Fairy",
+		zMove: { boost: { def: 1 } },
+	},
 	omniblast: {
 		accuracy: 100,
 		basePower: 100,
@@ -256,6 +353,30 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		secondary: undefined,
 		target: "normal",
 		type: "Steel",
+	},
+	sizzleslam: {
+		num: 0,
+		accuracy: 100,
+		basePower: 75,
+		category: "Physical",
+		name: "Sizzle Slam",
+		desc: "The user headbutts the opponent with an open flame stove atop its head. Leaves the foe burning.",
+		shortDesc: "100% chance to burn the target. Destroys foe's Berry/Gem.",
+		pp: 10,
+		priority: 0,
+		flags: { protect: 1, mirror: 1 },
+		onHit(pokemon, source) {
+			const item = pokemon.getItem();
+			if ((item.isBerry || item.isGem) && pokemon.takeItem(source)) {
+				this.add('-enditem', pokemon, item.name, '[from] move: Incinerate');
+			}
+		},
+		secondary: {
+			chance: 100,
+			status: 'brn',
+		},
+		target: "normal",
+		type: "Fire",
 	},
 	kablow: {
 		accuracy: 100,

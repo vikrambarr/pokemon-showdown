@@ -351,6 +351,18 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "This Pokemon's Sp. Atk is raised by 1 stage if it attacks and KOes another Pokemon.",
 		rating: 3,
 	},
+	icecleats: {
+		onModifySpe(spe, pokemon) {
+			if (this.field.isWeather(['hail', 'snowscape'])) {
+				return this.chainModify(2);
+			}
+		},
+		flags: {},
+		name: "Ice Cleats",
+		shortDesc: "If Hail/Snow is active, this Pokemon's Speed is doubled.",
+		rating: 3,
+		num: 0,
+	},
 	intoxicate: {
 		onModifyTypePriority: -1,
 		onModifyType(move, pokemon) {
@@ -460,6 +472,16 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Lernean",
 		shortDesc: "Grows heads when it loses HP. Moves become multihit.",
 		rating: 4.5,
+	},
+	noctem: {
+		onStart(source) {
+			this.field.setWeather('newmoon');
+		},
+		flags: {},
+		name: "Noctem",
+		shortDesc: "On switch-in, this Pokemon summons New Moon.",
+		rating: 4,
+		num: 0,
 	},
 	omnitype: {
 		onStart(target) {
@@ -681,6 +703,16 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "This Pokemon's offensive stat is multiplied by 1.5 while using a Dark-type attack.",
 		rating: 2,
 	},
+	sleet: {
+		onStart(source) {
+			this.field.setWeather('hail');
+		},
+		flags: {},
+		name: "Sleet",
+		shortDesc: "Hail damage increased while active; summons Hail.",
+		rating: 4,
+		num: 0,
+	},
 	spectraljaws: {
 		onBasePowerPriority: 19,
 		onBasePower(basePower, attacker, defender, move) {
@@ -808,6 +840,22 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "Vaporizes Water-type attacks and damages water types.",
 		flags: { breakable: 1 },
 		rating: 3.5,
+	},
+	windforce: {
+		onTryHit(target, source, move) {
+			if (target !== source && move.type === 'Flying') {
+				if (!this.boost({ spe: 1 })) {
+					this.add('-immune', target, '[from] ability: Wind Force');
+				}
+				return null;
+			}
+		},
+		flags: { breakable: 1 },
+		name: "Wind Force",
+		desc: "This Pokemon is immune to Flying-type moves and raises its Speed by 1 stage when hit by an Flying-type move.",
+		shortDesc: "Raises Speed when hit by Flying-type move; Flying immunity.",
+		rating: 3,
+		num: 0,
 	},
 	winterjoy: {
 		onBasePower(basePower, pokemon, target, move) {

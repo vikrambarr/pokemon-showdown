@@ -1,4 +1,81 @@
 export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
+	electrodite: {
+		name: "Electrodite",
+		desc: "If held by a Electrode, this item allows it to Mega Evolve in battle.",
+		spritenum: 596,
+		megaStone: { "Electrode": "Electrode-Mega" },
+		itemUser: ["Electrode"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	florgesite: {
+		name: "Florgesite",
+		desc: "If held by a Florges, this item allows it to Mega Evolve in battle.",
+		spritenum: 615,
+		megaStone: { "Florges": "Florges-Mega" },
+		itemUser: ["Florges"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	frostysnorlaxite: {
+		name: "Frosty Snorlaxite",
+		desc: "If held by a Snorlax-Frost, this item allows it to Mega Evolve in battle.",
+		spritenum: 623,
+		megaStone: { "Snorlax-Frost": "Snorlax-Frost-Mega" },
+		itemUser: ["Snorlax-Frost"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	deltablazikenite: {
+		name: "Delta Blazikenite",
+		desc: "If held by a Blaziken-Delta, this item allows it to Mega Evolve in battle.",
+		spritenum: -3,
+		megaStone: { "Blaziken-Delta": "Blaziken-Delta-Mega" },
+		itemUser: ["Blaziken-Delta"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	deltasceptilite: {
+		name: "Delta Sceptilite",
+		desc: "If held by a Sceptile-Delta, this item allows it to Mega Evolve in battle.",
+		spritenum: -3,
+		megaStone: { "Sceptile-Delta": "Sceptile-Delta-Mega" },
+		itemUser: ["Sceptile-Delta"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	sekrilite: {
+		name: "Sekrilite",
+		desc: "If held by a Sekrilon, this item allows it to Mega Evolve in battle.",
+		spritenum: -3,
+		megaStone: { "Sekrilon": "Sekrilon-Mega" },
+		itemUser: ["Sekrilon"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	deltatyranitarite: {
+		name: "Delta Tyranitarite",
+		desc: "If held by a Tyranitar-Delta, this item allows it to Mega Evolve in battle.",
+		spritenum: -3,
+		megaStone: { "Tyranitar-Delta": "Tyranitar-Delta-Mega" },
+		itemUser: ["Tyranitar-Delta"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
 	vigorherb: {
 		name: "Vigor Herb",
 		desc: "Holder's recharge turn is skipped. Single use.",
@@ -174,6 +251,50 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 			return this.chainModify(0.5);
 		},
 		itemUser: ['Dhelmise'],
+	},
+	tofagrifite: {
+		name: "Tofagrifite",
+		desc: "If held by a Tofagrif, this item allows it to Mega Evolve in battle.",
+		spritenum: -3,
+		megaStone: { "Tofagrif": "Tofagrif-Mega" },
+		itemUser: ["Tofagrif"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	subarcticheracronite: {
+		name: "Subarctic Heracronite",
+		desc: "If held by a Heracross-Subarctic, this item allows it to Mega Evolve in battle.",
+		spritenum: -3,
+		megaStone: { "Heracross-Subarctic": "Heracross-Subarctic-Mega" },
+		itemUser: ["Heracross-Subarctic"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	dryguaronite: {
+		name: "Dryguaronite",
+		desc: "If held by a Dryguaro, this item allows it to Mega Evolve in battle.",
+		spritenum: -3,
+		megaStone: { "Dryguaro": "Dryguaro-Mega" },
+		itemUser: ["Dryguaro"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
+	},
+	utensitite: {
+		name: "Utensitite",
+		desc: "If held by a Utensitile, this item allows it to Mega Evolve in battle.",
+		spritenum: -3,
+		megaStone: { "Utensitile": "Utensitile-Mega" },
+		itemUser: ["Utensitile"],
+		onTakeItem(item, source) {
+			return !item.megaStone?.[source.baseSpecies.baseSpecies];
+		},
+		num: 0,
 	},
 	bubbleclef: {
 		name: "Bubble Clef",
