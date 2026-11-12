@@ -48,7 +48,7 @@ export class Field {
 				if (this.battle.gen > 5 || this.weatherState.duration === 0) {
 					return false;
 				}
-			} else if (this.battle.gen > 2 || countsAs(this.battle.dex, status.id, 'sandstorm')) {
+			} else if (this.battle.gen > 2 || countsAs(this.battle.dex, 'Conditions', status.id, 'sandstorm')) {
 				return false;
 			}
 		}
@@ -119,9 +119,9 @@ export class Field {
 	isWeather(weather: string | string[]) {
 		const ourWeather = this.effectiveWeather();
 		if (!Array.isArray(weather)) {
-			return countsAs(this.battle.dex, ourWeather, toID(weather));
+			return countsAs(this.battle.dex, 'Conditions', ourWeather, toID(weather));
 		}
-		return weather.some(entry => countsAs(this.battle.dex, ourWeather, toID(entry)));
+		return weather.some(entry => countsAs(this.battle.dex, 'Conditions', ourWeather, toID(entry)));
 	}
 
 	getWeather() {
@@ -175,9 +175,9 @@ export class Field {
 	isTerrain(terrain: string | string[], target?: Pokemon | Side | Battle) {
 		const ourTerrain = this.effectiveTerrain(target);
 		if (!Array.isArray(terrain)) {
-			return countsAs(this.battle.dex, ourTerrain, toID(terrain));
+			return countsAs(this.battle.dex, 'Conditions', ourTerrain, toID(terrain));
 		}
-		return terrain.some(entry => countsAs(this.battle.dex, ourTerrain, toID(entry)));
+		return terrain.some(entry => countsAs(this.battle.dex, 'Conditions', ourTerrain, toID(entry)));
 	}
 
 	getTerrain() {
@@ -223,7 +223,7 @@ export class Field {
 
 	removePseudoWeather(status: string | Effect) {
 		status = this.battle.dex.conditions.get(status);
-		const copies: string[] = countedAs(this.battle.dex, status.id).filter(id => this.removePseudoWeather(id));
+		const copies: string[] = countedAs(this.battle.dex, 'Conditions', status.id).filter(id => this.removePseudoWeather(id));
 		const state = this.pseudoWeather[status.id];
 		if (!state) return copies.length > 0;
 		this.battle.singleEvent('FieldEnd', status, state, this);

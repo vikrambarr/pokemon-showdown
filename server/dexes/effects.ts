@@ -4,7 +4,7 @@ import {
 	baseEffect, effectSlots, inheritedEffect, isObject, REPLACED, UNSAFE, type EffectEdit, type EffectTable,
 } from '../../sim/dex-custom';
 import {
-	classify, checkSlot, eventTargets, handlersOf, parseHandler, STAT_EVENT, type Slot,
+	classify, checkSlot, eventTargets, parseHandler, STAT_EVENT, type Slot,
 } from '../../sim/dex-handlers';
 import { validateName, type Origin } from './species';
 
@@ -31,9 +31,6 @@ export interface EffectEntry {
 
 export const EFFECT_NAMES: { [table in EffectTable]: string } = {
 	Moves: 'move', Abilities: 'ability', Items: 'item', Conditions: 'condition',
-};
-export const EFFECT_PLURALS: { [table in EffectTable]: string } = {
-	Moves: 'Moves', Abilities: 'Abilities', Items: 'Items', Conditions: 'Conditions',
 };
 
 type Check = (value: unknown, field: string, data: AnyObject, old: unknown) => unknown;
@@ -142,7 +139,6 @@ const status = slot('status');
 const condition = slot('ref', { tables: ['Conditions', 'Moves', 'Abilities', 'Items'], form: 'id' });
 const move = slot('ref', { tables: ['Moves'], form: 'name' });
 const species = slot('ref', { tables: ['Pokedex'], form: 'name' });
-const countsAs = (table: EffectTable) => slot('ref', { tables: [table], form: 'id' });
 const boosts = record(slot('stat', { value: 'atk', key: true }), int(-6, 6));
 const fraction = list(int(1, 100), 2);
 const animation: Check = (value, field) => {
@@ -156,10 +152,10 @@ const secondaryFields: Fields = {
 };
 const secondary = object({ ...secondaryFields, self: object(secondaryFields) });
 const MOVE_BOOLEANS = [
-	'breaksProtect', 'callsMove', 'forceSwitch', 'hasCrashDamage', 'hasSheerForceBoost', 'ignoreAbility', 'ignoreDefensive',
-	'ignoreEvasion', 'infiltrates', 'mindBlownRecoil', 'multiaccuracy', 'noPPBoosts', 'sleepUsable', 'smartTarget',
-	'stallingMove', 'stealsBoosts', 'struggleRecoil', 'thawsTarget', 'tracksTarget', 'willCrit',
+	'breaksProtect', 'forceSwitch', 'hasCrashDamage', 'hasSheerForceBoost', 'ignoreAbility', 'ignoreDefensive', 'ignoreEvasion',
+	'infiltrates', 'multiaccuracy', 'sleepUsable', 'stealsBoosts', 'thawsTarget', 'tracksTarget', 'willCrit',
 ];
+const OFFICIAL_MOVE_BOOLEANS = ['callsMove', 'mindBlownRecoil', 'noPPBoosts', 'smartTarget', 'stallingMove', 'struggleRecoil'];
 const ITEM_BOOLEANS = ['ignoreKlutz', 'isBerry', 'isChoice', 'isGem', 'isPokeball', 'isPrimalOrb'];
 export const EDITABLE: { [table in EffectTable]: string[] } = {
 	Moves: [
@@ -167,13 +163,11 @@ export const EDITABLE: { [table in EffectTable]: string[] } = {
 		'secondary', 'secondaries', 'self', 'boosts', 'selfBoost', 'status', 'volatileStatus', 'sideCondition', 'slotCondition',
 		'pseudoWeather', 'weather', 'terrain', 'multihit', 'selfSwitch', 'selfdestruct', 'ignoreImmunity', 'overrideOffensiveStat',
 		'overrideDefensiveStat', 'overrideOffensivePokemon', 'overrideDefensivePokemon', 'damage', 'ohko', 'condition',
-		'breaksProtect', 'forceSwitch', 'hasCrashDamage', 'hasSheerForceBoost', 'ignoreAbility', 'ignoreDefensive', 'ignoreEvasion',
-		'infiltrates', 'multiaccuracy', 'sleepUsable', 'stealsBoosts', 'thawsTarget', 'tracksTarget', 'willCrit', 'desc', 'shortDesc',
-		'countsAs', 'animations',
+		...MOVE_BOOLEANS, 'desc', 'shortDesc', 'animations',
 	],
-	Abilities: ['flags', 'suppressWeather', 'desc', 'shortDesc', 'countsAs'],
-	Items: ['fling', 'naturalGift', 'boosts', 'ignoreKlutz', 'spritenum', 'desc', 'shortDesc', 'countsAs'],
-	Conditions: ['duration', 'counterMax', 'noCopy', 'affectsFainted', 'desc', 'shortDesc', 'countsAs'],
+	Abilities: ['flags', 'suppressWeather', 'desc', 'shortDesc'],
+	Items: ['fling', 'naturalGift', 'boosts', 'ignoreKlutz', 'spritenum', 'desc', 'shortDesc'],
+	Conditions: ['duration', 'counterMax', 'noCopy', 'affectsFainted', 'desc', 'shortDesc'],
 };
 
 const FIELDS: { [table in EffectTable]: Fields } = {
@@ -194,12 +188,11 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		}),
 		maxMove: object({ basePower: int(0, 1000) }),
 		contestType: oneOf(...used('Moves', entry => entry.contestType)), isNonstandard: nonstandard, gen: int(1, 9),
-		...Object.fromEntries(MOVE_BOOLEANS.map(field => [field, bool])), ...desc(55), countsAs: countsAs('Moves'),
+		...Object.fromEntries([...MOVE_BOOLEANS, ...OFFICIAL_MOVE_BOOLEANS].map(field => [field, bool])), ...desc(55),
 		animations: list(animation, 2),
 	},
 	Abilities: {
 		rating: num(-1, 5), suppressWeather: bool, isNonstandard: nonstandard, gen: int(1, 9), ...desc(90),
-		countsAs: countsAs('Abilities'),
 		flags: record(oneOf(...used('Abilities', entry => Object.keys(entry.flags || {}))), oneOf(1)),
 	},
 	Items: {
@@ -208,11 +201,10 @@ const FIELDS: { [table in EffectTable]: Fields } = {
 		naturalGift: object({ basePower: int(0, 250), type }), itemUser: list(species, 30), forcedForme: species,
 		megaStone: record(species, species), boosts, zMove: either(oneOf(true), move), zMoveFrom: move, zMoveType: type,
 		onPlate: type, onMemory: type, onDrive: type, isNonstandard: nonstandard, gen: int(1, 9),
-		...Object.fromEntries(ITEM_BOOLEANS.map(field => [field, bool])), ...desc(90), countsAs: countsAs('Items'),
+		...Object.fromEntries(ITEM_BOOLEANS.map(field => [field, bool])), ...desc(90),
 	},
 	Conditions: {
 		duration: int(1, 100), counterMax: int(1, 10000), noCopy: bool, affectsFainted: bool, ...desc(90),
-		countsAs: countsAs('Conditions'),
 	},
 };
 
@@ -276,7 +268,7 @@ function sameValue(a: unknown, b: unknown) {
 	return typeof a === 'string' && typeof b === 'string' ? toID(a) === toID(b) : a === b;
 }
 
-export function editOf(
+function editOf(
 	entry: EffectEntry, slots: EffectEdit['slots'] = {}, events: EffectEdit['events'] = {}
 ): EffectEdit {
 	return {
@@ -363,15 +355,6 @@ function checkEffect(
 	}
 	const locked = unlimited ? undefined : Object.keys(fields).find(field => !EDITABLE[table].includes(field));
 	if (locked) throw new Chat.ErrorMessage(`"${locked}" can only be changed in official dexes.`);
-	if (fields.countsAs !== undefined) {
-		if (fields.countsAs !== null && typeof fields.countsAs !== 'boolean') {
-			throw new Chat.ErrorMessage(`"countsAs" must be true or false.`);
-		}
-		if (fields.countsAs && !inheritsfrom) {
-			throw new Chat.ErrorMessage(`Only copies can count as something: ${name} isn't copied from another ${what}.`);
-		}
-		fields.countsAs = fields.countsAs ? inheritedEffect(dex, table, inheritsfrom).baseid : null;
-	}
 	const keep = old?.inheritsfrom === inheritsfrom;
 	const start = keep ? old!.data : !base ? BLANK[table] : {};
 	const entry: EffectEntry = {
@@ -457,48 +440,12 @@ const lineOf = (src: string, start: number, end: number) => {
 };
 
 let engine: [string, string][] | null = null;
-const references = new WeakMap<AnyObject, Map<string, Map<string, number>>>();
-
 export function engineChecks(id: string) {
 	engine ||= [...FS('dist/sim').readdirSync().map(file => `sim/${file}`), 'data/rulesets.js']
 		.filter(file => file.endsWith('.js') && !['sim/dex-custom.js', 'sim/dex-handlers.js'].includes(file))
 		.map(file => [file, FS(`dist/${file}`).readSync()]);
 	const pattern = new RegExp(`["']${id}["']`, 'g');
 	return engine.map(([file, src]) => ({ file, count: src.match(pattern)?.length || 0 })).filter(entry => entry.count);
-}
-
-export function referencesTo(dex: ModdedDex, id: string) {
-	let index = references.get(dex.data);
-	if (!index) {
-		index = new Map();
-		for (const table of ['Moves', 'Abilities', 'Items', 'Conditions'] as const) {
-			for (const effectid in dex.data[table]) {
-				const effect = dex.data[table][effectid] as AnyObject;
-				const add = (value: unknown) => {
-					const target = toID(value);
-					if (!target || target === effectid) return;
-					const counts = index!.get(target) || new Map<string, number>();
-					index!.set(target, counts);
-					const key = `${EFFECT_NAMES[table]}: ${effect.name || effectid}`;
-					counts.set(key, (counts.get(key) || 0) + 1);
-				};
-				for (const [, fn] of handlersOf(effect)) {
-					for (const found of parseHandler(fn, dex.data)?.slots || []) {
-						if (found.kind === 'ref') add(found.value);
-					}
-				}
-				const attributes = (value: unknown, key: string) => {
-					if (typeof value === 'string' && key !== 'name' && classify(value, key, dex.data)?.kind === 'ref') add(value);
-					if (value && typeof value === 'object') {
-						for (const [field, entry] of Object.entries(value)) attributes(entry, field);
-					}
-				};
-				attributes(effect, '');
-			}
-		}
-		references.set(dex.data, index);
-	}
-	return [...index.get(id) || []].map(([effect, count]) => ({ effect, count }));
 }
 
 export function describeEffect(
@@ -520,7 +467,6 @@ export function describeEffect(
 	}));
 	return {
 		table, id: effectid, name, official, base: base ? baseid : null, handlers,
-		lost: official || !base ? null : { engine: engineChecks(baseid), references: referencesTo(dex, baseid) },
 	};
 }
 

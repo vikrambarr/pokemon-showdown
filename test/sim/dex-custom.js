@@ -309,13 +309,13 @@ describe('Custom dexes', () => {
 	it('should let copies count as their originals, alongside them', () => {
 		const dex = buildDex({
 			...DATA, hash: 'simcounts', species: ['blissey', 'snorlax', 'machamp'], effects: {
-				Items: { hoverdisc: { inherit: 'airballoon', data: { name: 'Hover Disc', countsAs: 'airballoon' } } },
-				Abilities: { floaty: { inherit: 'levitate', data: { name: 'Floaty', countsAs: 'levitate' } } },
+				Items: { hoverdisc: { inherit: 'airballoon', data: { name: 'Hover Disc' } } },
+				Abilities: { floaty: { inherit: 'levitate', data: { name: 'Floaty' } } },
 				Moves: {
-					glasswall: { inherit: 'reflect', data: { name: 'Glass Wall', countsAs: 'reflect' } },
-					guardup: { inherit: 'protect', data: { name: 'Guard Up', countsAs: 'protect' } },
+					glasswall: { inherit: 'reflect', data: { name: 'Glass Wall' } },
+					guardup: { inherit: 'protect', data: { name: 'Guard Up' } },
 				},
-				Conditions: { scorched: { inherit: 'sunnyday', data: { name: 'Scorched', countsAs: 'sunnyday' } } },
+				Conditions: { scorched: { inherit: 'sunnyday', data: { name: 'Scorched' } } },
 			},
 		});
 		const format = buildFormat(dex, { name: '[Sim Test] Anything', ruleset: [] });
@@ -365,7 +365,7 @@ describe('Custom dexes', () => {
 
 		const insurgence = buildDex({
 			...DATA, hash: 'simcountsmod', mod: 'gen9insurgence', species: ['blissey'],
-			effects: { Items: { hoverdisc: { inherit: 'airballoon', data: { name: 'Hover Disc', countsAs: 'airballoon' } } } },
+			effects: { Items: { hoverdisc: { inherit: 'airballoon', data: { name: 'Hover Disc' } } } },
 		});
 		const modBattle = new Battle({ formatid: 'simtestanything', format: buildFormat(insurgence, { name: '[Sim Test] Anything', ruleset: [] }) });
 		for (const side of ['p1', 'p2']) {
@@ -380,5 +380,47 @@ describe('Custom dexes', () => {
 		plainBattle.setPlayer('p2', { team: [set('Voltlet')] });
 		assert(!require('util').types.isProxy(plainBattle.p1.active[0].volatiles));
 		releaseDex(plain);
+	});
+	it('should keep move, item and ability copies with the same name separate', () => {
+		const dex = buildDex({
+			...DATA, hash: 'simnamespaces', species: ['blissey'], effects: {
+				Moves: { hoverdisc: { inherit: 'tackle', data: { name: 'Hover Disc' } } },
+				Items: { hoverdisc: { inherit: 'airballoon', data: { name: 'Hover Disc' } } },
+				Abilities: { hoverdisc: { inherit: 'levitate', data: { name: 'Hover Disc' } } },
+			},
+		});
+		assert.deepEqual(parseHandler(pokemon => pokemon.hasItem('hoverdisc'), dex.data).slots[0].tables, ['Items']);
+		assert.deepEqual(parseHandler(pokemon => pokemon.hasAbility('hoverdisc'), dex.data).slots[0].tables, ['Abilities']);
+		const battle = new Battle({ formatid: 'simnamespaces', format: buildFormat(dex, { name: 'Names', ruleset: [] }) });
+		try {
+			for (const side of ['p1', 'p2']) battle.setPlayer(side, {
+				team: [{ species: 'Blissey', ability: 'Hover Disc', item: 'Hover Disc', moves: ['hoverdisc'], evs: {} }],
+			});
+			const pokemon = battle.p1.active[0];
+			assert(pokemon.hasItem('airballoon'));
+			assert(!pokemon.hasItem('tackle'));
+			assert(pokemon.hasAbility('levitate'));
+			assert(!pokemon.hasAbility('airballoon'));
+			assert.equal(pokemon.isGrounded(), null);
+		} finally {
+			battle.destroy();
+			releaseDex(dex);
+		}
+	});
+
+	it('should release tiered validator dexes without retaining their underlying versions', () => {
+		const data = { ...DATA, hash: 'simtiercleanup' };
+		const owner = buildDex(data);
+		for (let i = 0; i < 3; i++) {
+			const dex = buildDex(data);
+			const format = buildFormat(dex, { name: 'Tiers', ruleset: [], tiers: { raichu: { tier: 'Uber' } } });
+			const validator = new TeamValidator(format);
+			assert.equal(validator.dex.species.get('Raichu').tier, 'Uber');
+			releaseDex(validator.dex);
+		}
+		assert(Dex.dexes[owner.currentMod]);
+		releaseDex(owner);
+		assert(!Dex.dexes[owner.currentMod]);
+		assert(!Object.keys(Dex.dexes).some(id => id.startsWith(owner.currentMod + 'tiers')));
 	});
 });

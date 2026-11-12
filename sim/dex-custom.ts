@@ -78,7 +78,8 @@ function renameSelf(value: any, from: string, id: string, name: string): any {
 }
 
 export function inheritedEffect(parent: ModdedDex, table: EffectTable, inherit: string | null | undefined) {
-	const [mod, id] = `${inherit || ''}`.includes(':') ? `${inherit}`.split(':') : ['', `${inherit || ''}`];
+	const sourceName = inherit || '';
+	const [mod, id] = sourceName.includes(':') ? sourceName.split(':') : ['', sourceName];
 	const source = mod ? (parent.dexes[toID(mod)] && !isBuiltDex(toID(mod)) ? parent.mod(toID(mod)) : null) : parent;
 	const baseid = toID(id);
 	return { baseid, base: baseid && source ? source.data[table][baseid] as AnyObject | undefined : undefined };
@@ -176,6 +177,7 @@ function resolveEffects(parent: ModdedDex, effects: NonNullable<DexLayer['effect
 			if (!official) {
 				effect.name ||= id;
 				effect.gen = parent.gen;
+				if (base) effect.countsAs = baseid;
 			}
 			data[table][id] = effect;
 			resolved.push([table, id, effect, edit]);
@@ -223,7 +225,11 @@ function countCopies(data: AnyObject) {
 				if (!handler) continue;
 				const replacements: { start: number, end: number, text: string }[] = [];
 				for (const slot of handler.slots) {
-					const copies = slot.context && countedAs(dex, toID(slot.value));
+					const tables = slot.kind === 'status' || slot.condition ? ['Conditions'] as const :
+						slot.tables?.length === 1 ? slot.tables : [];
+					const copies = slot.context && [...new Set(tables.flatMap(effectTable => (
+						EFFECT_TABLES.includes(effectTable as EffectTable) ? countedAs(dex, effectTable as EffectTable, toID(slot.value)) : []
+					)))];
 					if (!copies?.length) continue;
 					const { kind, start, end, other, negate } = slot.context!;
 					if (replacements.some(entry => entry.start < end && start < entry.end)) continue;
@@ -355,89 +361,96 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 		return cached.dex;
 	}
 	const parent = buildBase(data, base, engine || data.mod);
-	const species = new Set(data.species);
-	const removed = (table: 'Moves' | 'Abilities' | 'Items') => new Set(data.lists?.[table]?.removed || []);
-	const removedMoves = removed('Moves');
-	const removedAbilities = removed('Abilities');
-	const removedItems = removed('Items');
-	const dex = new base.ModdedDex(id);
-	dex.parentMod = parent.currentMod;
-	dex.gen = parent.gen;
-	dex.dataCache = {
-		...parent.data,
-		Pokedex: { ...parent.data.Pokedex, ...data.Pokedex },
-		Learnsets: { ...parent.data.Learnsets, ...data.Learnsets },
-		FormatsData: { ...parent.data.FormatsData, ...data.FormatsData },
-		TypeChart: { ...parent.data.TypeChart, ...data.TypeChart },
-		Scripts: {
-			...parent.data.Scripts,
-			actions: {
-				canMegaEvo,
-				...parent.data.Scripts.actions,
+	try {
+		const species = new Set(data.species);
+		const removed = (table: 'Moves' | 'Abilities' | 'Items') => new Set(data.lists?.[table]?.removed || []);
+		const removedMoves = removed('Moves');
+		const removedAbilities = removed('Abilities');
+		const removedItems = removed('Items');
+		const dex = new base.ModdedDex(id);
+		dex.parentMod = parent.currentMod;
+		dex.gen = parent.gen;
+		dex.dataCache = {
+			...parent.data,
+			Pokedex: { ...parent.data.Pokedex, ...data.Pokedex },
+			Learnsets: { ...parent.data.Learnsets, ...data.Learnsets },
+			FormatsData: { ...parent.data.FormatsData, ...data.FormatsData },
+			TypeChart: { ...parent.data.TypeChart, ...data.TypeChart },
+			Scripts: {
+				...parent.data.Scripts,
+				actions: {
+					canMegaEvo,
+					...parent.data.Scripts.actions,
+				},
 			},
-		},
-		Rulesets: {
-			...PokeathlonRulesets,
-			...parent.data.Rulesets,
-			dexpokemon: {
-				effectType: 'ValidatorRule',
-				name: 'Dex Pokemon',
-				desc: "Only Pok&eacute;mon, moves, abilities and items in this dex can be used",
-				onValidateSet(set) {
-					const { outOfBattleSpecies, tierSpecies } = this.getValidationSpecies(set);
-					const fusion = this.ruleTable.has('infinitefusionmod') && set.fusion ? [this.dex.species.get(set.fusion)] : [];
-					for (const forme of [outOfBattleSpecies, tierSpecies, ...fusion]) {
-						if (!species.has(forme.isCosmeticForme ? toID(forme.baseSpecies) : forme.id)) {
-							return [`${forme.name} isn't in this dex.`];
+			Rulesets: {
+				...PokeathlonRulesets,
+				...parent.data.Rulesets,
+				dexpokemon: {
+					effectType: 'ValidatorRule',
+					name: 'Dex Pokemon',
+					desc: "Only Pok&eacute;mon, moves, abilities and items in this dex can be used",
+					onValidateSet(set) {
+						const { outOfBattleSpecies, tierSpecies } = this.getValidationSpecies(set);
+						const fusion = this.ruleTable.has('infinitefusionmod') && set.fusion ? [this.dex.species.get(set.fusion)] : [];
+						for (const forme of [outOfBattleSpecies, tierSpecies, ...fusion]) {
+							if (!species.has(forme.isCosmeticForme ? toID(forme.baseSpecies) : forme.id)) {
+								return [`${forme.name} isn't in this dex.`];
+							}
 						}
-					}
-					const problems = set.moves.filter(move => removedMoves.has(toID(move)))
-						.map(move => `${this.dex.moves.get(move).name} isn't in this dex.`);
-					if (removedAbilities.has(toID(set.ability))) problems.push(`${this.dex.abilities.get(set.ability).name} isn't in this dex.`);
-					if (removedItems.has(toID(set.item))) problems.push(`${this.dex.items.get(set.item).name} isn't in this dex.`);
-					if (problems.length) return problems;
+						const problems = set.moves.filter(move => removedMoves.has(toID(move)))
+							.map(move => `${this.dex.moves.get(move).name} isn't in this dex.`);
+						if (removedAbilities.has(toID(set.ability))) {
+							problems.push(`${this.dex.abilities.get(set.ability).name} isn't in this dex.`);
+						}
+						if (removedItems.has(toID(set.item))) problems.push(`${this.dex.items.get(set.item).name} isn't in this dex.`);
+						if (problems.length) return problems;
+					},
+				},
+				officialteratypes: {
+					effectType: 'ValidatorRule',
+					name: 'Official Tera Types',
+					desc: "Pok&eacute;mon can only Terastallize into types from the main games",
+					onValidateSet(set) {
+						if (set.teraType && !base.data.TypeChart[toID(set.teraType)]) {
+							return [`${set.name || set.species}'s Tera Type can't be ${set.teraType}, which isn't from the main games.`];
+						}
+					},
+				},
+				dexsnapshot: {
+					effectType: 'Rule',
+					name: 'Dex Snapshot',
+					onBegin() {
+						this.add('dex', data.hash);
+					},
 				},
 			},
-			officialteratypes: {
-				effectType: 'ValidatorRule',
-				name: 'Official Tera Types',
-				desc: "Pok&eacute;mon can only Terastallize into types from the main games",
-				onValidateSet(set) {
-					if (set.teraType && !base.data.TypeChart[toID(set.teraType)]) {
-						return [`${set.name || set.species}'s Tera Type can't be ${set.teraType}, which isn't from the main games.`];
-					}
-				},
-			},
-			dexsnapshot: {
-				effectType: 'Rule',
-				name: 'Dex Snapshot',
-				onBegin() {
-					this.add('dex', data.hash);
-				},
-			},
-		},
-	};
-	if (data.effects) resolveEffects(parent, data.effects, dex.dataCache);
-	for (const table of ['Moves', 'Abilities', 'Items'] as const) {
-		const added = data.lists?.[table]?.added || [];
-		if (!added.length) continue;
-		const entries: AnyObject = { ...dex.dataCache[table] };
-		for (const id of added) {
-			if (entries[id]?.isNonstandard) entries[id] = { ...entries[id], isNonstandard: null };
+		};
+		if (data.effects) resolveEffects(parent, data.effects, dex.dataCache);
+		for (const table of ['Moves', 'Abilities', 'Items'] as const) {
+			const added = data.lists?.[table]?.added || [];
+			if (!added.length) continue;
+			const entries: AnyObject = { ...dex.dataCache[table] };
+			for (const id of added) {
+				if (entries[id]?.isNonstandard) entries[id] = { ...entries[id], isNonstandard: null };
+			}
+			(dex.dataCache as AnyObject)[table] = entries;
 		}
-		(dex.dataCache as AnyObject)[table] = entries;
+		countCopies(dex.dataCache);
+		const cosmetic = new Map(Object.entries(data.Pokedex).flatMap(([speciesid, entry]) => (
+			(entry.cosmeticFormes || []).map(forme => [toID(forme), speciesid as ID] as const)
+		)));
+		const own = (alias: ID) => !dex.dataCache!.Pokedex[alias]?.isCosmeticForme &&
+			['Pokedex', ...EFFECT_TABLES].some(table => dex.dataCache![table as 'Moves'][alias]);
+		dex.getAlias = alias => cosmetic.get(alias) || (own(alias) ? undefined : parent.getAlias(alias));
+		dex.forGen = gen => (!gen || gen === dex.gen ? dex : base.forGen(gen));
+		base.dexes[id] = dex;
+		built.set(id, { dex, base, refs: 1, parents: [parent], data });
+		return dex;
+	} catch (err) {
+		releaseDex(parent);
+		throw err;
 	}
-	countCopies(dex.dataCache);
-	const cosmetic = new Map(Object.entries(data.Pokedex).flatMap(([speciesid, entry]) => (
-		(entry.cosmeticFormes || []).map(forme => [toID(forme), speciesid as ID] as const)
-	)));
-	const own = (alias: ID) => !dex.dataCache!.Pokedex[alias]?.isCosmeticForme &&
-		['Pokedex', ...EFFECT_TABLES].some(table => dex.dataCache![table as 'Moves'][alias]);
-	dex.getAlias = alias => cosmetic.get(alias) || (own(alias) ? undefined : parent.getAlias(alias));
-	dex.forGen = gen => (!gen || gen === dex.gen ? dex : base.forGen(gen));
-	base.dexes[id] = dex;
-	built.set(id, { dex, base, refs: 1, parents: [parent], data });
-	return dex;
 }
 
 const tiered = new Map<string, { dex: ModdedDex, parent: string }>();
@@ -473,6 +486,8 @@ function tieredDex(dex: ModdedDex, tiers: AnyObject) {
 }
 
 export function releaseDex(dex: ModdedDex) {
+	const tierParent = tiered.get(dex.currentMod)?.parent;
+	if (tierParent) dex = Dex.mod(tierParent);
 	const cached = built.get(dex.currentMod);
 	if (!cached || --cached.refs > 0) return;
 	built.delete(dex.currentMod);

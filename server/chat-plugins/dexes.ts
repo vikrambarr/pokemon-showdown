@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as http from 'http';
 import { Utils } from '../../lib';
 import * as Dexes from '../dexes';
-import { EFFECT_NAMES, EFFECT_PLURALS, engineChecks } from '../dexes/effects';
+import { EFFECT_NAMES, engineChecks } from '../dexes/effects';
 import type { Origin } from '../dexes/species';
 import type { EffectTable } from '../../sim/dex-custom';
 import { STATUSES, handlersOf, parseHandler } from '../../sim/dex-handlers';
@@ -88,7 +88,7 @@ function dexTable(list: Dexes.LoadedDex[], empty: string) {
 }
 
 const COUNTED: [Dexes.Table, string][] = [
-	['Pokedex', 'Pok&eacute;mon'], ...Object.entries(EFFECT_PLURALS) as [EffectTable, string][], ['TypeChart', 'Types'],
+	['Pokedex', 'Pok&eacute;mon'], ...Object.values(EFFECT_TABLES).map(table => [table, table] as [EffectTable, string]), ['TypeChart', 'Types'],
 ];
 
 const GETTERS = { Moves: 'moves', Abilities: 'abilities', Items: 'items', Conditions: 'conditions', TypeChart: 'types' } as const;
@@ -111,8 +111,8 @@ function neededConditions(loaded: Dexes.LoadedDex, entries: AnyObject) {
 	}
 	const queue: AnyObject[] = [data.Scripts, ...(['Moves', 'Abilities', 'Items'] as const).flatMap(table => entries[table].map((id: ID) => data[table][id]))];
 	for (const id of needed) queue.push(data.Conditions[id]);
-	for (let i = 0; i < queue.length; i++) {
-		for (const match of serialize(queue[i]).matchAll(/(['"`])([^'"`\n]{1,40})\1/g)) {
+	for (const entry of queue) {
+		for (const match of serialize(entry).matchAll(/(['"`])([^'"`\n]{1,40})\1/g)) {
 			const id = toID(match[2]);
 			if (!conditions.has(id) || needed.has(id)) continue;
 			needed.add(id);
@@ -270,7 +270,6 @@ function summary(loaded: Dexes.LoadedDex) {
 		updated: loaded.row.updated,
 		species: loaded.data.species.length,
 		entries: loaded.entries.size,
-		size: Dexes.dataSize(loaded),
 		counts: countsOf(loaded),
 		formats: [...loaded.formats.keys()].map(formatid => ({ id: formatid, name: Dex.formats.get(formatid).name })),
 	};
@@ -491,7 +490,7 @@ export const commands: Chat.ChatCommands = {
 			for (const table in EFFECT_NAMES) {
 				const effects = [...loaded.effects[table as EffectTable].values()];
 				if (!effects.length) continue;
-				buf += `<br />${EFFECT_PLURALS[table as EffectTable]}: `;
+				buf += `<br />${table}: `;
 				buf += effects.map(entry => Utils.html`<strong>${entry.data.name}</strong>` +
 					(entry.inheritsfrom ? Utils.html` (based on ${entry.inheritsfrom})` : '') + originHTML(entry) +
 					(entry.sprites.item ? ' ' + spriteHTML(loaded, { item: entry.sprites.item }) : '')).join(', ');
@@ -647,7 +646,7 @@ export const commands: Chat.ChatCommands = {
 			const { loaded, skipped } = await Dexes.addEffects(
 				await Dexes.editable(user, dexName), table as Dexes.ListTable, from, names.split(',').map(name => name.trim())
 			);
-			this.sendReply(`Updated the ${EFFECT_PLURALS[table].toLowerCase()} in ${loaded.row.name}.`);
+			this.sendReply(`Updated the ${table.toLowerCase()} in ${loaded.row.name}.`);
 			if (skipped.length) this.sendReply(`Skipped: ${skipped.join('; ')}`);
 		},
 		deleteability: 'deletemove',
@@ -677,15 +676,6 @@ export const commands: Chat.ChatCommands = {
 					buf += Utils.html`: <code>${slot.line.slice(0, slot.column)}<strong>${slot.line.slice(slot.column, end)}</strong>`;
 					buf += Utils.html`${slot.line.slice(end)}</code>`;
 				}
-			}
-			if (editor.lost?.engine.length) {
-				buf += Utils.html`<br /><br />The battle engine treats ${editor.base} specially in `;
-				buf += editor.lost.engine.map(entry => Utils.html`${entry.file} (${entry.count})`).join(', ');
-				buf += `. A copy doesn't get that.`;
-			}
-			if (editor.lost?.references.length) {
-				buf += Utils.html`<br /><br />These check for ${editor.base} by name, and won't affect the copy: `;
-				buf += editor.lost.references.map(entry => Utils.html`${entry.effect}`).join(', ');
 			}
 			return this.sendReplyBox(buf);
 		},
@@ -772,7 +762,7 @@ export const commands: Chat.ChatCommands = {
 		`/dexes bulkpokemon [dex], [JSON list] - Makes or edits many Pokemon at once, each like /dexes pokemon. Useful for learnsets.`,
 		`/dexes deletepokemon [dex], [pokemon] - Deletes a Pokemon from a dex, with its edits. A Pokemon from the dex's world goes with its formes, and can be added back.`,
 		`/dexes resetpokemon [dex], [pokemon] - Undoes every edit to a Pokemon from the dex's world.`,
-		`/dexes move [dex], [JSON] - Makes or edits a move. Using an existing move's name edits it for this dex; "inheritsFrom" copies another move, code and all. Set any attribute, like "basePower" or "secondary"; null clears it. "slots" changes values in the code, like {"onHit:0": "Fire"}, numbered as in /dexes code. "events" moves a stat handler to another stat, like {"onModifySpe": "atk"}.`,
+		`/dexes move [dex], [JSON] - Makes or edits a move. Using an existing move's name edits it for this dex; "inheritsFrom" copies another move, code and all, and the copy counts as that move wherever the engine or another effect checks for it. Set any attribute, like "basePower" or "secondary"; null clears it. "slots" changes values in the code, like {"onHit:0": "Fire"}, numbered as in /dexes code. "events" moves a stat handler to another stat, like {"onModifySpe": "atk"}.`,
 		`/dexes ability [dex], [JSON] - Makes or edits an ability, like /dexes move.`,
 		`/dexes item [dex], [JSON] - Makes or edits an item, like /dexes move. "spriteFrom" uses another item's icon.`,
 		`/dexes condition [dex], [JSON] - Makes or edits a condition, like a status or weather, like /dexes move.`,
@@ -780,8 +770,8 @@ export const commands: Chat.ChatCommands = {
 		`/dexes deletemove [dex], [name] - Deletes a move from a dex, with its edits. A move from the dex's world can be added back. Also: deleteability, deleteitem, deletecondition (custom ones only; conditions come with what needs them), deletetype.`,
 		`/dexes resetmove [dex], [name] - Undoes every edit to a move from the dex's world. Also: resetability, resetitem, resetcondition.`,
 		`/dexes addeffect [dex], [move|ability|item], [source], [name], ... - Adds moves, abilities or items from the dex's world (leave the source empty), a main game like gen4, or an official dex. From an official dex, its custom and edited ones are forked; a move from another generation comes as it was there.`,
-		`/dexes code [dex], [move|ability|item|condition], [name] - Shows the values in its code you can change, and what a copy loses.`,
-		`/dexes sprite [dex], [pokemon, item or type], [kind], [base64 PNG or GIF], [settings JSON] - Sets a sprite, shown scaled to fit. Kinds: front, back, front-shiny, back-shiny (made at 96x96, up to 192x192), icon (40x30, up to 64x64), item (24x24, up to 64x64, items only), type (32x14, up to 64x64, types only, used instead of the type's drawn icon). A cosmetic forme, like Gastrodon-East, gets its own sprites. Official dexes have no limits, and can also add -f for a female sprite, like front-shiny-f or icon-f, or start with afd- for an April Fools' sprite, like afd-front. Sprites you upload count toward your ${Dexes.megabytes(Dexes.MAX_STORAGE_BYTES)} of storage while any dex uses them, unless you upload them to an official dex.`,
+		`/dexes code [dex], [move|ability|item|condition], [name] - Shows the values in its code you can change.`,
+		`/dexes sprite [dex], [pokemon, item or type], [kind], [base64 PNG or GIF], [settings JSON] - Sets a sprite, shown scaled to fit. Kinds: front, back, front-shiny, back-shiny (made at 96x96, up to 192x192), icon (40x30, up to 64x64), item (24x24, up to 64x64, items only), type (32x14, up to 64x64, types only, used instead of the type's drawn icon). A cosmetic forme, like Gastrodon-East, gets its own sprites. Official dexes have no limits, and can also add -f for a female sprite, like front-shiny-f or icon-f, or start with afd- for an April Fools' sprite, like afd-front. Sprites in the dexes you own count toward your ${Dexes.megabytes(Dexes.MAX_SPRITE_STORAGE)} of sprite storage, and their data toward your ${Dexes.megabytes(Dexes.MAX_DATA_STORAGE)} of data storage. Official dexes don't count.`,
 		`Optional settings: {"artist": "who drew it"}. Official dexes can also set "y": -16 (moves it up or down) and "gen": 3 (placed like that generation's sprites). To change them, set the sprite again.`,
 		`/dexes upload [dex], [pokemon, item or type], [kind], [settings JSON] - Gives you a link to send a sprite to, for sprites too big for /dexes sprite, up to ${MAX_SPRITE_BYTES / 1024}KB. It works once, for ${UPLOAD_TIME / 60 / 1000} minutes, while you stay logged in.`,
 		`/dexes clearsprite [dex], [pokemon, item or type], [kind] - Stops using a sprite here.`,
@@ -811,7 +801,10 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 	},
 	async dexstorage(target, user) {
 		const account = await viewer(user);
-		return { used: account ? Dexes.storageUsed(account) : 0, limit: Dexes.MAX_STORAGE_BYTES, data: Dexes.MAX_DATA_BYTES };
+		return {
+			data: account ? Dexes.dataUsed(account) : 0, dataLimit: Dexes.MAX_DATA_STORAGE,
+			sprites: account ? Dexes.spritesUsed(account) : 0, spriteLimit: Dexes.MAX_SPRITE_STORAGE,
+		};
 	},
 	dex(target) {
 		const loaded = Dexes.findDex(target);
