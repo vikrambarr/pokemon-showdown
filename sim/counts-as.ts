@@ -1,23 +1,37 @@
 import type { ModdedDex } from './dex';
 
 const TABLES = ['Conditions', 'Moves', 'Abilities', 'Items'] as const;
+export type CountsTable = typeof TABLES[number];
 
 interface CountsIndex {
 	up: Map<string, string[]>;
 	down: Map<string, string[]>;
 }
 
-const indexes = new WeakMap<object, CountsIndex | null>();
+const indexes = new WeakMap<object, Map<CountsTable, CountsIndex | null>>();
 
-function countsIndex(dex: ModdedDex) {
-	let index = indexes.get(dex.data);
+function countsIndex(dex: ModdedDex, table: CountsTable) {
+	let cache = indexes.get(dex.data);
+	if (!cache) indexes.set(dex.data, cache = new Map());
+	let index = cache.get(table);
 	if (index !== undefined) return index;
 	const parents = new Map<string, string>();
-	for (const table of TABLES) {
-		const entries: AnyObject = dex.data[table] || {};
-		for (const id in entries) {
-			const parent = entries[id]?.countsAs;
-			if (typeof parent === 'string' && parent && parent !== id && !parents.has(id)) parents.set(id, parent);
+	const entries: AnyObject = table === 'Conditions' ? Object.assign({}, ...[...TABLES].reverse().map(other => (
+		Object.fromEntries(Object.entries(dex.data[other] || {}).filter(([, entry]) => (
+			other === 'Conditions' || (entry as AnyObject).condition
+		)))
+	))) : dex.data[table];
+	for (const id in entries) {
+		const parent = entries[id]?.countsAs;
+		if (typeof parent === 'string' && parent && parent !== id) parents.set(id, parent);
+	}
+	if (table === 'Conditions') {
+		for (const other of ['Abilities', 'Items'] as const) {
+			const prefix = other === 'Abilities' ? 'ability:' : 'item:';
+			for (const id in dex.data[other]) {
+				const parent = (dex.data[other][id] as AnyObject).countsAs;
+				if (typeof parent === 'string' && parent && parent !== id) parents.set(prefix + id, prefix + parent);
+			}
 		}
 	}
 	index = null;
@@ -34,43 +48,43 @@ function countsIndex(dex: ModdedDex) {
 			index.up.set(id, chain);
 		}
 	}
-	indexes.set(dex.data, index);
+	cache.set(table, index);
 	return index;
 }
 
-export function countsAs(dex: ModdedDex, actual: string, wanted: string | string[]): boolean {
-	if (Array.isArray(wanted)) return wanted.some(id => countsAs(dex, actual, id));
+export function countsAs(dex: ModdedDex, table: CountsTable, actual: string, wanted: string | string[]): boolean {
+	if (Array.isArray(wanted)) return wanted.some(id => countsAs(dex, table, actual, id));
 	if (actual === wanted) return true;
-	return !!countsIndex(dex)?.up.get(actual)?.includes(wanted);
+	return !!countsIndex(dex, table)?.up.get(actual)?.includes(wanted);
 }
 
-export function countedBase(dex: ModdedDex, actual: string) {
-	const chain = countsIndex(dex)?.up.get(actual);
+export function countedBase(dex: ModdedDex, table: CountsTable, actual: string) {
+	const chain = countsIndex(dex, table)?.up.get(actual);
 	return chain?.length ? chain[chain.length - 1] : actual;
 }
 
-export function countedAs(dex: ModdedDex, wanted: string) {
-	return countsIndex(dex)?.down.get(wanted) || [];
+export function countedAs(dex: ModdedDex, table: CountsTable, wanted: string) {
+	return countsIndex(dex, table)?.down.get(wanted) || [];
 }
 
 export function countedKey(dex: ModdedDex, holder: AnyObject, wanted: string) {
 	if (Object.hasOwn(holder, wanted)) return wanted;
-	return countedAs(dex, wanted).find(id => Object.hasOwn(holder, id));
+	return countedAs(dex, 'Conditions', wanted).find(id => Object.hasOwn(holder, id));
 }
 
 export function countingHolder<T extends AnyObject>(dex: ModdedDex, holder: T): T {
-	if (!countsIndex(dex)) return holder;
+	if (!countsIndex(dex, 'Conditions')) return holder;
 	return new Proxy(holder, {
 		get(target, key, receiver) {
 			if (typeof key === 'string' && !Object.hasOwn(target, key)) {
-				const copy = countedAs(dex, key).find(id => Object.hasOwn(target, id));
+				const copy = countedAs(dex, 'Conditions', key).find(id => Object.hasOwn(target, id));
 				if (copy) return target[copy];
 			}
 			return Reflect.get(target, key, receiver);
 		},
 		has(target, key) {
 			if (Reflect.has(target, key)) return true;
-			return typeof key === 'string' && countedAs(dex, key).some(id => Object.hasOwn(target, id));
+			return typeof key === 'string' && countedAs(dex, 'Conditions', key).some(id => Object.hasOwn(target, id));
 		},
 	});
 }

@@ -318,8 +318,8 @@ export const Scripts: ModdedBattleScriptsData = {
 			if (this.ignoringAbility()) return false;
 			if (Array.isArray(ability)) return ability.some(abil => this.hasAbility(abil));
 			ability = this.battle.toID(ability);
-			return countsAs(this.battle.dex, this.ability, ability) ||
-				[ability, ...countedAs(this.battle.dex, ability)].some(id => !!this.volatiles['ability:' + id]);
+			return countsAs(this.battle.dex, 'Abilities', this.ability, ability) ||
+				[ability, ...countedAs(this.battle.dex, 'Abilities', ability)].some(id => !!this.volatiles['ability:' + id]);
 		},
 		transformInto(pokemon, effect) {
 			if (!Pokemon.prototype.transformInto.call(this, pokemon, effect || undefined)) return false;

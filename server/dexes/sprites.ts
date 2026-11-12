@@ -162,13 +162,15 @@ export async function getUploads(db: PGDatabase, ids: string[]) {
 	return new Map(rows.map(row => [row.uploadid, { ...row, created: Number(row.created) }]));
 }
 
-export async function remove(db: PGDatabase, image: Upload) {
+export async function remove(db: PGDatabase, image: Upload, afterCommit?: (remove: () => Promise<void>) => void) {
 	await db.query(SQL`DELETE FROM dex_sprite_uploads WHERE uploadid = ${image.uploadid}`);
 	const others = await db.queryOne<{ count: string }>(SQL`
 		SELECT count(*) FROM dex_sprite_uploads WHERE sha = ${image.sha}`);
 	if (Number(others?.count)) return;
 	await db.query(SQL`DELETE FROM dex_sprites WHERE sha = ${image.sha}`);
-	await FS(spritePath(image.sha, image.format)).unlinkIfExists();
+	const unlink = () => FS(spritePath(image.sha, image.format)).unlinkIfExists();
+	if (afterCommit) afterCommit(unlink);
+	else await unlink();
 }
 
 export async function rebuild(db: PGDatabase) {

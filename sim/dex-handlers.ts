@@ -115,7 +115,12 @@ function comparedWith(node: AnyObject, stack: AnyObject[]) {
 	if (parent.type === 'BinaryExpression') other = parent.left === node ? parent.right : parent.left;
 	if (parent.type === 'AssignmentExpression') other = parent.left;
 	if (parent.type === 'SwitchCase') other = stack[stack.length - 2].discriminant;
-	return other?.type === 'MemberExpression' && !other.computed ? other.property.name as string : '';
+	if (other?.type !== 'MemberExpression' || other.computed) return '';
+	const getter = calledMethod(other.object);
+	if (other.property.name === 'id' && ['getItem', 'getAbility', 'getMove'].includes(getter)) {
+		return getter.slice(3).toLowerCase();
+	}
+	return other.property.name as string;
 }
 
 function usesOf(data: AnyObject) {
@@ -216,7 +221,8 @@ export function classify(value: string, comparedTo: string, data: AnyObject): Pa
 		return entry && (value === id || value === entry.name);
 	});
 	if (!id || !tables.length) return null;
-	return { kind: 'ref', tables, form: value === id ? 'id' : 'name' };
+	const table = ({ item: 'Items', ability: 'Abilities', move: 'Moves' } as AnyObject)[comparedTo];
+	return { kind: 'ref', tables: tables.includes(table) ? [table] : tables, form: value === id ? 'id' : 'name' };
 }
 
 function find(src: string, data: AnyObject): Handler | null {
@@ -287,7 +293,9 @@ function find(src: string, data: AnyObject): Handler | null {
 			slots.push({ start: node.start - offset, end: node.end - offset, kind: 'flag', value: node.value });
 			return;
 		}
-		const comparedTo = comparedWith(node, stack);
+		const method = parent.type === 'CallExpression' ? calledMethod(parent) : '';
+		const getter = ({ hasItem: 'item', hasAbility: 'ability', hasMove: 'move' } as AnyObject)[method];
+		const comparedTo = getter || comparedWith(node, stack);
 		if (comparedTo === 'effectType') return;
 		const kind = classify(node.value, comparedTo, data);
 		if (!kind) return;

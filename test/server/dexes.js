@@ -3,6 +3,7 @@
 const assert = require('assert').strict;
 const { FS } = require('../../dist/lib');
 const Dexes = require('../../dist/server/dexes');
+const { Monitor } = require('../../dist/server/monitor');
 const { TeamValidatorAsync } = require('../../dist/server/team-validator-async');
 const { makeUser } = require('../users-utils');
 
@@ -66,6 +67,58 @@ describe('Dexes', () => {
 		editor?.destroy();
 	});
 
+	async function effectsFixture() {
+		let loaded = Dexes.getDex('mochadex');
+		for (const [table, input] of [
+			['Moves', { name: 'Scorch Soak', inheritsFrom: 'Soak', type: 'Fire' }],
+			['Moves', { name: 'Volt Jab', type: 'Electric', category: 'Physical', basePower: 70 }],
+			['Moves', { name: 'Shield', inheritsFrom: 'Protect' }],
+			['Items', { name: 'Volt Orb', inheritsFrom: 'Light Ball' }],
+			['Items', { name: 'Choice Scarf', events: { onModifySpe: 'atk' } }],
+		]) ({ loaded } = await Dexes.putEffect(loaded, table, input));
+		({ loaded } = await Dexes.putEffect(loaded, 'Moves', {
+			name: 'Scorch Soak', slots: slotsOf(loaded, 'Moves', 'Scorch Soak', 'Water', 'Fire'),
+		}));
+		({ loaded } = await Dexes.putEffect(loaded, 'Abilities', {
+			name: 'Intimidate', slots: slotsOf(loaded, 'Abilities', 'Intimidate', -1, -2),
+		}));
+		await Dexes.putEntry(loaded, { name: 'Voltlet', learnset: { voltjab: ['9L1'], scorchsoak: ['9M'] } });
+	}
+
+	async function copiesFixture() {
+		const source = Dexes.getDex('mochadex');
+		for (const name of ['Copy Dex', 'Whole Copy']) {
+			const copy = await Dexes.createDex(editor, name, 'gen9');
+			await Dexes.forkEntry(copy, source, 'Pokedex', 'Voltlet');
+		}
+	}
+
+	async function fixture({ sprites = false, editorAccess = false, effects = false, copies = false, copy = false } = {}) {
+		let loaded = await Dexes.createDex(owner, 'Mocha Dex', 'gen9');
+		({ loaded } = await Dexes.putEntry(loaded, {
+			name: 'Voltlet', inheritsFrom: 'Pikachu', types: ['Electric', 'Steel'], learnset: { protect: ['9M'] },
+		}));
+		({ loaded } = await Dexes.putFormat(loaded, { name: 'OU', ruleset: ['Standard'] }));
+		if (sprites) loaded = await Dexes.setSprite(owner, loaded, 'Voltlet', 'front', png(96, 96));
+		if (editorAccess) {
+			LoginServer.request = async () => [{ discordid: EDITOR }];
+			await Dexes.setEditor(loaded, editor.name, true);
+			LoginServer.request = request;
+		}
+		if (effects) await effectsFixture();
+		if (copies) await copiesFixture();
+		if (copy) await Dexes.createDex(editor, 'Copy Dex', 'gen9');
+	}
+
+	afterEach(async () => {
+		LoginServer.request = request;
+		while (Dexes.dexes.size) {
+			const leaf = [...Dexes.dexes.values()].find(loaded => ![...Dexes.dexes.values()]
+				.some(other => other.row.parents.includes(loaded.row.dexid)));
+			await Dexes.deleteDex(leaf);
+		}
+	});
+
 	it('should make a dex with every Pokemon in its base mod', async () => {
 		const loaded = await Dexes.createDex(owner, 'Mocha Dex', 'gen9');
 		assert.equal(loaded.row.ownerid, OWNER);
@@ -75,7 +128,19 @@ describe('Dexes', () => {
 		await assert.rejects(Dexes.createDex(owner, 'Other', 'nosuchmod'), /isn't a world/);
 	});
 
+	it('should let an account own any number of dexes that fit in its data storage', async () => {
+		const size = Dexes.dataSize(await Dexes.createDex(owner, 'Dex 0', 'gen9'));
+		const fit = Math.floor(Dexes.MAX_DATA_STORAGE / size);
+		for (let i = 1; i < fit; i++) await Dexes.createDex(owner, `Dex ${i}`, 'gen9');
+		assert.equal(Dexes.dataUsed(OWNER), fit * size);
+		await assert.rejects(Dexes.createDex(owner, 'One Too Many', 'gen9'), /dex data storage/);
+		assert.equal(Dexes.dexes.size, fit);
+		assert.equal(Dexes.dataUsed(EDITOR), 0);
+		await Dexes.createDex(editor, 'Editor Dex', 'gen9');
+	});
+
 	it('should take Pokemon out of a dex and put them back from its world, with their formes', async () => {
+		await fixture();
 		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
 		const mocha = id('Mocha Dex');
 		const entries = await crqHandlers.dexentries.call(null, mocha, owner);
@@ -133,6 +198,7 @@ describe('Dexes', () => {
 	});
 
 	it('should make custom Pokemon, edit existing ones, and play them in its formats', async () => {
+		await fixture();
 		let loaded = await Dexes.editable(owner, 'mochadex');
 		({ loaded } = await Dexes.putEntry(loaded, {
 			name: 'Voltlet', inheritsFrom: 'Pikachu', types: ['Electric', 'Steel'],
@@ -176,6 +242,7 @@ describe('Dexes', () => {
 	});
 
 	it('should let only its owner and editors change it', async () => {
+		await fixture();
 		await assert.rejects(Dexes.editable(editor, 'mochadex'), /can't edit/);
 		LoginServer.request = async (action, { userid }) => [userid === 'nobody' ? { names: [] } : { discordid: EDITOR }];
 		await assert.rejects(Dexes.setEditor(Dexes.getDex('mochadex'), 'Nobody', true), /hasn't logged in/);
@@ -195,6 +262,7 @@ describe('Dexes', () => {
 	});
 
 	it('should keep sprites by their contents', async () => {
+		await fixture({ sprites: true });
 		const loaded = await Dexes.setSprite(owner, Dexes.getDex('mochadex'), 'Voltlet', 'front', png(96, 96));
 		const image = loaded.uploads.get(loaded.entries.get('voltlet').sprites.front);
 		assert.match(image.sha, /^[0-9a-f]{64}$/);
@@ -209,18 +277,19 @@ describe('Dexes', () => {
 		assert.equal(Dexes.clientData(loaded).images[image.uploadid].file, `${image.sha}.png`);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'icon', png(96, 96)), /at most 64x64/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'front', 'bm90IGEgcG5n'), /PNG or GIF/);
-		const used = Dexes.storageUsed(OWNER);
+		const used = Dexes.spritesUsed(OWNER);
 		assert(used >= image.bytes && image.bytes > 0);
 		let again = await Dexes.setSprite(owner, loaded, 'Voltlet', 'front-shiny', png(96, 96));
-		assert.equal(Dexes.storageUsed(OWNER), used);
+		assert.equal(Dexes.spritesUsed(OWNER), used);
 		again = await Dexes.setSprite(owner, again, 'Voltlet', 'back-shiny', png(80, 80));
-		assert(Dexes.storageUsed(OWNER) > used);
+		assert(Dexes.spritesUsed(OWNER) > used);
 		again = await Dexes.setSprite(owner, again, 'Voltlet', 'back-shiny', null);
 		await Dexes.setSprite(owner, again, 'Voltlet', 'front-shiny', null);
-		assert.equal(Dexes.storageUsed(OWNER), used);
+		assert.equal(Dexes.spritesUsed(OWNER), used);
 	});
 
 	it('should keep GIFs of any size up to the limit, with their settings', async () => {
+		await fixture();
 		const settings = { artist: 'Mocha Artist' };
 		const loaded = await Dexes.setSprite(owner, Dexes.getDex('mochadex'), 'Voltlet', 'back', gif(160, 150), settings);
 		const uploadid = loaded.entries.get('voltlet').sprites.back;
@@ -240,6 +309,7 @@ describe('Dexes', () => {
 	});
 
 	it('should edit base Pokemon and items that get sprites', async () => {
+		await fixture({ sprites: true });
 		let loaded = await Dexes.createDex(owner, 'Sprite Dex', 'gen9');
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Leftovers', 'item', png(24, 24), { gen: 3 }), /isn't a sprite setting/);
 		assert(!loaded.effects.Items.has('leftovers'));
@@ -269,6 +339,7 @@ describe('Dexes', () => {
 	});
 
 	it('should make unreleased Pokemon legal', async () => {
+		await fixture();
 		assert.equal(Dex.species.get('Raichu-Mega-X').isNonstandard, 'Future');
 		const { loaded } = await Dexes.putEntry(Dexes.getDex('mochadex'), { name: 'Raichu-Mega-X', isNonstandard: null });
 		assert.equal(loaded.entries.get('raichumegax').data.isNonstandard, null);
@@ -277,6 +348,7 @@ describe('Dexes', () => {
 	});
 
 	it('should make and edit moves, abilities and items, including values in their code', async () => {
+		await fixture();
 		let loaded = Dexes.getDex('mochadex');
 		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', inheritsFrom: 'Soak', type: 'Fire' }));
 		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', slots: slotsOf(loaded, 'Moves', 'Scorch Soak', 'Water', 'Fire') }));
@@ -300,20 +372,20 @@ describe('Dexes', () => {
 		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Shield', inheritsFrom: 'Protect' }));
 		editor = Dexes.effectEditor(loaded, 'Moves', 'Shield');
 		assert.equal(loaded.dex.moves.get('Shield').volatileStatus, 'shield');
-		assert(editor.lost.engine.some(entry => entry.file === 'sim/battle.js'));
-		assert(editor.lost.references.some(entry => entry.effect === `move: King's Shield`));
+		assert.equal(loaded.dex.moves.get('Shield').countsAs, 'protect');
+		assert.equal(loaded.dex.moves.get('Volt Jab').countsAs, undefined);
 
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', slots: { 'onHit:0': 'Fyre' } }), /isn't a type/);
-		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', onHit: 1 }), /is code/);
+		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', onHit: 1 }), /only be changed in official dexes/);
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', basePower: 'lots' }), /whole number/);
-		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', speed: 1 }), /isn't something you can set/);
+		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', speed: 1 }), /only be changed in official dexes/);
 		await assert.rejects(Dexes.putEffect(loaded, 'Moves', { name: 'Scorch Soak', type: null }), /can't be removed/);
 
 		({ loaded } = await Dexes.putEffect(loaded, 'Items', { name: 'Choice Scarf', events: { onModifySpe: 'atk' } }));
 		assert.equal(loaded.dex.items.get('Choice Scarf').onModifySpe, undefined);
 		assert(Dexes.effectEditor(loaded, 'Items', 'Choice Scarf').data.shortDesc.startsWith(`Holder's Speed is 1.5×`));
 		await assert.rejects(Dexes.putEffect(loaded, 'Items', { name: 'Choice Scarf', events: { onModifySpe: 'hp' } }), /can become/);
-		({ loaded } = await Dexes.putEffect(loaded, 'Abilities', { name: 'Intimidate', slots: { 'onStart:3': -2 } }));
+		({ loaded } = await Dexes.putEffect(loaded, 'Abilities', { name: 'Intimidate', slots: slotsOf(loaded, 'Abilities', 'Intimidate', -1, -2) }));
 		assert(loaded.dex.abilities.get('Intimidate').onStart.toString().includes('atk: (-2)'));
 
 		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltlet', learnset: { voltjab: ['9L1'], scorchsoak: ['9M'] } }));
@@ -327,7 +399,17 @@ describe('Dexes', () => {
 		assert.equal(loaded.data.effects.Items.choiceband, undefined);
 	});
 
+	it("should count sprites toward the storage of the dex's owner, whoever uploads them", async () => {
+		await fixture({ editorAccess: true });
+		const loaded = await Dexes.setSprite(editor, Dexes.getDex('mochadex'), 'Voltlet', 'front', png(96, 96));
+		const image = loaded.uploads.get(loaded.entries.get('voltlet').sprites.front);
+		assert.equal(image.accountid, EDITOR);
+		assert.equal(Dexes.spritesUsed(OWNER), image.bytes);
+		assert.equal(Dexes.spritesUsed(EDITOR), 0);
+	});
+
 	it('should hide private dexes from lists and searches, but not from their exact names', async () => {
+		await fixture({ editorAccess: true });
 		let loaded = Dexes.getDex('mochadex');
 		assert.deepEqual(Dexes.search('mocha', null).map(dex => dex.row.dexid), [id('Mocha Dex')]);
 		loaded = await Dexes.setVisibility(loaded, 'private');
@@ -342,6 +424,7 @@ describe('Dexes', () => {
 	});
 
 	it('should fork entries with what they need, and keep them up to date until they are edited', async () => {
+		await fixture({ sprites: true, effects: true });
 		let source = Dexes.getDex('mochadex');
 		let copy = await Dexes.createDex(editor, 'Copy Dex', 'gen9');
 		let result = await Dexes.forkEntry(copy, source, 'Pokedex', 'Voltlet');
@@ -380,6 +463,7 @@ describe('Dexes', () => {
 	});
 
 	it('should delete a sprite everywhere it was forked, but only for its uploader', async () => {
+		await fixture({ sprites: true, effects: true, copies: true });
 		const uploadid = Dexes.getDex('mochadex').entries.get('voltlet').sprites.front;
 		await assert.rejects(Dexes.deleteSprite(editor, uploadid), /Only Dex Owner/);
 		const { uses } = await Dexes.deleteSprite(owner, uploadid);
@@ -393,6 +477,7 @@ describe('Dexes', () => {
 	});
 
 	it('should only let creators lock entries, and stop other users forking them', async () => {
+		await fixture({ sprites: true, effects: true, copies: true });
 		let source = await Dexes.setLocked(Dexes.getDex('mochadex'), 'Moves', 'Scorch Soak', true);
 		assert(source.effects.Moves.get('scorchsoak').locked);
 		assert.equal(Dexes.getDex('copydex').effects.Moves.get('scorchsoak').trackdex, null);
@@ -415,6 +500,7 @@ describe('Dexes', () => {
 	});
 
 	it('should list a dex\'s custom and modified entries, count them, and answer every request about it', async () => {
+		await fixture({ sprites: true, effects: true });
 		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
 		const mocha = id('Mocha Dex');
 		const entries = await crqHandlers.dexentries.call(null, mocha, owner);
@@ -427,7 +513,7 @@ describe('Dexes', () => {
 		assert(entries.Moves.includes('voltjab') && entries.Moves.includes('thunderbolt'));
 		assert.equal(await crqHandlers.dexentries.call(null, mocha, owner).then(again => again.Moves), entries.Moves);
 
-		const [dex] = await crqHandlers.dexes.call(null, 'mocha dex', owner);
+		const [dex] = await crqHandlers.dexes.call({ connection: {} }, 'mocha dex', owner);
 		const moves = dex.counts.find(count => count.table === 'Moves');
 		assert.deepEqual([moves.custom, moves.modified, moves.total], [3, 0, entries.Moves.length]);
 		assert.equal(moves.customIds, undefined);
@@ -449,11 +535,12 @@ describe('Dexes', () => {
 			});
 		} finally {
 			Dexes.dexes.delete('dbroken');
-			Monitor.crashlog = crashlog;
+			Object.assign(Monitor, { crashlog });
 		}
 	});
 
 	it('should count only what exists in a dex\'s generation, and tell outright bans from tag bans', async () => {
+		await fixture();
 		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
 		let loaded = await Dexes.createDex(owner, 'Old Dex', 'gen7');
 		const entries = await crqHandlers.dexentries.call(null, loaded.row.dexid, owner);
@@ -506,6 +593,7 @@ describe('Dexes', () => {
 	});
 
 	it('should make chained formes, types, many Pokemon at once, and formats from existing ones', async () => {
+		await fixture({ copy: true });
 		let loaded = await Dexes.createDex(owner, 'Forme Dex', 'gen9');
 		({ loaded } = await Dexes.putType(loaded, {
 			name: 'Cosmic', damageTaken: { Dark: 2, sandstorm: 0 }, attacks: { Steel: 0.5 },
@@ -523,6 +611,7 @@ describe('Dexes', () => {
 			},
 			{ name: 'Venusaur-Delta-Mega', baseSpecies: 'Venusaur-Delta', inheritsFrom: 'Venusaur-Mega', types: ['Fairy', 'Cosmic'] },
 		]));
+		loaded = await Dexes.setOfficial(loaded, true);
 		({ loaded } = await Dexes.putEffect(loaded, 'Items', {
 			name: 'Delta Venusaurite', inheritsFrom: 'Venusaurite', megaStone: { 'Venusaur-Delta': 'Venusaur-Delta-Mega' },
 		}));
@@ -578,6 +667,7 @@ describe('Dexes', () => {
 	});
 
 	it('should build a fangame dex on an engine mod', async () => {
+		await fixture();
 		const bro = {
 			types: ['Normal'], abilities: { 0: 'Forecast' }, baseStats: { hp: 80, atk: 100, def: 80, spa: 100, spd: 70, spe: 70 },
 			eggGroups: ['Mariomon'], weightkg: 40,
@@ -610,6 +700,7 @@ describe('Dexes', () => {
 	});
 
 	it('should build dexes on other dexes, keeping only their own changes', async () => {
+		await fixture();
 		const get = Dexes.getDex;
 		await Dexes.putEntries(await Dexes.createDex(owner, 'Parent Dex', 'gen9'), [
 			{ name: 'Sproutle', inheritsFrom: 'Bulbasaur', types: ['Grass'] },
@@ -631,7 +722,7 @@ describe('Dexes', () => {
 		await Dexes.putEntry(get('parentdex'), { name: 'Pikachu', types: ['Electric', 'Fire'] });
 		assert.deepEqual(get('childdex').data.parents, [get('parentdex').data.hash]);
 		assert.deepEqual(get('childdex').dex.species.get('Pikachu').types, ['Electric', 'Fire']);
-		const [summary] = await require('../../dist/server/chat-plugins/dexes').crqHandlers.dexes.call(null, 'child dex', editor);
+		const [summary] = await require('../../dist/server/chat-plugins/dexes').crqHandlers.dexes.call({ connection: {} }, 'child dex', editor);
 		const pokedex = summary.counts.find(count => count.table === 'Pokedex');
 		assert.deepEqual([pokedex.custom, pokedex.modified], [1, 1]);
 		await Dexes.setSpecies(get('childdex'), Dexes.findSpecies(get('childdex'), ['Bulbasaur']), false);
@@ -675,6 +766,7 @@ describe('Dexes', () => {
 	});
 
 	it('should build a dex on several dexes, or with another mod\'s engine', async () => {
+		await fixture();
 		const get = Dexes.getDex;
 		await Dexes.putEntries(await Dexes.createDex(owner, 'Left Dex', 'gen9'), [
 			{ name: 'Pikachu', types: ['Electric', 'Steel'] },
@@ -717,6 +809,7 @@ describe('Dexes', () => {
 	});
 
 	it('should save a snapshot when a battle starts, which outlives the dex', async () => {
+		await fixture({ sprites: true, effects: true, copies: true });
 		const loaded = Dexes.getDex('mochadex');
 		const formatid = formatOf('Mocha Dex', 'OU');
 		const p1 = makeUser('Dex Player 1');
@@ -757,5 +850,85 @@ describe('Dexes', () => {
 		assert(Dexes.getDex('wholecopy').data.Pokedex.voltlet);
 		await Dexes.deleteDex(Dexes.getDex('wholecopy'));
 		await Dexes.deleteDex(Dexes.getDex('copydex'));
+	});
+	it('should reject parent changes that create evolution loops in descendants and restore both versions', async () => {
+		await fixture();
+		let parent = await Dexes.createDex(owner, 'Loop Parent', 'gen9');
+		const child = await Dexes.createDex(editor, 'Loop Child', 'Loop Parent');
+		await Dexes.putEntry(child, { name: 'Charmander', evos: ['Bulbasaur'] });
+		parent = Dexes.getDex('Loop Parent');
+		const before = [parent.data.hash, Dexes.getDex('Loop Child').data.hash];
+		await assert.rejects(Dexes.putEntry(parent, { name: 'Bulbasaur', evos: ['Charmander'] }), /loop/);
+		assert.deepEqual([Dexes.getDex('Loop Parent').data.hash, Dexes.getDex('Loop Child').data.hash], before);
+		await Dexes.refresh(parent.row.dexid);
+		assert.deepEqual([Dexes.getDex('Loop Parent').data.hash, Dexes.getDex('Loop Child').data.hash], before);
+		assert(!Dexes.getDex('Loop Parent').entries.has('bulbasaur'));
+	});
+
+	it('should roll back every entry when a batch write fails', async () => {
+		await fixture();
+		const { SQL } = require('../../dist/lib/database');
+		const db = Dexes.database();
+		await db.query(SQL`ALTER TABLE dex_species ADD CONSTRAINT reject_second CHECK (speciesid <> 'rejectmon')`);
+		const loaded = Dexes.getDex('Mocha Dex');
+		try {
+			await assert.rejects(Dexes.putEntries(loaded, [
+				{ name: 'Acceptmon', inheritsFrom: 'Pikachu' },
+				{ name: 'Rejectmon', inheritsFrom: 'Pikachu' },
+			]), /reject_second/);
+			await Dexes.refresh(loaded.row.dexid);
+			assert(!Dexes.getDex('Mocha Dex').entries.has('acceptmon'));
+			assert(!Dexes.getDex('Mocha Dex').entries.has('rejectmon'));
+		} finally {
+			await db.query(SQL`ALTER TABLE dex_species DROP CONSTRAINT reject_second`);
+		}
+	});
+
+	it('should apply concurrent edits against the latest saved entry', async () => {
+		await fixture();
+		const loaded = Dexes.getDex('Mocha Dex');
+		await Promise.all([
+			Dexes.putEntry(loaded, { name: 'Voltlet', types: ['Water'] }),
+			Dexes.putEntry(loaded, { name: 'Voltlet', weightkg: 42 }),
+		]);
+		const species = Dexes.getDex('Mocha Dex').dex.species.get('Voltlet');
+		assert.deepEqual(species.types, ['Water']);
+		assert.equal(species.weightkg, 42);
+	});
+
+	it('should publish parent and tracked fork changes together after committing', async () => {
+		await fixture();
+		const { SQL } = require('../../dist/lib/database');
+		const source = Dexes.getDex('Mocha Dex');
+		const copy = await Dexes.createDex(editor, 'Pending Copy', 'gen9');
+		await Dexes.forkEntry(copy, source, 'Pokedex', 'Voltlet');
+		const db = Dexes.database();
+		await db.query(SQL`CREATE FUNCTION delay_fork() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN
+				IF NEW.trackdex IS NOT NULL THEN PERFORM pg_sleep(0.2); END IF;
+				RETURN NEW;
+			END $$`);
+		await db.query(SQL`CREATE TRIGGER delay_fork BEFORE UPDATE ON dex_species FOR EACH ROW EXECUTE FUNCTION delay_fork()`);
+		let edit;
+		try {
+			edit = Dexes.putEntry(source, { name: 'Voltlet', types: ['Water'] });
+			let pending;
+			for (let i = 0; i < 100 && !pending; i++) {
+				pending = await db.queryOne(SQL`SELECT 1 FROM pg_stat_activity WHERE wait_event = 'PgSleep'`);
+				if (!pending) await new Promise(resolve => {
+					setTimeout(resolve, 5);
+				});
+			}
+			assert(pending);
+			assert.deepEqual(Dexes.getDex('Mocha Dex').dex.species.get('Voltlet').types, ['Electric', 'Steel']);
+			assert.equal(Dex.formats.get(formatOf('Mocha Dex', 'OU')).mod, source.dex.currentMod);
+			await edit;
+			assert.deepEqual(Dexes.getDex('Mocha Dex').dex.species.get('Voltlet').types, ['Water']);
+			assert.deepEqual(Dexes.getDex('Pending Copy').dex.species.get('Voltlet').types, ['Water']);
+		} finally {
+			await edit;
+			await db.query(SQL`DROP TRIGGER delay_fork ON dex_species`);
+			await db.query(SQL`DROP FUNCTION delay_fork()`);
+		}
 	});
 });

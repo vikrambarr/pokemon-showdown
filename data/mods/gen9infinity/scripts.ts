@@ -48,7 +48,8 @@ export const Scripts: ModdedBattleScriptsData = {
 					}
 				}
 				if (
-					move.alwaysHit || (countsAs(this.battle.dex, move.id, 'toxic') && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
+					move.alwaysHit ||
+					(countsAs(this.battle.dex, 'Moves', move.id, 'toxic') && this.battle.gen >= 8 && pokemon.hasType('Poison')) ||
 					(move.target === 'self' && move.category === 'Status' && !target.isSemiInvulnerable())
 				) {
 					accuracy = true;

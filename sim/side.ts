@@ -456,7 +456,7 @@ export class Side {
 
 	removeSideCondition(status: string | Effect): boolean {
 		status = this.battle.dex.conditions.get(status) as Effect;
-		const copies: string[] = countedAs(this.battle.dex, status.id).filter(id => this.removeSideCondition(id));
+		const copies: string[] = countedAs(this.battle.dex, 'Conditions', status.id).filter(id => this.removeSideCondition(id));
 		if (!this.sideConditions[status.id]) return copies.length > 0;
 		this.battle.singleEvent('SideEnd', status, this.sideConditions[status.id], this);
 		delete this.sideConditions[status.id];
@@ -506,7 +506,8 @@ export class Side {
 	removeSlotCondition(target: Pokemon | number, status: string | Effect) {
 		if (target instanceof Pokemon) target = target.position;
 		status = this.battle.dex.conditions.get(status) as Effect;
-		const copies: string[] = countedAs(this.battle.dex, status.id).filter(id => this.removeSlotCondition(target, id));
+		const copies: string[] = countedAs(this.battle.dex, 'Conditions', status.id)
+			.filter(id => this.removeSlotCondition(target, id));
 		if (!this.slotConditions[target][status.id]) return copies.length > 0;
 		this.battle.singleEvent('End', status, this.slotConditions[target][status.id], this.active[target]);
 		delete this.slotConditions[target][status.id];
@@ -872,7 +873,7 @@ export class Side {
 				}
 			}
 		}
-		if (req.moves.every(m => m.disabled || countsAs(this.battle.dex, m.id, 'struggle'))) {
+		if (req.moves.every(m => m.disabled || countsAs(this.battle.dex, 'Moves', m.id, 'struggle'))) {
 			if (req.canMegaEvo) {
 				req.canMegaEvo = false;
 				updated = true;

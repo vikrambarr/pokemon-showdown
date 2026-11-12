@@ -262,7 +262,7 @@ export class BattleQueue {
 			action.move = this.battle.dex.getActiveMove(action.move);
 
 			if (this.battle.dex.currentMod.startsWith('champions') &&
-				countsAs(this.battle.dex, action.move.id, 'curse') && !action.pokemon.hasType('Ghost')) {
+				countsAs(this.battle.dex, 'Moves', action.move.id, 'curse') && !action.pokemon.hasType('Ghost')) {
 				action.move.target = 'self';
 			}
 

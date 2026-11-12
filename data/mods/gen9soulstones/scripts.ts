@@ -132,16 +132,18 @@ export const Scripts: ModdedBattleScriptsData = {
 
 			if (isCrit && !suppressMessages) this.battle.add('-crit', target);
 
-			if (countsAs(this.battle.dex, pokemon.status, 'brn') && move.category === 'Physical' && !pokemon.hasAbility('guts')) {
-				if (this.battle.gen < 6 || !countsAs(this.battle.dex, move.id, 'facade')) {
+			if (countsAs(this.battle.dex, 'Conditions', pokemon.status, 'brn') && move.category === 'Physical' &&
+				!pokemon.hasAbility('guts')) {
+				if (this.battle.gen < 6 || !countsAs(this.battle.dex, 'Moves', move.id, 'facade')) {
 					baseDamage = this.battle.modify(baseDamage, 0.5);
 				}
 			}
 
 			if (
-				countsAs(this.battle.dex, pokemon.status, 'frb') && move.category === 'Special' && !pokemon.hasAbility('attunement')
+				countsAs(this.battle.dex, 'Conditions', pokemon.status, 'frb') && move.category === 'Special' &&
+				!pokemon.hasAbility('attunement')
 			) {
-				if (this.battle.gen < 6 || !countsAs(this.battle.dex, move.id, 'facade')) {
+				if (this.battle.gen < 6 || !countsAs(this.battle.dex, 'Moves', move.id, 'facade')) {
 					baseDamage = this.battle.modify(baseDamage, 0.5);
 				}
 			}
