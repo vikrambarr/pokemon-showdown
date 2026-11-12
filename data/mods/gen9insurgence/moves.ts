@@ -605,6 +605,72 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Normal",
 		contestType: "Tough",
 	},
+	corrode: {
+		num: 0,
+		accuracy: 100,
+		basePower: 70,
+		category: "Special",
+		name: "Corrode",
+		desc: "This move's type effectiveness against Steel is changed to be super effective no matter what this move's type is.",
+		shortDesc: "Super effective on Steel.",
+		pp: 10,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, metronome: 1 },
+		ignoreImmunity: { 'Poison': true },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Steel') return 1;
+		},
+		target: "normal",
+		type: "Poison",
+		contestType: "Beautiful",
+	},
+	dragonify: {
+		num: 0,
+		accuracy: 100,
+		basePower: 0,
+		category: "Status",
+		name: "Dragonify",
+		desc: "Causes the target to become a Dragon type. Fails if the target is an Arceus, or if the target is already purely Dragon type.",
+		shortDesc: "Changes the target's type to Dragon.",
+		pp: 20,
+		priority: 0,
+		flags: { protect: 1, reflectable: 1, mirror: 1, allyanim: 1, metronome: 1 },
+		onHit(target) {
+			if (target.getTypes().join() === 'Dragon' || !target.setType('Dragon')) return false;
+			this.add('-start', target, 'typechange', 'Dragon');
+		},
+		target: "normal",
+		type: "Dragon",
+		zMove: { boost: { spa: 1 } },
+	},
+	hotcoals: {
+		num: 0,
+		accuracy: true,
+		basePower: 0,
+		category: "Status",
+		name: "Hot Coals",
+		desc: "Sets up a hazard on the opposing side of the field, damaging each opposing Pokemon that switches in. Fails if the effect is already active on the opposing side. Foes lose 1/32, 1/16, 1/8, 1/4, or 1/2 of their maximum HP, rounded down, based on their weakness to the Fire type; 0.25x, 0.5x, neutral, 2x, or 4x, respectively. Can be removed from the opposing side if any Pokemon uses Tidy Up, or if any opposing Pokemon uses Mortal Spin, Rapid Spin, or Defog successfully, or is hit by Defog.",
+		shortDesc: "Hurts foes on switch-in. Factors Fire weakness.",
+		pp: 20,
+		priority: 0,
+		flags: { reflectable: 1, mustpressure: 1, nosketch: 1 },
+		sideCondition: 'hotcoals',
+		condition: {
+
+			onSideStart(side) {
+				this.add('-sidestart', side, 'move: Hot Coals');
+			},
+			onSwitchIn(pokemon) {
+				if (pokemon.hasItem('heavydutyboots')) return;
+				const typeMod = this.clampIntRange(pokemon.runEffectiveness(this.dex.getActiveMove('hotcoals')), -6, 6);
+				this.damage(pokemon.maxhp * (2 ** typeMod) / 8);
+			},
+		},
+		target: "foeSide",
+		type: "Fire",
+		zMove: { boost: { def: 1 } },
+		contestType: "Cool",
+	},
 	jetstream: {
 		accuracy: true,
 		basePower: 0,
@@ -716,6 +782,25 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		target: "normal",
 		type: "Dark",
 		contestType: "Cool",
+	},
+	medusaray: {
+		num: 0,
+		accuracy: 100,
+		basePower: 0,
+		category: "Status",
+		name: "Medusa Ray",
+		desc: "Causes the target to become a Rock type. Fails if the target is an Arceus, or if the target is already purely Rock type.",
+		shortDesc: "Changes the target's type to Rock.",
+		pp: 20,
+		priority: 0,
+		flags: { protect: 1, reflectable: 1, mirror: 1, allyanim: 1, metronome: 1 },
+		onHit(target) {
+			if (target.getTypes().join() === 'Rock' || !target.setType('Rock')) return false;
+			this.add('-start', target, 'typechange', 'Rock');
+		},
+		target: "normal",
+		type: "Rock",
+		zMove: { boost: { spa: 1 } },
 	},
 	morph: {
 		accuracy: true,

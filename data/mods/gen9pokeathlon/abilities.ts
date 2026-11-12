@@ -1,4 +1,16 @@
 export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTable = {
+	icecleats: {
+		onModifySpe(spe, pokemon) {
+			if (this.field.isWeather(['hail', 'snowscape'])) {
+				return this.chainModify(2);
+			}
+		},
+		flags: {},
+		name: "Ice Cleats",
+		shortDesc: "If Hail/Snow is active, this Pokemon's Speed is doubled.",
+		rating: 3,
+		num: 0,
+	},
 	lernean: {
 		onUpdate(pokemon) {
 			if (!pokemon.hp || pokemon.transformed) return;
@@ -447,6 +459,32 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		shortDesc: "Charge moves do not require a charge turn",
 		rating: 5,
 	},
+	cannoneer: {
+		onBasePowerPriority: 19,
+		onBasePower(basePower, attacker, defender, move) {
+			if (move.flags['bullet']) {
+				return this.chainModify(1.5);
+			}
+		},
+		flags: { breakable: 1 },
+		name: "Cannoneer",
+		desc: "This Pokemon's bullet-based attacks have their power multiplied by 1.5.",
+		shortDesc: "This Pokemon's bullet-based attacks have 1.5x power. Pollen Puff heals 50% more.",
+		rating: 3,
+		num: 0,
+	},
+	psychoslider: {
+		onModifySpe(spe) {
+			if (this.field.isTerrain('psychicterrain')) {
+				return this.chainModify(2);
+			}
+		},
+		flags: {},
+		name: "Psycho Slider",
+		shortDesc: "If Psychic Terrain is active, this Pokemon's Speed is doubled.",
+		rating: 3,
+		num: 0,
+	},
 	spittingfire: {
 		onModifyMovePriority: -1,
 		onModifyMove(move) {
@@ -807,6 +845,19 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "As Above",
 		rating: 4,
 		shortDesc: "While on field, stat changes have the opposite effect. Breaks upon any hit.",
+	},
+	soulsymphony: {
+		onModifyTypePriority: -1,
+		onModifyType(move, pokemon) {
+			if (move.flags['sound'] && !pokemon.volatiles['dynamax']) {
+				move.type = 'Ghost';
+			}
+		},
+		flags: {},
+		name: "Soul Symphony",
+		rating: 1.5,
+		num: 0,
+		shortDesc: "This Pokemon's sound-based moves become Ghost type.",
 	},
 	caeciliandefense: {
 		onDamagingHitOrder: 1,

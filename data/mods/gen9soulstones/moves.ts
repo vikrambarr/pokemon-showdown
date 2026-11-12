@@ -738,6 +738,140 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Dives underwater turn 1, strikes turn 2.",
 	},
+	spiritbarrage: {
+		num: 0,
+		basePower: 60,
+		accuracy: 100,
+		category: "Special",
+		name: "Spirit Barrage",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			const damagedByTarget = pokemon.attackedBy.some(
+				p => p.source === target && p.damage > 0 && p.thisTurn
+			);
+			if (damagedByTarget) {
+				this.debug(`BP doubled for getting hit by ${target}`);
+				return move.basePower * 2;
+			}
+			return move.basePower;
+		},
+		target: "normal",
+		type: "Ghost",
+		contestType: "Tough",
+		shortDesc: "Power doubles if user is damaged by the target.",
+	},
+	flutter: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Flutter",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, snatch: 1 },
+		onHit(pokemon) {
+			if (['', 'slp', 'frz'].includes(pokemon.status)) return false;
+			pokemon.cureStatus();
+		},
+		target: "self",
+		type: "Bug",
+		contestType: "Tough",
+		shortDesc: "User cures its burn, poison, or paralysis.",
+	},
+	infection: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Special",
+		name: "Infection",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			if (target.status || target.hasAbility('comatose')) {
+				this.debug('BP doubled from status condition');
+				return move.basePower * 2;
+			}
+			return move.basePower;
+		},
+		target: "normal",
+		type: "Bug",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target has a status ailment.",
+	},
+	antimatter: {
+		num: 0,
+		basePower: 80,
+		accuracy: 100,
+		category: "Physical",
+		name: "Antimatter",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			target.clearBoosts();
+			this.add('-clearboost', target);
+		},
+		target: "normal",
+		type: "Cosmic",
+		contestType: "Tough",
+		shortDesc: "Resets all of the target's stat stages to 0.",
+	},
+	asteroidbelt: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Asteroid Belt",
+		pp: 5,
+		priority: 4,
+		flags: { metronome: 1 },
+		stallingMove: true,
+		volatileStatus: 'asteroidbelt',
+		onPrepareHit(pokemon) {
+			return !!this.queue.willAct() && this.runEvent('StallMove', pokemon);
+		},
+		onHit(pokemon) {
+			pokemon.addVolatile('stall');
+		},
+		condition: {
+			duration: 1,
+			onStart(target) {
+				this.add('-singleturn', target, 'move: Protect');
+			},
+			onTryHitPriority: 3,
+			onTryHit(target, source, move) {
+				if (this.checkMoveBypassesProtect(move, source, target)) return;
+				if (move.smartTarget) {
+					move.smartTarget = false;
+				} else {
+					this.add('-activate', target, 'move: Protect');
+				}
+				const lockedmove = source.getVolatile('lockedmove');
+				if (lockedmove) {
+
+					if (source.volatiles['lockedmove'].duration === 2) {
+						delete source.volatiles['lockedmove'];
+					}
+				}
+				if (this.checkMoveMakesContact(move, source, target)) {
+					this.damage(source.baseMaxhp / 8, source, target);
+				}
+				return this.NOT_FAIL;
+			},
+			onHit(target, source, move) {
+				if (move.isZOrMaxPowered && this.checkMoveMakesContact(move, source, target)) {
+					this.damage(source.baseMaxhp / 8, source, target);
+				}
+			},
+		},
+		target: "self",
+		type: "Cosmic",
+		contestType: "Tough",
+		shortDesc: "Protects from moves. Contact: loses 1/8 max HP.",
+	},
 	blackhole: {
 		basePower: 90,
 		accuracy: 100,
@@ -783,6 +917,70 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Grounds target.",
 	},
+	shootingstar: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Physical",
+		name: "Shooting Star",
+		pp: 5,
+		priority: 1,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onTry(source, target) {
+			const action = this.queue.willMove(target);
+			const move = action?.choice === 'move' ? action.move : null;
+			if (!move || (move.category === 'Status' && move.id !== 'mefirst') || target.volatiles['mustrecharge']) {
+				return false;
+			}
+		},
+		target: "normal",
+		type: "Cosmic",
+		contestType: "Tough",
+		shortDesc: "Usually goes first. Fails if target is not attacking.",
+	},
+	spaceinvaders: {
+		num: 0,
+		basePower: 1,
+		basePowerCallback(pokemon, target, move) {
+			const setSpecies = this.dex.species.get(move.allies!.shift()!.set.species);
+			const bp = 5 + Math.floor(setSpecies.baseStats.atk / 10);
+			this.debug(`BP for ${setSpecies.name} hit: ${bp}`);
+			return bp;
+		},
+		accuracy: 100,
+		category: "Physical",
+		name: "Space Invaders",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, allyanim: 1 },
+		onModifyMove(move, pokemon) {
+			move.allies = pokemon.side.pokemon.filter(ally => ally === pokemon || !ally.fainted && !ally.status);
+			move.multihit = move.allies.length;
+		},
+		target: "normal",
+		type: "Cosmic",
+		contestType: "Tough",
+		shortDesc: "All healthy allies aid in damaging the target.",
+	},
+	starsaligned: {
+		num: 0,
+		basePower: 20,
+		accuracy: 100,
+		category: "Special",
+		name: "Stars Aligned",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			const bp = move.basePower + 20 * pokemon.positiveBoosts();
+			this.debug(`BP: ${bp}`);
+			return bp;
+		},
+		target: "normal",
+		type: "Cosmic",
+		contestType: "Tough",
+		shortDesc: " + 20 power for each of the user's stat boosts.",
+	},
 	blackout: {
 		basePower: 0,
 		accuracy: true,
@@ -814,6 +1012,65 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Dark",
 		contestType: "Tough",
 		shortDesc: "For 5 turns, Light-type attacks have 1/3 power.",
+	},
+	evilthorn: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Physical",
+		name: "Evil Thorn",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Fairy') return 1;
+		},
+		secondary: {
+			chance: 10,
+			status: 'slp',
+		},
+		target: "normal",
+		type: "Dark",
+		contestType: "Tough",
+		shortDesc: "10% chance to sleep target. Supereffective on Fairy.",
+	},
+	scoresettler: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Physical",
+		name: "Score Settler",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onBasePower(basePower, pokemon) {
+			if (pokemon.side.faintedLastTurn) {
+				this.debug('Boosted for a faint last turn');
+				return this.chainModify(2);
+			}
+		},
+		target: "normal",
+		type: "Dark",
+		contestType: "Tough",
+		shortDesc: "Power doubles if an ally fainted last turn.",
+	},
+	sinfulsmite: {
+		num: 0,
+		basePower: 60,
+		accuracy: 100,
+		category: "Physical",
+		name: "Sinful Smite",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			target.clearBoosts();
+			this.add('-clearboost', target);
+		},
+		target: "normal",
+		type: "Dark",
+		contestType: "Tough",
+		shortDesc: "Resets all of the target's stat stages to 0.",
 	},
 	dragonmagic: {
 		basePower: 0,
@@ -863,6 +1120,48 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Swaps stat stages with target.",
 	},
+	fairytale: {
+		num: 0,
+		basePower: 0,
+		accuracy: 100,
+		category: "Status",
+		name: "Fairy Tale",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			if (target.getTypes().join() === 'Fairy' || !target.setType('Fairy')) {
+
+
+				this.add('-fail', target);
+				return null;
+			}
+			this.add('-start', target, 'typechange', 'Fairy');
+		},
+		target: "normal",
+		type: "Fairy",
+		contestType: "Tough",
+		shortDesc: "Changes the target's type to Fairy.",
+	},
+	oberonswrath: {
+		num: 0,
+		basePower: 150,
+		accuracy: 100,
+		category: "Physical",
+		name: "Oberon's Wrath",
+		pp: 5,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			const bp = move.basePower * pokemon.hp / pokemon.maxhp;
+			this.debug(`BP: ${bp}`);
+			return bp;
+		},
+		target: "allAdjacentFoes",
+		type: "Fairy",
+		contestType: "Tough",
+		shortDesc: "Less power as user's HP decreases. Hits foe(s).",
+	},
 	peekaboo: {
 		basePower: 40,
 		accuracy: 100,
@@ -885,6 +1184,44 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Fairy",
 		contestType: "Tough",
 		shortDesc: "Hits first. First turn out only. 100% flinch chance.",
+	},
+	sirenssong: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Special",
+		name: "Siren's Song",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, sound: 1 },
+		secondary: {
+			chance: 100,
+			onHit(target, source, move) {
+				if (source.isActive) target.addVolatile('trapped', source, move, 'trapper');
+			},
+		},
+		target: "normal",
+		type: "Fairy",
+		contestType: "Tough",
+		shortDesc: "Prevents the target from switching out.",
+	},
+	valkyriechariot: {
+		num: 0,
+		basePower: 110,
+		accuracy: 90,
+		category: "Physical",
+		name: "Valkyrie Chariot",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1, gravity: 1 },
+		hasCrashDamage: true,
+		onMoveFail(target, source, move) {
+			this.damage(source.baseMaxhp / 2, source, source, this.dex.conditions.get('Valkyrie Chariot'));
+		},
+		target: "normal",
+		type: "Fairy",
+		contestType: "Tough",
+		shortDesc: "User is hurt by 50% of its max HP if it misses.",
 	},
 	wildimagination: {
 		basePower: 0,
@@ -914,6 +1251,43 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Fairy",
 		contestType: "Tough",
 		shortDesc: "Raises user's lowest and highest stats by 1 stage.",
+	},
+	battleofwits: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Special",
+		name: "Battle of Wits",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Psychic') return 1;
+		},
+		target: "normal",
+		type: "Fighting",
+		contestType: "Tough",
+		shortDesc: "Super effective on Psychic.",
+	},
+	parry: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Physical",
+		name: "Parry",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onBasePower(basePower, pokemon) {
+			if (pokemon.side.faintedLastTurn) {
+				this.debug('Boosted for a faint last turn');
+				return this.chainModify(2);
+			}
+		},
+		target: "normal",
+		type: "Fighting",
+		contestType: "Tough",
+		shortDesc: "Power doubles if an ally fainted last turn.",
 	},
 	fireball: {
 		accuracy: 90,
@@ -976,6 +1350,106 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		desc: "If this move is successful, the user is locked into this move and cannot make another move until it misses, 5 turns have passed, or the attack cannot be used. Power doubles with each successful hit of this move and doubles again if Defense Curl was used previously by the user. If this move is called by Sleep Talk, the move is used for one turn.",
 		shortDesc: "Power doubles with each hit. Repeats for 5 turns.",
 	},
+	erosion: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Special",
+		name: "Erosion",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Rock') return 1;
+		},
+		target: "normal",
+		type: "Flying",
+		contestType: "Tough",
+		shortDesc: "Super effective on Rock.",
+	},
+	streamrush: {
+		num: 0,
+		basePower: 1,
+		accuracy: 100,
+		category: "Physical",
+		name: "Stream Rush",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target) {
+			let ratio = Math.floor(pokemon.getStat('spe') / target.getStat('spe'));
+			if (!isFinite(ratio)) ratio = 0;
+			const bp = [40, 60, 80, 120, 150][Math.min(ratio, 4)];
+			this.debug(`BP: ${bp}`);
+			return bp;
+		},
+		target: "normal",
+		type: "Flying",
+		contestType: "Tough",
+		shortDesc: "More power the faster the user is than the target.",
+	},
+	turbulence: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Special",
+		name: "Turbulence",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, wind: 1 },
+		onBasePower(basePower, source, target, move) {
+			const item = target.getItem();
+			if (!this.singleEvent('TakeItem', item, target.itemState, target, target, move, item)) return;
+			if (item.id) {
+				return this.chainModify(1.5);
+			}
+		},
+		onAfterHit(target, source) {
+			const item = target.takeItem();
+			if (item) {
+				this.add('-enditem', target, item.name, '[from] move: Turbulence', `[of] ${source}`);
+			}
+		},
+		target: "normal",
+		type: "Flying",
+		contestType: "Tough",
+		shortDesc: "1.5x damage if foe holds an item. Removes item.",
+	},
+	burningofuda: {
+		num: 0,
+		basePower: 20,
+		accuracy: 90,
+		category: "Special",
+		name: "Burning Ofuda",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, defrost: 1 },
+		basePowerCallback(pokemon, target, move) {
+			return 20 * move.hit;
+		},
+		multihit: 3,
+		target: "normal",
+		type: "Ghost",
+		contestType: "Tough",
+		shortDesc: "Hits 3 times. Each hit can miss, but power rises.",
+	},
+	grimreaper: {
+		num: 0,
+		basePower: 50,
+		accuracy: 100,
+		category: "Physical",
+		name: "Grim Reaper",
+		pp: 25,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1, slicing: 1 },
+		onAfterMoveSecondarySelf(pokemon, target, move) {
+			if (!target || target.fainted || target.hp <= 0) this.boost({ atk: 2 }, pokemon, pokemon, move);
+		},
+		target: "normal",
+		type: "Ghost",
+		contestType: "Tough",
+		shortDesc: "Raises user's Attack by 2 if this KOes the target.",
+	},
 	edenfruit: {
 		basePower: 0,
 		accuracy: true,
@@ -1016,6 +1490,40 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Raises the user's Defense and Sp. Def by 1. Ingrains User.",
 	},
+	flytrap: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Physical",
+		name: "Fly Trap",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1, bite: 1 },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Bug') return 1;
+		},
+		target: "normal",
+		type: "Grass",
+		contestType: "Tough",
+		shortDesc: "Super effective on Bug.",
+	},
+	vexingvines: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Vexing Vines",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onHit(target, source, move) {
+			return target.addVolatile('trapped', source, move, 'trapper');
+		},
+		target: "allAdjacentFoes",
+		type: "Grass",
+		contestType: "Tough",
+		shortDesc: "Traps foe(s).",
+	},
 	continentalrift: {
 		basePower: 100,
 		accuracy: 90,
@@ -1041,6 +1549,44 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Ground",
 		contestType: "Tough",
 		shortDesc: "Ignores the Abilities of other Pokemon. Special if would be stronger.",
+	},
+	goldrush: {
+		num: 0,
+		basePower: 75,
+		accuracy: 100,
+		category: "Physical",
+		name: "Gold Rush",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			target.clearBoosts();
+			this.add('-clearboost', target);
+		},
+		target: "normal",
+		type: "Ground",
+		contestType: "Tough",
+		shortDesc: "Resets all of the target's stat stages to 0.",
+	},
+	mudshackles: {
+		num: 0,
+		basePower: 55,
+		accuracy: 100,
+		category: "Special",
+		name: "Mud Shackles",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		secondary: {
+			chance: 100,
+			onHit(target, source, move) {
+				if (source.isActive) target.addVolatile('trapped', source, move, 'trapper');
+			},
+		},
+		target: "allAdjacentFoes",
+		type: "Ground",
+		contestType: "Tough",
+		shortDesc: "Prevents the target from switching out.",
 	},
 	seismicshift: {
 		basePower: 1,
@@ -1102,6 +1648,148 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Ice",
 		contestType: "Tough",
 		shortDesc: "Cures the user's party of all status conditions.",
+	},
+	hypothermia: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Special",
+		name: "Hypothermia",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			if (target.status || target.hasAbility('comatose')) {
+				this.debug('BP doubled from status condition');
+				return move.basePower * 2;
+			}
+			return move.basePower;
+		},
+		target: "normal",
+		type: "Ice",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target has a status ailment.",
+	},
+	cleanse: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Cleanse",
+		pp: 15,
+		priority: 0,
+		flags: { protect: 1, reflectable: 1, mirror: 1, bypasssub: 1, metronome: 1 },
+		onHit(target, source, move) {
+			let success = false;
+			if (!target.volatiles['substitute'] || move.infiltrates) success = !!this.boost({ evasion: -1 });
+			const removeAll = ['spikes', 'toxicspikes', 'stealthrock', 'stickyweb', 'gmaxsteelsurge'];
+			const removeTarget = ['reflect', 'lightscreen', 'auroraveil', 'safeguard', 'mist', ...removeAll];
+			for (const targetCondition of removeTarget) {
+				if (target.side.removeSideCondition(targetCondition)) {
+					if (!removeAll.includes(targetCondition)) continue;
+					this.add('-sideend', target.side, this.dex.conditions.get(targetCondition).name, '[from] move: Defog', `[of] ${source}`);
+					success = true;
+				}
+			}
+			for (const sideCondition of removeAll) {
+				if (source.side.removeSideCondition(sideCondition)) {
+					this.add('-sideend', source.side, this.dex.conditions.get(sideCondition).name, '[from] move: Defog', `[of] ${source}`);
+					success = true;
+				}
+			}
+			this.field.clearTerrain();
+			return success;
+		},
+		target: "normal",
+		type: "Light",
+		contestType: "Tough",
+		desc: "Lowers the target's evasiveness by 1 stage. If this move is successful and whether or not the target's evasiveness was affected, the effects of Reflect, Light Screen, Aurora Veil, Safeguard, Mist, Spikes, Toxic Spikes, Stealth Rock, and Sticky Web end for the target's side, and the effects of Spikes, Toxic Spikes, Stealth Rock, and Sticky Web end for the user's side. Ignores a target's substitute, although a substitute will still block the lowering of evasiveness. If there is a terrain active and this move is successful, the terrain will be cleared.",
+		shortDesc: "-1 evasion; ends user and target hazards/terrain.",
+	},
+	coupdegrace: {
+		num: 0,
+		basePower: 60,
+		accuracy: 100,
+		category: "Physical",
+		name: "Coup de Grace",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1, slicing: 1 },
+		onBasePower(basePower, pokemon, target) {
+			if (target.hp * 2 <= target.maxhp) {
+				return this.chainModify(2);
+			}
+		},
+		target: "normal",
+		type: "Light",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target's HP is 50% or less.",
+	},
+	divinevision: {
+		num: 0,
+		basePower: 120,
+		accuracy: 90,
+		category: "Special",
+		name: "Divine Vision",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, futuremove: 1 },
+		ignoreImmunity: true,
+		onTry(source, target) {
+			if (!target.side.addSlotCondition(target, 'futuremove')) return false;
+			Object.assign(target.side.slotConditions[target.position]['futuremove'], {
+				move: 'divinevision',
+				source,
+				moveData: {
+					id: 'divinevision',
+					name: "Divine Vision",
+					accuracy: 90,
+					basePower: 120,
+					category: "Special",
+					priority: 0,
+					flags: { allyanim: 1, metronome: 1, futuremove: 1 },
+					ignoreImmunity: false,
+					effectType: 'Move',
+					type: 'Light',
+				},
+			});
+			this.add('-start', source, 'move: Divine Vision');
+			return this.NOT_FAIL;
+		},
+		target: "normal",
+		type: "Light",
+		contestType: "Tough",
+		shortDesc: "Hits two turns after being used.",
+	},
+	guardianangel: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Guardian Angel",
+		pp: 10,
+		priority: 3,
+		flags: { metronome: 1 },
+		sideCondition: 'guardianangel',
+		onTry() {
+			return !!this.queue.willAct();
+		},
+		condition: {
+			duration: 1,
+			onSideStart(target, source) {
+				this.add('-singleturn', source, 'Guardian Angel');
+			},
+			onTryHitPriority: 3,
+			onTryHit(target, source, move) {
+				if (['self', 'all'].includes(move.target) || move.category !== 'Status') return;
+				this.add('-activate', target, 'move: Guardian Angel');
+				return this.NOT_FAIL;
+			},
+		},
+		target: "allySide",
+		type: "Light",
+		contestType: "Tough",
+		shortDesc: "Protects allies from Status moves this turn.",
 	},
 	hallowedground: {
 		basePower: 0,
@@ -1173,6 +1861,69 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Charges turn 1. Hits turn 2. No charge in sunlight.",
 	},
+	purge: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Physical",
+		name: "Purge",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			if (target.status || target.hasAbility('comatose')) {
+				this.debug('BP doubled from status condition');
+				return move.basePower * 2;
+			}
+			return move.basePower;
+		},
+		target: "normal",
+		type: "Light",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target has a status ailment.",
+	},
+	rayoflight: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Ray of Light",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, snatch: 1, heal: 1 },
+		onHit(pokemon) {
+			const success = !!this.heal(this.modify(pokemon.maxhp, 0.25));
+			return pokemon.cureStatus() || success;
+		},
+		target: "allies",
+		type: "Light",
+		contestType: "Tough",
+		shortDesc: "User and allies: healed 1/4 max HP, status cured.",
+	},
+	rebuke: {
+		num: 0,
+		basePower: 60,
+		accuracy: 100,
+		category: "Physical",
+		name: "Rebuke",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			const damagedByTarget = pokemon.attackedBy.some(
+				p => p.source === target && p.damage > 0 && p.thisTurn
+			);
+			if (damagedByTarget) {
+				this.debug(`BP doubled for getting hit by ${target}`);
+				return move.basePower * 2;
+			}
+			return move.basePower;
+		},
+		target: "normal",
+		type: "Light",
+		contestType: "Tough",
+		shortDesc: "Power doubles if user is damaged by the target.",
+	},
 	repentance: {
 		basePower: 0,
 		accuracy: true,
@@ -1192,6 +1943,57 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Light",
 		contestType: "Tough",
 		shortDesc: "User loses 50% max HP. Maximizes Sp. Atk.",
+	},
+	bearhug: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Bear Hug",
+		pp: 5,
+		priority: 0,
+		flags: { metronome: 1, mirror: 1 },
+		onHit(target, source, move) {
+			return target.addVolatile('trapped', source, move, 'trapper');
+		},
+		target: "normal",
+		type: "Normal",
+		contestType: "Tough",
+		shortDesc: "Prevents the target from switching out.",
+	},
+	clonesurge: {
+		num: 0,
+		basePower: 40,
+		accuracy: 100,
+		category: "Special",
+		name: "Clone Surge",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			if (!pokemon.volatiles['furycutter'] || move.hit === 1) {
+				pokemon.addVolatile('furycutter');
+			}
+			const bp = this.clampIntRange(move.basePower * pokemon.volatiles['furycutter'].multiplier, 1, 160);
+			this.debug(`BP: ${bp}`);
+			return bp;
+		},
+		condition: {
+			duration: 2,
+			onStart() {
+				this.effectState.multiplier = 1;
+			},
+			onRestart() {
+				if (this.effectState.multiplier < 4) {
+					this.effectState.multiplier <<= 1;
+				}
+				this.effectState.duration = 2;
+			},
+		},
+		target: "normal",
+		type: "Normal",
+		contestType: "Tough",
+		shortDesc: "Power doubles with each hit, up to 160.",
 	},
 	curbstomp: {
 		basePower: 1,
@@ -1223,6 +2025,24 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Normal",
 		contestType: "Tough",
 		shortDesc: "More power the heavier the user than the target.",
+	},
+	fantasyseal: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Special",
+		name: "Fantasy Seal",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Ghost') return 1;
+		},
+		ignoreImmunity: { 'Normal': true },
+		target: "normal",
+		type: "Normal",
+		contestType: "Tough",
+		shortDesc: "Super effective on Ghost.",
 	},
 	genesis: {
 		basePower: 100,
@@ -1294,6 +2114,71 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Hits first. First turn out only. 100% flinch chance.",
 	},
+	slicingtail: {
+		num: 0,
+		basePower: 20,
+		accuracy: 90,
+		category: "Physical",
+		name: "Slicing Tail",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1, slicing: 1 },
+		basePowerCallback(pokemon, target, move) {
+			return 20 * move.hit;
+		},
+		target: "normal",
+		type: "Normal",
+		contestType: "Tough",
+		shortDesc: "Hits 3 times. Each hit can miss, but power rises.",
+	},
+	allergy: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Special",
+		name: "Allergy",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			if (target.status || target.hasAbility('comatose')) {
+				this.debug('BP doubled from status condition');
+				return move.basePower * 2;
+			}
+			return move.basePower;
+		},
+		target: "normal",
+		type: "Poison",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target has a status ailment.",
+	},
+	spoil: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Physical",
+		name: "Spoil",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onBasePower(basePower, source, target, move) {
+			const item = target.getItem();
+			if (!this.singleEvent('TakeItem', item, target.itemState, target, target, move, item)) return;
+			if (item.id) {
+				return this.chainModify(1.5);
+			}
+		},
+		onAfterHit(target, source) {
+			const item = target.takeItem();
+			if (item) {
+				this.add('-enditem', target, item.name, '[from] move: Spoil', `[of] ${source}`);
+			}
+		},
+		target: "normal",
+		type: "Poison",
+		contestType: "Tough",
+		shortDesc: "1.5x damage if foe holds an item. Removes item.",
+	},
 	checkmate: {
 		basePower: 50,
 		accuracy: 100,
@@ -1310,6 +2195,27 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Raises user's Sp. Atk by 2 if this KOes the target.",
 	},
+	bejeweled: {
+		num: 0,
+		basePower: 90,
+		accuracy: 100,
+		category: "Special",
+		name: "Bejeweled",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		secondary: {
+			chance: 20,
+			onHit(target, source) {
+				const status = this.sample(['brn', 'par', 'frz']);
+				target.trySetStatus(status, source);
+			},
+		},
+		target: "normal",
+		type: "Rock",
+		contestType: "Tough",
+		shortDesc: "20% chance to burn, freeze, or paralyze target.",
+	},
 	gemstorm: {
 		basePower: 110,
 		accuracy: 70,
@@ -1325,6 +2231,96 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Rock",
 		contestType: "Tough",
 		shortDesc: "Can't miss in Sandstorm.",
+	},
+	battlecry: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Physical",
+		name: "Battle Cry",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, sound: 1 },
+		onHit(target, source, move) {
+			return target.addVolatile('trapped', source, move, 'trapper');
+		},
+		target: "allAdjacentFoes",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: "Prevents the target from switching out.",
+	},
+	crescendo: {
+		num: 0,
+		basePower: 40,
+		accuracy: 90,
+		category: "Special",
+		name: "Crescendo",
+		pp: 25,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, sound: 1 },
+		basePowerCallback(pokemon, target, move) {
+			if (!pokemon.volatiles['crescendo'] || move.hit === 1) {
+				pokemon.addVolatile('crescendo');
+			}
+			const bp = this.clampIntRange(move.basePower * pokemon.volatiles['crescendo'].multiplier, 1, 160);
+			this.debug(`BP: ${bp}`);
+			return bp;
+		},
+		condition: {
+			duration: 2,
+			onStart() {
+				this.effectState.multiplier = 1;
+			},
+			onRestart() {
+				if (this.effectState.multiplier < 4) {
+					this.effectState.multiplier <<= 1;
+				}
+				this.effectState.duration = 2;
+			},
+		},
+		target: "normal",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: "Power doubles with each hit, up to 160.",
+	},
+	philharmonic: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Philharmonic",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, sound: 1, heal: 1 },
+		onHit(pokemon) {
+			const success = !!this.heal(this.modify(pokemon.maxhp, 0.25));
+			return pokemon.cureStatus() || success;
+		},
+		target: "allies",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: "User and allies: healed 1/4 max HP, status cured.",
+	},
+	rallentando: {
+		num: 0,
+		basePower: 0,
+		accuracy: 100,
+		category: "Status",
+		name: "Rallentando",
+		pp: 5,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, sound: 1, reflectable: 1 },
+		onHit(target, source, move) {
+			const success = this.boost({ atk: -1, spa: -1 }, target, source);
+			if (!success && !target.hasAbility('mirrorarmor')) {
+				delete move.selfSwitch;
+			}
+		},
+		selfSwitch: true,
+		target: "normal",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: "Lowers target's Atk, Sp. Atk by 1. User switches.",
 	},
 	schizophrenia: {
 		basePower: 0,
@@ -1354,6 +2350,24 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Sound",
 		contestType: "Tough",
 		shortDesc: "Raises user's lowest and highest stats by 1 stage.",
+	},
+	songofsilence: {
+		num: 0,
+		basePower: 60,
+		accuracy: true,
+		category: "Special",
+		name: "Song of Silence",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, sound: 1 },
+		onHit(target) {
+			target.clearBoosts();
+			this.add('-clearboost', target);
+		},
+		target: "normal",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: "Resets all of the target's stat stages to 0.",
 	},
 	staccato: {
 		basePower: 40,
@@ -1397,6 +2411,85 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "2x power if the user had a stat lowered this turn.",
 	},
+	goldenbullet: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Physical",
+		name: "Golden Bullet",
+		pp: 5,
+		priority: 1,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onTry(source, target) {
+			const action = this.queue.willMove(target);
+			const move = action?.choice === 'move' ? action.move : null;
+			if (!move || (move.category === 'Status' && move.id !== 'mefirst') || target.volatiles['mustrecharge']) {
+				return false;
+			}
+		},
+		target: "normal",
+		type: "Steel",
+		contestType: "Tough",
+		shortDesc: "Usually goes first. Fails if target is not attacking.",
+	},
+	timebomb: {
+		num: 0,
+		basePower: 60,
+		accuracy: 100,
+		category: "Special",
+		name: "Time Bomb",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, bullet: 1 },
+		onBasePower(basePower, pokemon) {
+			if (pokemon.side.faintedLastTurn) {
+				this.debug('Boosted for a faint last turn');
+				return this.chainModify(2);
+			}
+		},
+		target: "normal",
+		type: "Steel",
+		contestType: "Tough",
+		shortDesc: "Power doubles if an ally fainted last turn.",
+	},
+	surgingblow: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Physical",
+		name: "Surging Blow",
+		pp: 5,
+		priority: 1,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1, punch: 1 },
+		onTry(source, target) {
+			const action = this.queue.willMove(target);
+			const move = action?.choice === 'move' ? action.move : null;
+			if (!move || (move.category === 'Status' && move.id !== 'mefirst') || target.volatiles['mustrecharge']) {
+				return false;
+			}
+		},
+		target: "normal",
+		type: "Water",
+		contestType: "Tough",
+		shortDesc: "Usually goes first. Fails if target is not attacking.",
+	},
+	satelliteray: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Special",
+		name: "Satellite Ray",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Cosmic') return 1;
+		},
+		target: "normal",
+		type: "Steel",
+		contestType: "Tough",
+		shortDesc: "Super effective on Cosmic.",
+	},
 	concoction: {
 		basePower: 100,
 		accuracy: 90,
@@ -1422,6 +2515,27 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Special if would be stronger.",
 	},
+	cruelwhip: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Physical",
+		name: "Cruel Whip",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			if (target.status || target.hasAbility('comatose')) {
+				this.debug('BP doubled from status condition');
+				return move.basePower * 2;
+			}
+			return move.basePower;
+		},
+		target: "normal",
+		type: "Dark",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target has a status ailment.",
+	},
 	bombardment: {
 		basePower: 100,
 		accuracy: 90,
@@ -1446,6 +2560,63 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Steel",
 		contestType: "Tough",
 		shortDesc: "Special if would be stronger.",
+	},
+	powerdrill: {
+		num: 0,
+		basePower: 75,
+		accuracy: 100,
+		category: "Physical",
+		name: "Power Drill",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onTryHit(pokemon) {
+
+			pokemon.side.removeSideCondition('reflect');
+			pokemon.side.removeSideCondition('lightscreen');
+			pokemon.side.removeSideCondition('auroraveil');
+		},
+		target: "normal",
+		type: "Steel",
+		contestType: "Tough",
+		shortDesc: "Destroys screens, unless the target is immune.",
+	},
+	sonicwave: {
+		num: 0,
+		basePower: 1,
+		accuracy: 100,
+		category: "Physical",
+		name: "Sonic Wave",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, sound: 1 },
+		damageCallback(pokemon) {
+			return (this.random(50, 151) * pokemon.level) / 100;
+		},
+		target: "normal",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: "Random damage equal to 0.5x-1.5x user's level.",
+	},
+	shatter: {
+		num: 0,
+		basePower: 75,
+		accuracy: 100,
+		category: "Physical",
+		name: "Shatter",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1, sound: 1 },
+		onTryHit(pokemon) {
+
+			pokemon.side.removeSideCondition('reflect');
+			pokemon.side.removeSideCondition('lightscreen');
+			pokemon.side.removeSideCondition('auroraveil');
+		},
+		target: "normal",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: "Destroys screens, unless the target is immune.",
 	},
 	gravitypress: {
 		basePower: 1,
@@ -1498,6 +2669,42 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Power doubles if the user ate a berry.",
 	},
+	darkomen: {
+		num: 0,
+		basePower: 120,
+		accuracy: 90,
+		category: "Special",
+		name: "Dark Omen",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		ignoreImmunity: true,
+		onTry(source, target) {
+			if (!target.side.addSlotCondition(target, 'futuremove')) return false;
+			Object.assign(target.side.slotConditions[target.position]['futuremove'], {
+				move: 'darkomen',
+				source,
+				moveData: {
+					id: 'darkomen',
+					name: "Dark Omen",
+					accuracy: 90,
+					basePower: 120,
+					category: "Special",
+					priority: 0,
+					flags: { allyanim: 1, metronome: 1, futuremove: 1 },
+					ignoreImmunity: false,
+					effectType: 'Move',
+					type: 'Dark',
+				},
+			});
+			this.add('-start', source, 'move: Dark Omen');
+			return this.NOT_FAIL;
+		},
+		target: "normal",
+		type: "Dark",
+		contestType: "Tough",
+		shortDesc: "Hits two turns after being used.",
+	},
 	duneblast: {
 		basePower: 50,
 		accuracy: 100,
@@ -1536,6 +2743,139 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Rock",
 		contestType: "Tough",
 		shortDesc: "Hits first. First turn out only. 100% flinch chance.",
+	},
+	boil: {
+		num: 0,
+		basePower: 70,
+		accuracy: 100,
+		category: "Special",
+		name: "Boil",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Water') return 1;
+		},
+		target: "normal",
+		type: "Fire",
+		contestType: "Tough",
+		shortDesc: "Super effective on Water.",
+	},
+	meltaway: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Melt Away",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, snatch: 1 },
+		onTryHit(pokemon) {
+			const hasContrary = pokemon.hasAbility('contrary');
+			if ((!hasContrary && pokemon.boosts.spe === 6) || (hasContrary && pokemon.boosts.spe === -6)) {
+				return false;
+			}
+		},
+		boosts: {
+			spe: 2,
+		},
+		onHit(pokemon) {
+			if (pokemon.weighthg > 1) {
+				pokemon.weighthg = Math.max(1, pokemon.weighthg - 1000);
+				this.add('-start', pokemon, 'Autotomize');
+			}
+		},
+		target: "self",
+		type: "Fire",
+		contestType: "Tough",
+		shortDesc: "Raises the user's Speed by 2; user loses 100 kg.",
+	},
+	hotsprings: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Hot Springs",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onHit(target, source) {
+			if (!target.cureStatus()) {
+				this.add('-fail', source);
+				this.attrLastMove('[still]');
+				return this.NOT_FAIL;
+			}
+			this.heal(Math.ceil(source.maxhp * 0.5), source);
+		},
+		target: "normal",
+		type: "Fire",
+		contestType: "Tough",
+		shortDesc: "Cures target's status; heals user 1/2 max HP if so.",
+	},
+	phobia: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Special",
+		name: "Phobia",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			if (target.status || target.hasAbility('comatose')) {
+				this.debug('BP doubled from status condition');
+				return move.basePower * 2;
+			}
+			return move.basePower;
+		},
+		target: "normal",
+		type: "Dark",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target has a status ailment.",
+	},
+	judoflip: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Judo Flip",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			let success = false;
+			let i: BoostID;
+			for (i in target.boosts) {
+				if (target.boosts[i] === 0) continue;
+				target.boosts[i] = -target.boosts[i];
+				success = true;
+			}
+			if (!success) return false;
+			this.add('-invertboost', target, '[from] move: Judo Flip');
+		},
+		target: "normal",
+		type: "Fighting",
+		contestType: "Tough",
+		shortDesc: "Inverts the target's stat stages.",
+	},
+	boomingbeats: {
+		num: 0,
+		basePower: 20,
+		accuracy: 100,
+		category: "Special",
+		name: "Booming Beats",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, sound: 1 },
+		basePowerCallback(pokemon, target, move) {
+			const bp = move.basePower + 20 * pokemon.positiveBoosts();
+			this.debug(`BP: ${bp}`);
+			return bp;
+		},
+		target: "normal",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: " + 20 power for each of the user's stat boosts.",
 	},
 	zephyrpurge: {
 		basePower: 140,
@@ -1578,6 +2918,79 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Inverts type chart for damage calculation.",
 	},
+	cobaltray: {
+		num: 0,
+		basePower: 80,
+		accuracy: 100,
+		category: "Special",
+		name: "Cobalt Ray",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			target.clearBoosts();
+			this.add('-clearboost', target);
+		},
+		target: "normal",
+		type: "Steel",
+		contestType: "Tough",
+		shortDesc: "Resets all of the target's stat stages to 0.",
+	},
+	grabandgo: {
+		num: 0,
+		basePower: 55,
+		accuracy: 100,
+		category: "Physical",
+		name: "Grab and Go!",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			if (!this.canSwitch(target.side) || target.volatiles['commanded']) {
+				this.attrLastMove('[still]');
+				this.add('-fail', target);
+				return this.NOT_FAIL;
+			}
+		},
+		self: {
+			onHit(source) {
+				source.skipPursuit = true;
+			},
+		},
+		selfSwitch: 'copyvolatile',
+		stealsBoosts: true,
+		target: "normal",
+		type: "Dark",
+		contestType: "Tough",
+		shortDesc: "Steals foe's stat stage changes before hitting. Passes the boosts to an ally.",
+	},
+	powerwash: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Physical",
+		name: "Power Wash",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onBasePower(basePower, source, target, move) {
+			const item = target.getItem();
+			if (!this.singleEvent('TakeItem', item, target.itemState, target, target, move, item)) return;
+			if (item.id) {
+				return this.chainModify(1.5);
+			}
+		},
+		onAfterHit(target, source) {
+			const item = target.takeItem();
+			if (item) {
+				this.add('-enditem', target, item.name, '[from] move: Power Wash', `[of] ${source}`);
+			}
+		},
+		target: "normal",
+		type: "Water",
+		contestType: "Tough",
+		shortDesc: "1.5x damage if foe holds an item. Removes item.",
+	},
 	piddle: {
 		basePower: 0,
 		accuracy: 100,
@@ -1597,6 +3010,87 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Poison",
 		contestType: "Tough",
 		shortDesc: "Lowers target's Def, Sp. Def by 1. User switches.",
+	},
+	overflow: {
+		num: 0,
+		basePower: 50,
+		accuracy: 100,
+		category: "Physical",
+		name: "Overflow",
+		pp: 40,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onAfterHit(target, pokemon, move) {
+			if (!move.hasSheerForce) {
+				if (pokemon.removeVolatile('leechseed')) {
+					this.add('-end', pokemon, 'Leech Seed', '[from] move: Overflow', `[of] ${pokemon}`);
+				}
+				const sideConditions = ['spikes', 'toxicspikes', 'stealthrock', 'stickyweb', 'gmaxsteelsurge'];
+				for (const condition of sideConditions) {
+					if (pokemon.side.removeSideCondition(condition)) {
+						this.add('-sideend', pokemon.side, this.dex.conditions.get(condition).name, '[from] move: Overflow', `[of] ${pokemon}`);
+					}
+				}
+				if (pokemon.volatiles['partiallytrapped']) {
+					pokemon.removeVolatile('partiallytrapped');
+				}
+			}
+		},
+		onAfterSubDamage(damage, target, pokemon, move) {
+			if (!move.hasSheerForce) {
+				if (pokemon.hp && pokemon.removeVolatile('leechseed')) {
+					this.add('-end', pokemon, 'Leech Seed', '[from] move: Overflow', `[of] ${pokemon}`);
+				}
+				const sideConditions = ['spikes', 'toxicspikes', 'stealthrock', 'stickyweb', 'gmaxsteelsurge'];
+				for (const condition of sideConditions) {
+					if (pokemon.hp && pokemon.side.removeSideCondition(condition)) {
+						this.add('-sideend', pokemon.side, this.dex.conditions.get(condition).name, '[from] move: Overflow', `[of] ${pokemon}`);
+					}
+				}
+				if (pokemon.hp && pokemon.volatiles['partiallytrapped']) {
+					pokemon.removeVolatile('partiallytrapped');
+				}
+			}
+		},
+		secondary: {
+			chance: 100,
+			self: {
+				boosts: {
+					spe: 1,
+				},
+			},
+		},
+		target: "normal",
+		type: "Water",
+		contestType: "Tough",
+		shortDesc: "Free user from hazards/bind/Leech Seed; +1 Spe.",
+	},
+	quakeslam: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Physical",
+		name: "Quake Slam",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onBasePower(basePower, source, target, move) {
+			const item = target.getItem();
+			if (!this.singleEvent('TakeItem', item, target.itemState, target, target, move, item)) return;
+			if (item.id) {
+				return this.chainModify(1.5);
+			}
+		},
+		onAfterHit(target, source) {
+			const item = target.takeItem();
+			if (item) {
+				this.add('-enditem', target, item.name, '[from] move: Quake Slam', `[of] ${source}`);
+			}
+		},
+		target: "normal",
+		type: "Ground",
+		contestType: "Tough",
+		shortDesc: "1.5x damage if foe holds an item. Removes item.",
 	},
 	wraithpulse: {
 		basePower: 70,
@@ -1619,6 +3113,43 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "1.5x power if user moves before the target.",
 	},
+	radiantlance: {
+		num: 0,
+		basePower: 100,
+		accuracy: 95,
+		category: "Physical",
+		name: "Radiant Lance",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1, gravity: 1 },
+		hasCrashDamage: true,
+		onMoveFail(target, source, move) {
+			this.damage(source.baseMaxhp / 2, source, source, this.dex.conditions.get('Radiant Lance'));
+		},
+		target: "normal",
+		type: "Light",
+		contestType: "Tough",
+		shortDesc: "User is hurt by 50% of its max HP if it misses.",
+	},
+	dracotempest: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Special",
+		name: "Draco Tempest",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, wind: 1 },
+		onBasePower(basePower, pokemon, target) {
+			if (target.hp * 2 <= target.maxhp) {
+				return this.chainModify(2);
+			}
+		},
+		target: "normal",
+		type: "Dragon",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target's HP is 50% or less.",
+	},
 	wyrmsrage: {
 		basePower: 65,
 		accuracy: 100,
@@ -1638,6 +3169,87 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Dragon",
 		contestType: "Tough",
 		shortDesc: "Power doubles if the user's last move failed.",
+	},
+	dragonsoul: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Dragon Soul",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, snatch: 1 },
+		onHit(pokemon) {
+			if (['', 'slp', 'frz'].includes(pokemon.status)) return false;
+			pokemon.cureStatus();
+		},
+		target: "self",
+		type: "Dragon",
+		contestType: "Tough",
+		shortDesc: "User cures its burn, poison, or paralysis.",
+	},
+	unlockchi: {
+		num: 0,
+		basePower: 20,
+		accuracy: 100,
+		category: "Special",
+		name: "Unlock Chi",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			const bp = move.basePower + 20 * pokemon.positiveBoosts();
+			this.debug(`BP: ${bp}`);
+			return bp;
+		},
+		target: "normal",
+		type: "Fighting",
+		contestType: "Tough",
+		shortDesc: " + 20 power for each of the user's stat boosts.",
+	},
+	firewall: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Fire Wall",
+		pp: 10,
+		priority: 3,
+		flags: { snatch: 1 },
+		sideCondition: 'firewall',
+		onTry() {
+			return !!this.queue.willAct();
+		},
+		onHitSide(side, source) {
+			source.addVolatile('stall');
+		},
+		condition: {
+			duration: 1,
+			onSideStart(target, source) {
+				this.add('-singleturn', source, 'Fire Wall');
+			},
+			onTryHitPriority: 4,
+			onTryHit(target, source, move) {
+
+				if (move?.target !== 'allAdjacent' && move.target !== 'allAdjacentFoes') {
+					return;
+				}
+				if (this.checkMoveBypassesProtect(move, source, target)) return;
+				this.add('-activate', target, 'move: Fire Wall');
+				const lockedmove = source.getVolatile('lockedmove');
+				if (lockedmove) {
+
+					if (source.volatiles['lockedmove'].duration === 2) {
+						delete source.volatiles['lockedmove'];
+					}
+				}
+				return this.NOT_FAIL;
+			},
+		},
+		target: "allySide",
+		type: "Fire",
+		contestType: "Tough",
+		shortDesc: "Protects allies from multi-target moves this turn.",
 	},
 	huntdown: {
 		basePower: 40,
@@ -1703,6 +3315,106 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "If a foe is switching out, hits it at 2x power.",
 	},
+	quillvolley: {
+		num: 0,
+		basePower: 20,
+		accuracy: 90,
+		category: "Physical",
+		name: "Quill Volley",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target, move) {
+			return 20 * move.hit;
+		},
+		target: "normal",
+		type: "Flying",
+		contestType: "Tough",
+		shortDesc: "Hits 3 times. Each hit can miss, but power rises.",
+	},
+	encircle: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Encircle",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onHit(target, source, move) {
+			return target.addVolatile('trapped', source, move, 'trapper');
+		},
+		target: "allAdjacentFoes",
+		type: "Flying",
+		contestType: "Tough",
+		shortDesc: "Prevents the target from switching out.",
+	},
+	disturb: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Physical",
+		name: "Disturb",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onBasePower(basePower, source, target, move) {
+			const item = target.getItem();
+			if (!this.singleEvent('TakeItem', item, target.itemState, target, target, move, item)) return;
+			if (item.id) {
+				return this.chainModify(1.5);
+			}
+		},
+		onAfterHit(target, source) {
+			const item = target.takeItem();
+			if (item) {
+				this.add('-enditem', target, item.name, '[from] move: Disturb', `[of] ${source}`);
+			}
+		},
+		target: "normal",
+		type: "Ghost",
+		contestType: "Tough",
+		shortDesc: "1.5x damage if foe holds an item. Removes item.",
+	},
+	spectrallash: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Physical",
+		name: "Spectral Lash",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onBasePower(basePower, pokemon, target) {
+			if (target.hp * 2 <= target.maxhp) {
+				return this.chainModify(2);
+			}
+		},
+		target: "normal",
+		type: "Ghost",
+		contestType: "Tough",
+		shortDesc: "Power doubles if the target's HP is 50% or less.",
+	},
+	autumnblast: {
+		num: 0,
+		basePower: 85,
+		accuracy: 100,
+		category: "Special",
+		name: "Autumn Blast",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onTryHit(pokemon) {
+
+			pokemon.side.removeSideCondition('reflect');
+			pokemon.side.removeSideCondition('lightscreen');
+			pokemon.side.removeSideCondition('auroraveil');
+		},
+		target: "normal",
+		type: "Grass",
+		contestType: "Tough",
+		shortDesc: "Destroys screens, unless the target is immune.",
+	},
 	icydeluge: {
 		basePower: 70,
 		accuracy: 100,
@@ -1740,6 +3452,62 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Raises user's Sp. Atk by 2 if this KOes the target.",
 	},
+	numbingwind: {
+		num: 0,
+		basePower: 75,
+		accuracy: 100,
+		category: "Special",
+		name: "Numbing Wind",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, wind: 1 },
+		secondary: {
+			chance: 100,
+			onHit(target, source, move) {
+				if (source.isActive) target.addVolatile('trapped', source, move, 'trapper');
+			},
+		},
+		target: "normal",
+		type: "Ice",
+		contestType: "Tough",
+		shortDesc: "Prevents the target from switching out.",
+	},
+	winterwarning: {
+		num: 0,
+		basePower: 120,
+		accuracy: 100,
+		category: "Special",
+		name: "Winter Warning",
+		pp: 10,
+		priority: 0,
+		flags: { allyanim: 1, metronome: 1, futuremove: 1 },
+		ignoreImmunity: true,
+		onTry(source, target) {
+			if (!target.side.addSlotCondition(target, 'futuremove')) return false;
+			Object.assign(target.side.slotConditions[target.position]['futuremove'], {
+				move: 'winterwarning',
+				source,
+				moveData: {
+					id: 'winterwarning',
+					name: "Winter Warning",
+					accuracy: 100,
+					basePower: 120,
+					category: "Special",
+					priority: 0,
+					flags: { allyanim: 1, metronome: 1, futuremove: 1 },
+					ignoreImmunity: false,
+					effectType: 'Move',
+					type: 'Ice',
+				},
+			});
+			this.add('-start', source, 'move: Winter Warning');
+			return this.NOT_FAIL;
+		},
+		target: "normal",
+		type: "Ice",
+		contestType: "Tough",
+		shortDesc: "Hits two turns after being used.",
+	},
 	fanaticism: {
 		basePower: 75,
 		accuracy: 100,
@@ -1759,6 +3527,141 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Light",
 		contestType: "Tough",
 		shortDesc: "Power doubles if the user's last move failed.",
+	},
+	blight: {
+		num: 0,
+		basePower: 85,
+		accuracy: 100,
+		category: "Special",
+		name: "Blight",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onTryHit(pokemon) {
+
+			pokemon.side.removeSideCondition('reflect');
+			pokemon.side.removeSideCondition('lightscreen');
+			pokemon.side.removeSideCondition('auroraveil');
+		},
+		target: "normal",
+		type: "Poison",
+		contestType: "Tough",
+		shortDesc: "Destroys screens, unless the target is immune.",
+	},
+	mindcrush: {
+		num: 0,
+		basePower: 60,
+		accuracy: 100,
+		category: "Physical",
+		name: "Mind Crush",
+		pp: 5,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		basePowerCallback(pokemon, target) {
+			let power = 60 + 20 * target.positiveBoosts();
+			if (power > 200) power = 200;
+			this.debug(`BP: ${power}`);
+			return power;
+		},
+		target: "normal",
+		type: "Psychic",
+		contestType: "Tough",
+		shortDesc: "60 power +20 for each of the target's stat boosts.",
+	},
+	mindmeld: {
+		num: 0,
+		basePower: 65,
+		accuracy: 100,
+		category: "Physical",
+		name: "Mind Meld",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onBasePower(basePower, source, target, move) {
+			const item = target.getItem();
+			if (!this.singleEvent('TakeItem', item, target.itemState, target, target, move, item)) return;
+			if (item.id) {
+				return this.chainModify(1.5);
+			}
+		},
+		onAfterHit(target, source) {
+			const item = target.takeItem();
+			if (item) {
+				this.add('-enditem', target, item.name, '[from] move: Mind Meld', `[of] ${source}`);
+			}
+		},
+		target: "normal",
+		type: "Psychic",
+		contestType: "Tough",
+		shortDesc: "1.5x damage if foe holds an item. Removes item.",
+	},
+	weardown: {
+		num: 0,
+		basePower: 0,
+		accuracy: 100,
+		category: "Status",
+		name: "Wear Down",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onTryImmunity(target) {
+			return this.dex.getImmunity('trapped', target);
+		},
+		volatileStatus: 'weardown',
+		condition: {
+			onStart(pokemon, source) {
+				this.add('-start', pokemon, 'move: Wear Down', `[of] ${source}`);
+			},
+			onResidualOrder: 14,
+			onResidual(pokemon) {
+				const source = this.effectState.source;
+				if (source && (!source.isActive || source.hp <= 0 || !source.activeTurns)) {
+					delete pokemon.volatiles['weardown'];
+					this.add('-end', pokemon, 'Wear Down', '[partiallytrapped]', '[silent]');
+					return;
+				}
+				this.boost({ def: -1, spd: -1 }, pokemon, source, this.dex.getActiveMove('octolock'));
+			},
+			onTrapPokemon(pokemon) {
+				if (this.effectState.source?.isActive) pokemon.tryTrap();
+			},
+		},
+		target: "normal",
+		type: "Rock",
+		contestType: "Tough",
+		shortDesc: "Traps target, lowers Def and SpD by 1 each turn.",
+	},
+	vanguard: {
+		num: 0,
+		basePower: 0,
+		accuracy: true,
+		category: "Status",
+		name: "Vanguard",
+		pp: 20,
+		priority: 0,
+		flags: { metronome: 1, snatch: 1 },
+		volatileStatus: 'vanguard',
+		condition: {
+			onStart(pokemon) {
+				this.add('-start', pokemon, 'move: Vanguard');
+			},
+			onResidualOrder: 7,
+			onResidual(pokemon) {
+				this.heal(pokemon.baseMaxhp / 16);
+			},
+			onTrapPokemon(pokemon) {
+				pokemon.tryTrap();
+			},
+
+			onDragOut(pokemon) {
+				this.add('-activate', pokemon, 'move: Vanguard');
+				return null;
+			},
+		},
+		target: "self",
+		type: "Steel",
+		contestType: "Tough",
+		shortDesc: "Traps/grounds user; heals 1/16 max HP per turn.",
 	},
 	refurbish: {
 		basePower: 0,
@@ -1789,6 +3692,113 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		contestType: "Tough",
 		shortDesc: "Raises user's lowest and highest stats by 1 stage.",
 	},
+	swarmattack: {
+		num: 0,
+		basePower: 90,
+		accuracy: 100,
+		category: "Physical",
+		name: "Swarm Attack",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onHit(target, source, move) {
+			return target.addVolatile('trapped', source, move, 'trapper');
+		},
+		target: "allAdjacentFoes",
+		type: "Bug",
+		contestType: "Tough",
+		shortDesc: "Prevents the target from switching out.",
+	},
+	heavensknuckle: {
+		num: 0,
+		accuracy: 100,
+		basePower: 50,
+		category: "Physical",
+		name: "Heaven's Knuckle",
+		pp: 25,
+		priority: 0,
+		flags: { contact: 1, protect: 1, mirror: 1, metronome: 1 },
+		onAfterMoveSecondarySelf(pokemon, target, move) {
+			if (!target || target.fainted || target.hp <= 0) this.boost({ atk: 3 }, pokemon, pokemon, move);
+		},
+		target: "normal",
+		type: "Light",
+		contestType: "Cool",
+		shortDesc: "Raises user's Attack by 2 if this KOes the target.",
+	},
+	deadsilence: {
+		num: 0,
+		accuracy: 100,
+		basePower: 80,
+		category: "Physical",
+		name: "Dead Silence",
+		pp: 15,
+		priority: 0,
+		flags: {
+			protect: 1, mirror: 1, contact: 1,
+		},
+		condition: {
+			duration: 2,
+			onStart(target) {
+				this.add('-start', target, 'Dead Silence', '[silent]');
+			},
+			onDisableMove(pokemon) {
+				for (const moveSlot of pokemon.moveSlots) {
+					if (this.dex.moves.get(moveSlot.id).flags['sound']) {
+						pokemon.disableMove(moveSlot.id);
+					}
+				}
+			},
+			onBeforeMovePriority: 6,
+			onBeforeMove(pokemon, target, move) {
+				if (!move.isZOrMaxPowered && move.flags['sound']) {
+					this.add('cant', pokemon, 'move: Dead Silence');
+					return false;
+				}
+			},
+			onModifyMove(move, pokemon, target) {
+				if (!move.isZOrMaxPowered && move.flags['sound']) {
+					this.add('cant', pokemon, 'move: Dead Silence');
+					return false;
+				}
+			},
+			onResidualOrder: 22,
+			onEnd(target) {
+				this.add('-end', target, 'Dead Silence', '[silent]');
+			},
+		},
+		secondary: {
+			chance: 100,
+			onHit(target) {
+				target.addVolatile('deadsilence');
+			},
+		},
+		target: "normal",
+		type: "Sound",
+		contestType: "Tough",
+		desc: "For 2 turns, the target cannot use sound-based moves.",
+		shortDesc: "For 2 turns, the target cannot use sound moves.",
+	},
+	hellbrand: {
+		num: 0,
+		basePower: 85,
+		accuracy: 100,
+		category: "Physical",
+		name: "Hellbrand",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, contact: 1, protect: 1, mirror: 1 },
+		onTryHit(pokemon) {
+
+			pokemon.side.removeSideCondition('reflect');
+			pokemon.side.removeSideCondition('lightscreen');
+			pokemon.side.removeSideCondition('auroraveil');
+		},
+		target: "normal",
+		type: "Fire",
+		contestType: "Tough",
+		shortDesc: "Destroys screens, unless the target is immune.",
+	},
 	nebulastrike: {
 		basePower: 75,
 		accuracy: 100,
@@ -1808,6 +3818,60 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Cosmic",
 		contestType: "Tough",
 		shortDesc: "Power doubles if the user's last move failed.",
+	},
+	neutralize: {
+		num: 0,
+		basePower: 40,
+		accuracy: 100,
+		category: "Special",
+		name: "Neutralize",
+		pp: 15,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			target.clearBoosts();
+			this.add('-clearboost', target);
+		},
+		target: "normal",
+		type: "Normal",
+		contestType: "Tough",
+		shortDesc: "Resets all of the target's stat stages to 0.",
+	},
+	wyrmbeam: {
+		num: 0,
+		basePower: 80,
+		accuracy: 100,
+		category: "Special",
+		name: "Wyrm Beam",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1 },
+		onHit(target) {
+			target.clearBoosts();
+			this.add('-clearboost', target);
+		},
+		target: "allAdjacentFoes",
+		type: "Dragon",
+		contestType: "Tough",
+		shortDesc: "Resets all of the target(s)'s stat stages to 0. Hits adjacent foes.",
+	},
+	beatdrop: {
+		num: 0,
+		basePower: 110,
+		accuracy: 90,
+		category: "Physical",
+		name: "Beat Drop",
+		pp: 10,
+		priority: 0,
+		flags: { metronome: 1, protect: 1, mirror: 1, gravity: 1 },
+		hasCrashDamage: true,
+		onMoveFail(target, source, move) {
+			this.damage(source.baseMaxhp / 2, source, source, this.dex.conditions.get('Beat Drop'));
+		},
+		target: "normal",
+		type: "Sound",
+		contestType: "Tough",
+		shortDesc: "User is hurt by 50% of its max HP if it misses.",
 	},
 	bitterbastion: {
 		num: 908,
@@ -1950,5 +4014,24 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Rock",
 		contestType: "Tough",
 		shortDesc: "Raises user's Sp. Atk by 1 on turn 1. Hits turn 2.",
+	},
+	corrode: {
+		num: 0,
+		accuracy: 100,
+		basePower: 70,
+		category: "Special",
+		name: "Corrode",
+		pp: 15,
+		priority: 0,
+		flags: { protect: 1, mirror: 1, metronome: 1 },
+		ignoreImmunity: { 'Poison': true },
+		onEffectiveness(typeMod, target, type) {
+			if (type === 'Steel') return 1;
+		},
+		target: "normal",
+		type: "Poison",
+		contestType: "Beautiful",
+		desc: "This move's type effectiveness against Steel is changed to be super effective no matter what this move's type is.",
+		shortDesc: "Super effective on Steel.",
 	},
 };
