@@ -41,11 +41,11 @@ CREATE TABLE IF NOT EXISTS dex_species (
 	origin JSONB,
 	trackdex TEXT,
 	trackid TEXT,
-	locked BOOLEAN NOT NULL,
 	updated BIGINT NOT NULL,
 	PRIMARY KEY (dexid, speciesid)
 );
 
+ALTER TABLE dex_species DROP COLUMN IF EXISTS locked;
 CREATE INDEX IF NOT EXISTS dex_species_track ON dex_species (trackdex, trackid);
 
 CREATE TABLE IF NOT EXISTS dex_formats (
@@ -86,11 +86,11 @@ CREATE TABLE IF NOT EXISTS dex_effects (
 	origin JSONB,
 	trackdex TEXT,
 	trackid TEXT,
-	locked BOOLEAN NOT NULL,
 	updated BIGINT NOT NULL,
 	PRIMARY KEY (dexid, effecttable, effectid)
 );
 
+ALTER TABLE dex_effects DROP COLUMN IF EXISTS locked;
 CREATE INDEX IF NOT EXISTS dex_effects_track ON dex_effects (trackdex, effecttable, trackid);
 
 CREATE TABLE IF NOT EXISTS dex_sprite_uploads (

@@ -249,7 +249,6 @@ describe('Dexes', () => {
 		let loaded = await Dexes.setEditor(Dexes.getDex('mochadex'), 'Dex Editor', true);
 		assert.deepEqual([...loaded.editors], [[EDITOR, 'Dex Editor']]);
 		assert(await Dexes.editable(editor, 'mochadex'));
-		assert.deepEqual((await Dexes.dexesOf('Dex Editor', null)).map(dex => dex.row.dexid), [id('Mocha Dex')]);
 		loaded = await Dexes.setEditor(loaded, 'Dex Editor', false);
 		await assert.rejects(Dexes.editable(editor, 'mochadex'), /can't edit/);
 		await assert.rejects(Dexes.setEditor(loaded, 'Dex Editor', false), /isn't an editor/);
@@ -338,15 +337,6 @@ describe('Dexes', () => {
 		await Dexes.deleteDex(loaded);
 	});
 
-	it('should make unreleased Pokemon legal', async () => {
-		await fixture();
-		assert.equal(Dex.species.get('Raichu-Mega-X').isNonstandard, 'Future');
-		const { loaded } = await Dexes.putEntry(Dexes.getDex('mochadex'), { name: 'Raichu-Mega-X', isNonstandard: null });
-		assert.equal(loaded.entries.get('raichumegax').data.isNonstandard, null);
-		assert.equal(loaded.dex.species.get('Raichu-Mega-X').isNonstandard, null);
-		await Dexes.deleteEntry(loaded, 'Raichu-Mega-X');
-	});
-
 	it('should make and edit moves, abilities and items, including values in their code', async () => {
 		await fixture();
 		let loaded = Dexes.getDex('mochadex');
@@ -415,9 +405,6 @@ describe('Dexes', () => {
 		loaded = await Dexes.setVisibility(loaded, 'private');
 		assert.deepEqual(Dexes.search('mocha', null), []);
 		assert.deepEqual(Dexes.search('mocha', EDITOR).map(dex => dex.row.dexid), [id('Mocha Dex')]);
-		LoginServer.request = async () => [{ discordid: OWNER }];
-		assert.deepEqual(await Dexes.dexesOf('Dex Owner', null), []);
-		assert.equal((await Dexes.dexesOf('Dex Owner', OWNER)).length, 1);
 		assert.equal(Dexes.getDex('Mocha Dex').row.visibility, 'private');
 		await assert.rejects(Dexes.setVisibility(loaded, 'locked'), /public or private/);
 		await Dexes.setVisibility(loaded, 'public');
@@ -474,29 +461,6 @@ describe('Dexes', () => {
 		const loaded = await Dexes.setSprite(owner, Dexes.getDex('mochadex'), 'Voltlet', 'front', png(96, 96));
 		assert(Dexes.getDex('wholecopy').entries.get('voltlet').sprites.front);
 		assert(loaded.entries.get('voltlet').sprites.front !== uploadid);
-	});
-
-	it('should only let creators lock entries, and stop other users forking them', async () => {
-		await fixture({ sprites: true, effects: true, copies: true });
-		let source = await Dexes.setLocked(Dexes.getDex('mochadex'), 'Moves', 'Scorch Soak', true);
-		assert(source.effects.Moves.get('scorchsoak').locked);
-		assert.equal(Dexes.getDex('copydex').effects.Moves.get('scorchsoak').trackdex, null);
-		assert.equal(Dexes.getDex('wholecopy').effects.Moves.get('scorchsoak').trackdex, null);
-		await assert.rejects(Dexes.forkEntry(Dexes.getDex('copydex'), source, 'Pokedex', 'Voltlet', true), /is locked/);
-		await assert.rejects(Dexes.setLocked(Dexes.getDex('copydex'), 'Pokedex', 'Voltlet', true), /can't be locked/);
-		await assert.rejects(Dexes.setLocked(Dexes.getDex('wholecopy'), 'Moves', 'Volt Jab', true), /can't be locked/);
-
-		const lockedOut = await Dexes.createDex(editor, 'Locked Out', 'gen9');
-		await assert.rejects(Dexes.forkEntry(lockedOut, source, 'Pokedex', 'Voltlet'), /is locked/);
-		assert(!Dexes.getDex('Locked Out').entries.has('voltlet'));
-		await Dexes.deleteDex(Dexes.getDex('Locked Out'));
-
-		const own = await Dexes.createDex(owner, 'Own Fork', 'gen9');
-		const forked = (await Dexes.forkEntry(own, source, 'Moves', 'Scorch Soak')).loaded;
-		assert(forked.effects.Moves.get('scorchsoak').locked);
-		await Dexes.deleteDex(forked);
-		source = await Dexes.setLocked(source, 'Moves', 'Scorch Soak', false);
-		assert(!source.effects.Moves.get('scorchsoak').locked);
 	});
 
 	it('should list a dex\'s custom and modified entries, count them, and answer every request about it', async () => {
@@ -730,11 +694,6 @@ describe('Dexes', () => {
 		assert(get('parentdex').data.species.includes('bulbasaur'));
 		await Dexes.putEntry(get('parentdex'), { name: 'Sproutle', heightm: 1 });
 		assert(!get('childdex').data.species.includes('bulbasaur'));
-
-		await Dexes.setLocked(get('parentdex'), 'Pokedex', 'Pikachu', true);
-		await Dexes.setLocked(get('parentdex'), 'Pokedex', 'Sproutle', true);
-		await assert.rejects(Dexes.putEntry(get('childdex'), { name: 'Pikachu', types: ['Water'] }), /locked in Parent Dex/);
-		await assert.rejects(Dexes.putEntry(get('childdex'), { name: 'Sproutlet', inheritsFrom: 'Sproutle' }), /locked in Parent Dex/);
 
 		assert.deepEqual(Object.keys(Dexes.battleData(formatOf('Child Dex', 'OU'))).sort(), ['format', 'hash']);
 		const hashes = [get('childdex').data.hash, get('parentdex').data.hash];

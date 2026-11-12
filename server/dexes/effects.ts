@@ -26,7 +26,6 @@ export interface EffectEntry {
 	origin: Origin | null;
 	trackdex: ID | null;
 	trackid: ID | null;
-	locked: boolean;
 }
 
 export const EFFECT_NAMES: { [table in EffectTable]: string } = {
@@ -362,7 +361,6 @@ function checkEffect(
 		data: { ...combine(start, checkFields(fields, base, FIELDS[table], '', data)), name: official ? official.name : name },
 		slots: keep ? JSON.parse(JSON.stringify(old!.slots)) : {}, events: keep ? { ...old!.events } : {},
 		sprites: old?.sprites || {}, origin: old?.origin || null, trackdex: null, trackid: null,
-		locked: old?.locked || false,
 	};
 	if (input.spriteFrom !== undefined) {
 		const item = table === 'Items' ? dex.items.get(`${input.spriteFrom}`) : null;

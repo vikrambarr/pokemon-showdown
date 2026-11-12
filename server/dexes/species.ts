@@ -6,8 +6,6 @@ export interface Origin {
 	dex: string;
 	owner: string;
 	name: string;
-	creator?: string;
-	from?: Origin;
 }
 
 export interface SpeciesEntry {
@@ -20,7 +18,6 @@ export interface SpeciesEntry {
 	origin: Origin | null;
 	trackdex: ID | null;
 	trackid: ID | null;
-	locked: boolean;
 }
 
 const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
@@ -30,14 +27,16 @@ const EGG_GROUPS = [
 	'Mineral', 'Monster', 'Undiscovered', 'Water 1', 'Water 2', 'Water 3',
 ];
 const EVO_TYPES = ['trade', 'useItem', 'levelMove', 'levelExtra', 'levelFriendship', 'levelHold', 'other'];
-export const TIERS = [
+const TIERS = [
 	'AG', 'Uber', '(Uber)', 'OU', '(OU)', 'UUBL', 'UU', 'RUBL', 'RU', 'NUBL', 'NU', '(NU)', 'PUBL', 'PU', '(PU)',
 	'ZUBL', 'ZU', 'NFE', 'LC', 'Illegal', 'Unreleased',
 ];
-const NONSTANDARD = ['Past', 'Future', 'Unobtainable', 'CAP', 'LGPE', 'Custom', 'Gigantamax'];
-export const DOUBLES_TIERS = ['DUber', '(DUber)', 'DOU', '(DOU)', 'DBL', 'DUU', '(DUU)', 'NFE', 'LC', 'Illegal', 'Unreleased'];
+export const TIER_FIELDS = new Map([
+	['tier', TIERS],
+	['doublesTier', ['DUber', '(DUber)', 'DOU', '(DOU)', 'DBL', 'DUU', '(DUU)', 'NFE', 'LC', 'Illegal', 'Unreleased']],
+	['natDexTier', TIERS],
+]);
 const MOVE_SOURCE_REGEX = /^[1-9][MTLREDSVC][a-zA-Z0-9]*$/;
-const FORMATS_FIELDS = ['tier', 'doublesTier', 'natDexTier'];
 const LEARNSET_FIELDS = ['eventOnly', 'eventData'];
 const REQUIRED_FIELDS = ['types', 'abilities', 'baseStats', 'eggGroups', 'weightkg'];
 const NOT_INHERITED = [
@@ -69,25 +68,13 @@ function number(value: unknown, field: string, min: number, max: number, integer
 	return integer ? value : Math.round(value * 1000) / 1000;
 }
 
-let unlimited = false;
-
-function text(value: unknown, field: string, maxLength: number) {
+function text(value: unknown, field: string) {
 	if (typeof value !== 'string' || !value.trim()) throw new Chat.ErrorMessage(`"${field}" must be some text.`);
-	if (!unlimited && value.trim().length > maxLength) {
-		throw new Chat.ErrorMessage(`"${field}" can be at most ${maxLength} characters.`);
-	}
 	return value.trim();
 }
 
-function bool(value: unknown, field: string) {
-	if (typeof value !== 'boolean') throw new Chat.ErrorMessage(`"${field}" must be true or false.`);
-	return value;
-}
-
-function list<T>(value: unknown, field: string, maxLength: number, each: (entry: unknown) => T) {
-	if (!Array.isArray(value) || !value.length || (!unlimited && value.length > maxLength)) {
-		throw new Chat.ErrorMessage(`"${field}" must be a list of 1 to ${maxLength} entries.`);
-	}
+function list<T>(value: unknown, field: string, each: (entry: unknown) => T) {
+	if (!Array.isArray(value) || !value.length) throw new Chat.ErrorMessage(`"${field}" must be a list.`);
 	return value.map(each);
 }
 
@@ -100,36 +87,10 @@ function relative(value: unknown, field: string, dex: ModdedDex, names: Map<ID, 
 
 type Field = (value: unknown, dex: ModdedDex, names: Map<ID, string>) => any;
 
-const EVENT_FIELDS = new Map<string, (value: unknown, dex: ModdedDex) => any>([
-	['generation', value => number(value, 'eventData.generation', 1, 9, true)],
-	['level', value => number(value, 'eventData.level', 1, 100, true)],
-	['shiny', value => (value === 1 ? value : bool(value, 'eventData.shiny'))],
-	['gender', value => fromList(value, ['M', 'F'], 'eventData.gender')],
-	['nature', (value, dex) => fromDex(dex.natures, value, 'nature')],
-	['ivs', value => {
-		if (!value || typeof value !== 'object' || Object.keys(value).some(stat => !STATS.includes(stat))) {
-			throw new Chat.ErrorMessage(`"eventData.ivs" must be an object with some of ${STATS.join(', ')}.`);
-		}
-		const ivs: AnyObject = {};
-		for (const stat in value) ivs[stat] = number((value as AnyObject)[stat], `eventData.ivs.${stat}`, 0, 31, true);
-		return ivs;
-	}],
-	['perfectIVs', value => number(value, 'eventData.perfectIVs', 0, 6, true)],
-	['isHidden', value => bool(value, 'eventData.isHidden')],
-	['abilities', (value, dex) => list(value, 'eventData.abilities', 4, ability => (
-		toID(fromDex(dex.abilities, ability, 'ability'))
-	))],
-	['maxEggMoves', value => number(value, 'eventData.maxEggMoves', 0, 4, true)],
-	['moves', (value, dex) => list(value, 'eventData.moves', 24, move => toID(fromDex(dex.moves, move, 'move')))],
-	['pokeball', (value, dex) => toID(fromDex(dex.items, value, 'item'))],
-	['from', value => text(value, 'eventData.from', 100)],
-	['japan', value => bool(value, 'eventData.japan')],
-	['emeraldEventEgg', value => bool(value, 'eventData.emeraldEventEgg')],
-	['source', value => text(value, 'eventData.source', 100)],
-]);
 const FIELDS = new Map<string, Field>([
 	['types', (value, dex) => {
-		const types = list(value, 'types', 3, type => (type === '???' ? type : fromDex(dex.types, type, 'type')));
+		const types = list(value, 'types', type => (type === '???' ? type : fromDex(dex.types, type, 'type')));
+		if (types.length > 4) throw new Chat.ErrorMessage(`A Pokemon can have at most 4 types.`);
 		if (new Set(types).size < types.length) throw new Chat.ErrorMessage(`A Pokemon can't have the same type twice.`);
 		return types;
 	}],
@@ -153,16 +114,13 @@ const FIELDS = new Map<string, Field>([
 		if (!abilities['0']) throw new Chat.ErrorMessage(`An ability in slot "0" is required.`);
 		return abilities;
 	}],
-	['eggGroups', value => (Array.isArray(value) && !value.length ? [] : list(value, 'eggGroups', 8, group => (
-		EGG_GROUPS.find(entry => toID(entry) === toID(group)) || text(group, 'eggGroups', 20)
+	['eggGroups', value => (Array.isArray(value) && !value.length ? [] : list(value, 'eggGroups', group => (
+		EGG_GROUPS.find(entry => toID(entry) === toID(group)) || text(group, 'eggGroups')
 	)))],
 	['weightkg', value => number(value, 'weightkg', 0, 10000)],
 	['heightm', value => number(value, 'heightm', 0.01, 200)],
 	['color', value => fromList(value, COLORS, 'color')],
-	['gender', value => {
-		if (!['M', 'F', 'N'].includes(value as string)) throw new Chat.ErrorMessage(`"gender" must be "M", "F" or "N".`);
-		return value;
-	}],
+	['gender', value => fromList(value, ['M', 'F', 'N'], 'gender')],
 	['genderRatio', value => {
 		const { M, F } = (value || {}) as AnyObject;
 		if (typeof M !== 'number' || typeof F !== 'number' || M < 0 || F < 0 || Math.abs(M + F - 1) > 0.001) {
@@ -171,46 +129,26 @@ const FIELDS = new Map<string, Field>([
 		return { M, F };
 	}],
 	['prevo', (value, dex, names) => relative(value, 'prevo', dex, names)],
-	['evos', (value, dex, names) => list(value, 'evos', 32, evo => relative(evo, 'evos', dex, names))],
+	['evos', (value, dex, names) => list(value, 'evos', evo => relative(evo, 'evos', dex, names))],
 	['evoType', value => fromList(value, EVO_TYPES, 'evoType')],
 	['evoLevel', value => number(value, 'evoLevel', 1, 100, true)],
 	['evoItem', (value, dex) => fromDex(dex.items, value, 'item')],
 	['evoMove', (value, dex) => fromDex(dex.moves, value, 'move')],
-	['evoCondition', value => text(value, 'evoCondition', 128)],
+	['evoCondition', value => text(value, 'evoCondition')],
 	['baseSpecies', (value, dex, names) => relative(value, 'baseSpecies', dex, names)],
-	['forme', value => text(value, 'forme', 30)],
-	['baseForme', value => text(value, 'baseForme', 30)],
-	['cosmeticFormes', value => list(value, 'cosmeticFormes', 32, forme => validateName(forme, 'forme'))],
+	['forme', value => text(value, 'forme')],
+	['cosmeticFormes', value => list(value, 'cosmeticFormes', forme => validateName(forme, 'forme'))],
 	['requiredItem', (value, dex) => fromDex(dex.items, value, 'item')],
 	['requiredAbility', (value, dex) => fromDex(dex.abilities, value, 'ability')],
 	['requiredMove', (value, dex) => fromDex(dex.moves, value, 'move')],
 	['battleOnly', (value, dex, names) => (Array.isArray(value) ?
-		list(value, 'battleOnly', 8, entry => relative(entry, 'battleOnly', dex, names)) :
+		list(value, 'battleOnly', entry => relative(entry, 'battleOnly', dex, names)) :
 		relative(value, 'battleOnly', dex, names))],
 	['changesFrom', (value, dex, names) => relative(value, 'changesFrom', dex, names)],
 	['sameNumberAs', (value, dex, names) => relative(value, 'sameNumberAs', dex, names)],
-	['tier', value => fromList(value, TIERS, 'tier')],
-	['natDexTier', value => fromList(value, TIERS, 'tier')],
-	['doublesTier', value => fromList(value, DOUBLES_TIERS, 'doubles tier')],
-	['tags', value => list(value, 'tags', 8, tag => text(tag, 'tag', 40))],
+	...[...TIER_FIELDS].map(([field, tiers]): [string, Field] => [field, value => fromList(value, tiers, field)]),
+	['tags', value => list(value, 'tags', tag => text(tag, 'tag'))],
 	['maxHP', value => number(value, 'maxHP', 1, 999, true)],
-	['isNonstandard', value => fromList(value, NONSTANDARD, 'isNonstandard')],
-	['eventOnly', value => bool(value, 'eventOnly')],
-	['eventData', (value, dex) => list(value, 'eventData', 64, event => {
-		if (!event || typeof event !== 'object' || Array.isArray(event)) {
-			throw new Chat.ErrorMessage(`Each event must be an object like {"generation": 9, "level": 50, "moves": ["tackle"]}.`);
-		}
-		const result: AnyObject = {};
-		for (const [key, entry] of Object.entries(event)) {
-			const check = EVENT_FIELDS.get(key);
-			if (!check) {
-				throw new Chat.ErrorMessage(`"${key}" isn't an event field. Events can have: ${[...EVENT_FIELDS.keys()].join(', ')}.`);
-			}
-			result[key] = check(entry, dex);
-		}
-		if (!result.generation) throw new Chat.ErrorMessage(`Each event needs a "generation".`);
-		return result;
-	})],
 ]);
 
 export function validateName(input: unknown, what: string) {
@@ -252,18 +190,7 @@ function learnset(input: unknown, dex: ModdedDex, old: AnyObject) {
 	return result;
 }
 
-export function validateEntry(
-	input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built = dex, official = false
-) {
-	unlimited = official;
-	try {
-		return checkEntry(input, dex, entries, built);
-	} finally {
-		unlimited = false;
-	}
-}
-
-function checkEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built: ModdedDex) {
+export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built = dex) {
 	const name = validateName(input.name, 'Pokemon');
 	const speciesid = toID(name);
 	const official: AnyObject | undefined = dex.data.Pokedex[speciesid];
@@ -313,7 +240,7 @@ function checkEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEn
 	const entry: SpeciesEntry = {
 		speciesid, num: old?.num || 0, inheritsfrom, data,
 		learnset: learnset(input.learnset, built, old?.learnset || {}), sprites: old?.sprites || {},
-		origin: old?.origin || null, trackdex: null, trackid: null, locked: old?.locked || false,
+		origin: old?.origin || null, trackdex: null, trackid: null,
 	};
 	const species = resolveSpecies(dex, entry);
 	for (const field of REQUIRED_FIELDS) {
@@ -326,7 +253,7 @@ function checkEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEn
 
 export function resolveSpecies(dex: ModdedDex, entry: SpeciesEntry): AnyObject {
 	const data = { ...entry.data };
-	for (const field of [...FORMATS_FIELDS, ...LEARNSET_FIELDS, 'sameNumberAs']) delete data[field];
+	for (const field of [...TIER_FIELDS.keys(), ...LEARNSET_FIELDS, 'sameNumberAs']) delete data[field];
 	const official = dex.data.Pokedex[entry.speciesid];
 	if (official) return { ...official, ...data };
 	const base: AnyObject = entry.inheritsfrom ? { ...dex.data.Pokedex[entry.inheritsfrom] } : {};
@@ -357,7 +284,7 @@ export function resolveEntries(dex: ModdedDex, entries: Iterable<SpeciesEntry>) 
 			}
 		}
 		const tiers: AnyObject = dex.data.Pokedex[id] ? { ...dex.data.FormatsData[id] } : { tier: 'OU' };
-		for (const field of FORMATS_FIELDS) {
+		for (const field of TIER_FIELDS.keys()) {
 			if (entry.data[field]) tiers[field] = entry.data[field];
 		}
 		if (entry.data.isNonstandard !== undefined) tiers.isNonstandard = entry.data.isNonstandard;

@@ -16,7 +16,6 @@ export interface TypeEntry {
 	origin: Origin | null;
 	trackdex: ID | null;
 	trackid: ID | null;
-	locked: boolean;
 }
 
 const CODES: { [multiplier: string]: number } = { 1: 0, 2: 1, 0.5: 2, 0: 3 };
@@ -96,7 +95,7 @@ export function validateType(input: AnyObject, dex: ModdedDex, entries: Map<ID, 
 	}
 	return {
 		effecttable: 'TypeChart', effectid: id, num: 0, inheritsfrom: null, data, slots: {}, events: {},
-		sprites: { ...old?.sprites }, origin: old?.origin || null, trackdex: null, trackid: null, locked: old?.locked || false,
+		sprites: { ...old?.sprites }, origin: old?.origin || null, trackdex: null, trackid: null,
 	} as TypeEntry;
 }
 

@@ -12,7 +12,7 @@ import { TeamValidator } from '../../sim/team-validator';
 import type { PokemonSet } from '../../sim/teams';
 import { Tags } from '../../data/tags';
 import * as sprites from './sprites';
-import { DOUBLES_TIERS, resolveEntries, TIERS, validateEntry, validateName, type Origin, type SpeciesEntry } from './species';
+import { resolveEntries, TIER_FIELDS, validateEntry, validateName, type Origin, type SpeciesEntry } from './species';
 import {
 	describeEffect, describeText, EDITABLE, EFFECT_NAMES, lookupTables, resolveEdits, validateEffect, type EffectEntry,
 } from './effects';
@@ -59,7 +59,6 @@ export const MAX_BATCH = 512;
 export const MAX_FORMATS = 16;
 export const MAX_SPRITE_STORAGE = 10 * 1024 * 1024;
 export const MAX_DATA_STORAGE = 1024 * 1024;
-export const MAX_ORIGINS = 5;
 export const MAX_DEPTH = 8;
 export const MAX_PARENTS = 8;
 export const MAX_EDITORS = 8;
@@ -191,19 +190,6 @@ function heightOf(loaded: LoadedDex): number {
 	return Math.max(0, ...childrenOf(loaded).map(child => heightOf(child) + 1));
 }
 
-function lockedAbove(loaded: LoadedDex, table: Table, id: ID) {
-	const checked = new Set<LoadedDex>();
-	for (let level = parentsOf(loaded); level.length; level = level.flatMap(parentsOf)) {
-		for (const parent of level) {
-			if (checked.has(parent)) continue;
-			checked.add(parent);
-			const entry = entriesOf(parent, table).get(id);
-			if (entry?.locked && parent.row.ownerid !== loaded.row.ownerid) return parent;
-		}
-	}
-	return null;
-}
-
 const dataSizes = new WeakMap<DexLayer, number>();
 
 export const megabytes = (bytes: number) => (
@@ -232,15 +218,6 @@ export function spritesUsed(account: string, adding?: { sha: string, bytes: numb
 	}
 	if (adding) sizes.set(adding.sha, adding.bytes);
 	return [...sizes.values()].reduce((total, bytes) => total + bytes, 0);
-}
-
-function checkUnlocked(loaded: LoadedDex, table: Table, ids: (ID | null)[]) {
-	for (const id of ids) {
-		const locker = id && lockedAbove(loaded, table, id);
-		if (locker) {
-			throw new Chat.ErrorMessage(`The ${tableName(table)} "${id}" is locked in ${locker.row.name}, so it can't be edited or copied here.`);
-		}
-	}
 }
 
 export function load() {
@@ -703,9 +680,7 @@ export function clientData(loaded: LoadedDex) {
 	}
 	const origins: { [speciesid: string]: string } = {};
 	for (const entry of loaded.entries.values()) {
-		let origin = entry.origin;
-		while (origin?.from) origin = origin.from;
-		if (origin) origins[entry.speciesid] = origin.dex;
+		if (entry.origin) origins[entry.speciesid] = entry.origin.dex;
 		for (const [key, uploadid] of Object.entries(usedSprites(loaded, entry.sprites))) {
 			const [speciesid, kind] = key.includes(':') ? key.split(':') : [entry.speciesid, key];
 			(speciesSprites[speciesid] ||= {})[kind] = uploadid;
@@ -803,13 +778,6 @@ export function listed(loaded: LoadedDex, account: string | null) {
 export function search(text: string, account: string | null) {
 	const query = toID(text);
 	return [...currentDexes().values()].filter(loaded => listed(loaded, account) && toID(loaded.row.name).includes(query));
-}
-
-export async function dexesOf(name: string, account: string | null) {
-	const [result] = await LoginServer.request('discord/names', { userid: toID(name) });
-	const owner = result?.discordid ? `${result.discordid}` : null;
-	return [...currentDexes().values()].filter(loaded => listed(loaded, account) && (owner ?
-		loaded.row.ownerid === owner || loaded.editors.has(owner) : toID(loaded.row.ownername) === toID(name)));
 }
 
 async function setVisibilityImpl(loaded: LoadedDex, visibility: string) {
@@ -947,7 +915,7 @@ async function setOfficialImpl(loaded: LoadedDex, official: boolean) {
 
 async function deleteDexImpl(loaded: LoadedDex) {
 	const dexid = loaded.row.dexid;
-	const children = [...currentDexes().values()].filter(other => other.row.parents.includes(dexid));
+	const children = childrenOf(loaded);
 	if (children.length) {
 		throw new Chat.ErrorMessage(`${Chat.count(children, 'dexes are', 'dex is')} set in ${loaded.row.name}, so it can't be deleted.`);
 	}
@@ -958,8 +926,7 @@ async function deleteDexImpl(loaded: LoadedDex) {
 
 async function clearDexImpl(loaded: LoadedDex) {
 	const dexid = loaded.row.dexid;
-	const species = parentsOf(loaded).length ? [] : Dex.mod(loaded.row.mod).includeData().species.all()
-		.filter(entry => entry.exists && !entry.isNonstandard).map(entry => entry.id);
+	const species = parentsOf(loaded).length ? [] : standardSpecies(Dex.mod(loaded.row.mod));
 	await database().query(SQL`DELETE FROM dex_species WHERE dexid = ${dexid}`);
 	await database().query(SQL`DELETE FROM dex_effects WHERE dexid = ${dexid}`);
 	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = '[]', effectlists = '{}' WHERE dexid = ${dexid}`);
@@ -982,29 +949,28 @@ async function writeEntry(dexid: ID, table: Table, entry: Entry) {
 	const now = Date.now();
 	if (table === 'Pokedex') {
 		const {
-			speciesid, num, inheritsfrom, data, learnset, sprites: images, origin, trackdex, trackid, locked,
+			speciesid, num, inheritsfrom, data, learnset, sprites: images, origin, trackdex, trackid,
 		} = entry as SpeciesEntry;
 		await database().query(SQL`INSERT INTO dex_species
-			(dexid, speciesid, num, inheritsfrom, data, learnset, sprites, origin, trackdex, trackid, locked, updated) VALUES (
+			(dexid, speciesid, num, inheritsfrom, data, learnset, sprites, origin, trackdex, trackid, updated) VALUES (
 			${dexid}, ${speciesid}, ${num}, ${inheritsfrom}, ${json(data)}, ${json(learnset)}, ${json(images)},
-			${json(origin)}, ${trackdex}, ${trackid}, ${json(locked)}, ${now}
+			${json(origin)}, ${trackdex}, ${trackid}, ${now}
 		) ON CONFLICT (dexid, speciesid) DO UPDATE SET num = EXCLUDED.num, inheritsfrom = EXCLUDED.inheritsfrom,
 			data = EXCLUDED.data, learnset = EXCLUDED.learnset, sprites = EXCLUDED.sprites, origin = EXCLUDED.origin,
-			trackdex = EXCLUDED.trackdex, trackid = EXCLUDED.trackid, locked = EXCLUDED.locked, updated = EXCLUDED.updated`);
+			trackdex = EXCLUDED.trackdex, trackid = EXCLUDED.trackid, updated = EXCLUDED.updated`);
 		return;
 	}
 	const {
-		effectid, num, inheritsfrom, data, slots, events, sprites: images, origin, trackdex, trackid, locked,
+		effectid, num, inheritsfrom, data, slots, events, sprites: images, origin, trackdex, trackid,
 	} = entry as EffectEntry;
 	await database().query(SQL`INSERT INTO dex_effects
-		(dexid, effecttable, effectid, num, inheritsfrom, data, slots, events, sprites, origin, trackdex, trackid, locked,
+		(dexid, effecttable, effectid, num, inheritsfrom, data, slots, events, sprites, origin, trackdex, trackid,
 		updated) VALUES (
 		${dexid}, ${table}, ${effectid}, ${num}, ${inheritsfrom}, ${json(data)}, ${json(slots)}, ${json(events)},
-		${json(images)}, ${json(origin)}, ${trackdex}, ${trackid}, ${json(locked)}, ${now}
+		${json(images)}, ${json(origin)}, ${trackdex}, ${trackid}, ${now}
 	) ON CONFLICT (dexid, effecttable, effectid) DO UPDATE SET num = EXCLUDED.num, inheritsfrom = EXCLUDED.inheritsfrom,
 		data = EXCLUDED.data, slots = EXCLUDED.slots, events = EXCLUDED.events, sprites = EXCLUDED.sprites,
-		origin = EXCLUDED.origin, trackdex = EXCLUDED.trackdex, trackid = EXCLUDED.trackid, locked = EXCLUDED.locked,
-		updated = EXCLUDED.updated`);
+		origin = EXCLUDED.origin, trackdex = EXCLUDED.trackdex, trackid = EXCLUDED.trackid, updated = EXCLUDED.updated`);
 }
 
 async function saved(loaded: LoadedDex, table: Table, id: ID) {
@@ -1058,8 +1024,7 @@ async function putEntriesImpl(loaded: LoadedDex, inputs: unknown[]) {
 	const changed = new Map<ID, SpeciesEntry>();
 	for (const input of inputs) {
 		if (!isObject(input)) throw new Chat.ErrorMessage(`Each Pokemon needs to be a JSON object, like {"name": "Pikachu"}.`);
-		const entry = validateEntry(input, base, entries, loaded.dex, loaded.row.official);
-		checkUnlocked(loaded, 'Pokedex', [entry.speciesid, entry.inheritsfrom]);
+		const entry = validateEntry(input, base, entries, loaded.dex);
 		if (!entry.num && !base.data.Pokedex[entry.speciesid]) {
 			entry.num = newNum('Pokedex', entries.values());
 		}
@@ -1123,13 +1088,17 @@ async function deletePokemonImpl(loaded: LoadedDex, names: string[]) {
 	return currentDexes().get(updated.row.dexid) || updated;
 }
 
-export function sourceSpecies(loaded: LoadedDex, from: string) {
+function sourceOf(from: string) {
 	const gen = /^gen([1-9])$/.exec(toID(from));
-	if (!toID(from)) return worldSpecies(loaded);
-	if (gen) return standardSpecies(Dex.mod(`gen${gen[1]}`));
-	const source = getDex(from);
-	if (!source.row.official) throw new Chat.ErrorMessage(`Pokemon can only be added from the main games and official dexes.`);
-	return source.data.species as ID[];
+	const source = toID(from) && !gen ? getDex(from) : null;
+	if (source && !source.row.official) throw new Chat.ErrorMessage(`Things can only be added from the main games and official dexes.`);
+	return { gen: gen ? Number(gen[1]) : 0, source };
+}
+
+export function sourceSpecies(loaded: LoadedDex, from: string) {
+	const { gen, source } = sourceOf(from);
+	if (source) return source.data.species as ID[];
+	return gen ? standardSpecies(Dex.mod(`gen${gen}`)) : worldSpecies(loaded);
 }
 
 const LIST_GETTERS = { Moves: 'moves', Abilities: 'abilities', Items: 'items' } as const;
@@ -1142,19 +1111,15 @@ export function effectListed(loaded: LoadedDex, table: ListTable, id: ID) {
 
 export function sourceIds(loaded: LoadedDex, table: 'Pokedex' | ListTable, from: string) {
 	if (table === 'Pokedex') return sourceSpecies(loaded, from);
-	const gen = /^gen([1-9])$/.exec(toID(from));
+	const { gen, source } = sourceOf(from);
 	const playable = (effect: AnyObject) => !effect.isZ && !effect.isMax;
+	if (source) return Object.keys(source.dex.data[table]).filter(id => effectListed(source, table, id as ID)) as ID[];
 	if (gen) {
-		return ([...Dex.mod(`gen${gen[1]}`)[LIST_GETTERS[table]].all()] as AnyObject[])
+		return ([...Dex.mod(`gen${gen}`)[LIST_GETTERS[table]].all()] as AnyObject[])
 			.filter(effect => effect.exists && !effect.isNonstandard && playable(effect)).map(effect => effect.id as ID);
 	}
-	if (!toID(from)) {
-		const base = baseOf(loaded.row);
-		return Object.keys(base.data[table]).filter(id => playable(base.data[table][id] as AnyObject)) as ID[];
-	}
-	const source = getDex(from);
-	if (!source.row.official) throw new Chat.ErrorMessage(`Things can only be added from the main games and official dexes.`);
-	return Object.keys(source.dex.data[table]).filter(id => effectListed(source, table, id as ID)) as ID[];
+	const base = baseOf(loaded.row);
+	return Object.keys(base.data[table]).filter(id => playable(base.data[table][id] as AnyObject)) as ID[];
 }
 
 async function setListed(loaded: LoadedDex, table: ListTable, ids: ID[]) {
@@ -1170,10 +1135,8 @@ async function setListed(loaded: LoadedDex, table: ListTable, ids: ID[]) {
 
 async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string, names: string[]) {
 	const base = baseOf(target.row);
-	const gen = /^gen([1-9])$/.exec(toID(from));
-	const source = toID(from) && !gen ? getDex(from) : null;
-	if (source && !source.row.official) throw new Chat.ErrorMessage(`Things can only be added from the main games and official dexes.`);
-	const game = gen && Number(gen[1]) !== base.gen ? Dex.mod(`gen${gen[1]}`) : null;
+	const { gen, source } = sourceOf(from);
+	const game = gen && gen !== base.gen ? Dex.mod(`gen${gen}`) : null;
 	const skipped: string[] = [];
 	const listed: ID[] = [];
 	const inputs: AnyObject[] = [];
@@ -1271,14 +1234,12 @@ function vanillaInput(target: LoadedDex, game: ModdedDex, id: ID) {
 
 async function addPokemonImpl(target: LoadedDex, from: string, names: string[]) {
 	const base = baseOf(target.row);
-	const gen = /^gen([1-9])$/.exec(toID(from));
+	const { gen, source } = sourceOf(from);
+	const game = gen && gen !== base.gen ? Dex.mod(`gen${gen}`) : null;
 	const skipped: string[] = [];
 	const plain = new Set<ID>();
 	const inputs: AnyObject[] = [];
 	let loaded = target;
-	const source = toID(from) && !gen ? getDex(from) : null;
-	if (source && !source.row.official) throw new Chat.ErrorMessage(`Pokemon can only be added from the main games and official dexes.`);
-	const game = gen && Number(gen[1]) !== base.gen ? Dex.mod(`gen${gen[1]}`) : null;
 	for (const name of names) {
 		const id = toID(name);
 		if (loaded.entries.has(id) || loaded.data.species.includes(id)) {
@@ -1405,7 +1366,6 @@ async function putEffectImpl(loaded: LoadedDex, table: EffectTable, input: AnyOb
 	const base = baseOf(loaded.row);
 	const lookup = lookupTables(base, loaded.data.Pokedex, loaded.effects);
 	const entry = validateEffect(input, table, base, loaded.effects[table], lookup, loaded.row.official);
-	checkUnlocked(loaded, table, [entry.effectid, entry.inheritsfrom]);
 	if (!base.data[table][entry.effectid]) {
 		entry.num ||= newNum(table);
 		entry.data.num = entry.num;
@@ -1429,7 +1389,6 @@ export function getEffect<T extends EffectTable | 'TypeChart'>(loaded: LoadedDex
 
 async function putTypeImpl(loaded: LoadedDex, input: AnyObject) {
 	const entry = validateType(input, baseOf(loaded.row), loaded.effects.TypeChart, loaded.dex);
-	checkUnlocked(loaded, 'TypeChart', [entry.effectid]);
 	const effects = { ...loaded.effects, TypeChart: new Map([...loaded.effects.TypeChart, [entry.effectid, entry]]) };
 	check(compile(loaded.row, loaded.entries, effects));
 	await writeEntry(loaded.row.dexid, 'TypeChart', entry);
@@ -1447,13 +1406,7 @@ async function deleteEffectImpl(loaded: LoadedDex, table: EffectTable | 'TypeCha
 }
 
 function originOf(source: LoadedDex, entry: Entry): Origin {
-	const trim = (origin: Origin | undefined, depth: number): Origin | undefined => (
-		origin && depth < MAX_ORIGINS ? { ...origin, from: trim(origin.from, depth + 1) } : undefined
-	);
-	return {
-		dexid: source.row.dexid, dex: source.row.name, owner: source.row.ownername, name: entry.data.name,
-		creator: entry.origin ? entry.origin.creator : source.row.ownerid, from: trim(entry.origin || undefined, 1),
-	};
+	return entry.origin || { dexid: source.row.dexid, dex: source.row.name, owner: source.row.ownername, name: entry.data.name };
 }
 
 type Fork = [Table, ID, LoadedDex, (string | null)?];
@@ -1530,18 +1483,14 @@ async function copyInto(
 		const entry: Entry = engine ? {
 			effecttable: table as EffectTable, effectid: id, num: 0, inheritsfrom: `${engine}:${id}` as ID,
 			data: { name: (Dex.mod(engine).data[table as EffectTable][id] as AnyObject).name }, slots: {}, events: {}, sprites: {},
-			origin: null, trackdex: null, trackid: null, locked: false,
+			origin: null, trackdex: null, trackid: null,
 		} as EffectEntry : entriesOf(source, table).get(id)!;
 		const into: Map<ID, Entry> = table === 'Pokedex' ? entries : effects[table];
 		const existing = into.get(id);
 		const what = `the ${tableName(table)} ${entry.data.name}`;
-		if (entry.locked && source.row.ownerid !== target.row.ownerid) {
-			throw new Chat.ErrorMessage(`${what} in ${source.row.name} is locked, so only its creator can fork it.`);
-		}
 		if (engine && existing?.inheritsfrom === `${engine}:${id}`) continue;
 		if (existing && !(existing.trackdex === source.row.dexid && existing.trackid === id)) {
 			if (options.update) continue;
-			checkUnlocked(target, table, [id]);
 			if (!options.overwrite) {
 				throw new Chat.ErrorMessage(`${target.row.name} already has its own version of ${what}. Add "overwrite" to replace it.`);
 			}
@@ -1555,7 +1504,6 @@ async function copyInto(
 		if (entry.inheritsfrom && !entry.inheritsfrom.includes(':') && !isBase(base, table, entry.inheritsfrom)) {
 			throw new Chat.ErrorMessage(`${what} copies ${entry.inheritsfrom}, which ${baseName(target.row)} doesn't have.`);
 		}
-		checkUnlocked(target, table, [id, entry.inheritsfrom]);
 		let link: Entry | undefined = entry;
 		for (let i = 0; link?.trackdex && i < 100; i++) {
 			if (link.trackdex === target.row.dexid && link.trackid === id) {
@@ -1567,7 +1515,6 @@ async function copyInto(
 		const copy = {
 			...JSON.parse(json(entry)), origin: originOf(source, entry), trackdex: engine ? null : source.row.dexid, trackid: engine ? null : id,
 		};
-		copy.locked = (existing ? existing.locked : entry.locked) && copy.origin.creator === target.row.ownerid;
 		copy.num = official ? existing?.num || 0 : existing?.num || newNum(table, into.values());
 		if (table !== 'Pokedex' && table !== 'TypeChart' && !official) copy.data.num = copy.num;
 		into.set(id, copy);
@@ -1613,7 +1560,7 @@ async function propagate(dexid: ID, table: Table, id: ID, seen = new Set<string>
 	}
 }
 
-async function detachImpl(loaded: LoadedDex, table: Table, id: ID) {
+async function detach(loaded: LoadedDex, table: Table, id: ID) {
 	if (table === 'Pokedex') {
 		await database().query(SQL`UPDATE dex_species SET trackdex = NULL, trackid = NULL
 			WHERE dexid = ${loaded.row.dexid} AND speciesid = ${id}`);
@@ -1622,15 +1569,6 @@ async function detachImpl(loaded: LoadedDex, table: Table, id: ID) {
 			WHERE dexid = ${loaded.row.dexid} AND effecttable = ${table} AND effectid = ${id}`);
 	}
 	return (await refresh(loaded.row.dexid))!;
-}
-
-async function setLockedImpl(loaded: LoadedDex, table: Table, name: string, locked: boolean) {
-	const entry = table === 'Pokedex' ? getEntry(loaded, name) : getEffect(loaded, table, name);
-	if (locked && entry.origin && entry.origin.creator !== loaded.row.ownerid) {
-		throw new Chat.ErrorMessage(`${entry.data.name} was forked from someone else's, so it can't be locked, even after edits.`);
-	}
-	await writeEntry(loaded.row.dexid, table, { ...entry, locked });
-	return saved(loaded, table, toID(name));
 }
 
 async function forkEntryImpl(target: LoadedDex, source: LoadedDex, table: Table, name: string, overwrite = false) {
@@ -1740,7 +1678,7 @@ function validateTiers(loaded: LoadedDex, input: unknown) {
 		if (!isObject(entry)) throw new Chat.ErrorMessage(`The tiers of ${species.name} must be like {"tier": "UU"}.`);
 		const checked: AnyObject = {};
 		for (const key of Object.keys(entry)) {
-			const list = key === 'doublesTier' ? DOUBLES_TIERS : ['tier', 'natDexTier'].includes(key) ? TIERS : null;
+			const list = TIER_FIELDS.get(key);
 			if (!list) throw new Chat.ErrorMessage(`"${key}" isn't a tier field: use tier, natDexTier or doublesTier.`);
 			if (!list.includes(entry[key])) throw new Chat.ErrorMessage(`"${entry[key]}" isn't a ${key}: use one of ${list.join(', ')}.`);
 			checked[key] = entry[key];
@@ -1752,7 +1690,7 @@ function validateTiers(loaded: LoadedDex, input: unknown) {
 
 async function setTiersImpl(loaded: LoadedDex, input: AnyObject) {
 	const field = `${input.field}`;
-	if (!['tier', 'natDexTier', 'doublesTier'].includes(field)) {
+	if (!TIER_FIELDS.has(field)) {
 		throw new Chat.ErrorMessage(`"field" must be tier, natDexTier or doublesTier.`);
 	}
 	const names: string[] = Array.isArray(input.species) ? input.species.map(String) : [];
@@ -1764,8 +1702,8 @@ async function setTiersImpl(loaded: LoadedDex, input: AnyObject) {
 			const species: AnyObject = loaded.dex.species.get(name);
 			const own: AnyObject = loaded.dex.data.FormatsData[species.id] || {};
 			const resolved: AnyObject = {};
-			for (const key of ['tier', 'doublesTier', 'natDexTier']) {
-				if (!own[key] && (key === 'doublesTier' ? DOUBLES_TIERS : TIERS).includes(species[key])) resolved[key] = species[key];
+			for (const [key, list] of TIER_FIELDS) {
+				if (!own[key] && list.includes(species[key])) resolved[key] = species[key];
 			}
 			return { name, ...resolved, [field]: tier };
 		}))).loaded;
@@ -1851,9 +1789,7 @@ async function putFormatImpl(loaded: LoadedDex, input: AnyObject) {
 	await database().query(SQL`INSERT INTO dex_formats (formatid, dexid, data, updated) VALUES (
 		${formatid}, ${loaded.row.dexid}, ${json(data)}, ${Date.now()}
 	) ON CONFLICT (formatid) DO UPDATE SET data = EXCLUDED.data, updated = EXCLUDED.updated`);
-	const from: AnyObject = input.from !== undefined ? Dex.formats.get(`${input.from}`) : {};
-	const lost = Object.keys(from).filter(key => typeof from[key] === 'function');
-	return { loaded: await save(loaded), formatid, lost };
+	return { loaded: await save(loaded), formatid };
 }
 
 async function deleteFormatImpl(loaded: LoadedDex, name: string) {
@@ -1945,8 +1881,6 @@ export const deleteSprite = mutation(deleteSpriteImpl);
 export const putEffect = mutation(putEffectImpl);
 export const putType = mutation(putTypeImpl);
 export const deleteEffect = mutation(deleteEffectImpl);
-export const detach = mutation(detachImpl);
-export const setLocked = mutation(setLockedImpl);
 export const forkEntry = mutation(forkEntryImpl);
 export const forkLine = mutation(forkLineImpl);
 export const setTiers = mutation(setTiersImpl);
