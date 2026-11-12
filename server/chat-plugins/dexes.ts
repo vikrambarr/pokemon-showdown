@@ -2,11 +2,10 @@ import * as crypto from 'crypto';
 import * as http from 'http';
 import { Utils } from '../../lib';
 import * as Dexes from '../dexes';
-import { EFFECT_NAMES, engineChecks } from '../dexes/effects';
-import type { Origin } from '../dexes/species';
+import { engineChecks } from '../dexes/effects';
 import type { EffectTable } from '../../sim/dex-custom';
 import { STATUSES, handlersOf, parseHandler } from '../../sim/dex-handlers';
-import { MAX_SPRITE_BYTES, SPRITE_KINDS, checkKind, spriteURL, toKind, toSettings } from '../dexes/sprites';
+import { MAX_SPRITE_BYTES, checkKind, toKind, toSettings } from '../dexes/sprites';
 
 void Dexes.load().catch(err => Monitor.crashlog(err, 'Loading dexes'));
 
@@ -35,7 +34,6 @@ function args(target: string, count: number, usage: string) {
 	return parts;
 }
 
-const PAGE_SIZE = 50;
 const EFFECT_TABLES: { [name: string]: EffectTable } = {
 	move: 'Moves', ability: 'Abilities', item: 'Items', condition: 'Conditions',
 };
@@ -65,26 +63,6 @@ async function owned(user: User, name: string) {
 		throw new Chat.ErrorMessage(`Only the owner of ${loaded.row.name} can do that.`);
 	}
 	return loaded;
-}
-
-function originHTML(entry: { origin: Origin | null, trackdex: ID | null, locked: boolean }) {
-	if (!entry.origin) return entry.locked ? ' (locked)' : '';
-	const { name, dex, owner } = entry.origin;
-	const notes = `${entry.trackdex ? `, following its changes` : ''}${entry.locked ? ', locked' : ''}`;
-	return Utils.html` (forked from ${name} in ${dex} by ${owner}${notes})`;
-}
-
-function dexTable(list: Dexes.LoadedDex[], empty: string) {
-	if (!list.length) return empty;
-	let buf = `<table><tr><th>Dex</th><th>World</th><th>Owner</th><th>Pok&eacute;mon</th><th>Formats</th></tr>`;
-	for (const loaded of list) {
-		const dex = summary(loaded);
-		buf += Utils.html`<tr><td><button class="button" name="send" value="/dexes info ${dex.id}">${dex.name}</button>`;
-		buf += `${dex.official ? ' (official)' : ''}${dex.visibility === 'private' ? ' (private)' : ''}</td>`;
-		buf += Utils.html`<td>${dex.base}</td><td>${dex.owner}</td><td>${dex.species} (${dex.entries} custom or edited)</td>`;
-		buf += Utils.html`<td>${dex.formats.map(format => format.name).join(', ') || '(none)'}</td></tr>`;
-	}
-	return `${buf}</table>`;
 }
 
 const COUNTED: [Dexes.Table, string][] = [
@@ -275,17 +253,6 @@ function summary(loaded: Dexes.LoadedDex) {
 	};
 }
 
-function spriteHTML(loaded: Dexes.LoadedDex, images: { [kind: string]: string }) {
-	return Object.keys(images).filter(key => loaded.uploads.has(images[key])).map(key => {
-		const image = loaded.uploads.get(images[key])!;
-		const { width: boxWidth, height: boxHeight } = SPRITE_KINDS[image.kind];
-		const scale = Math.min(boxWidth / image.width, boxHeight / image.height);
-		const [width, height] = [Math.round(image.width * scale), Math.round(image.height * scale)];
-		const title = `${key.replace(':', ' ')}${image.artist ? ` by ${image.artist}` : ''}, uploaded by ${image.uploadername} to ${image.dexname}`;
-		return Utils.html`<img src="${spriteURL(image)}" alt="${key}" title="${title}" width="${width}" height="${height}" class="pixelated" />`;
-	}).join(' ');
-}
-
 const UPLOAD_TIME = 5 * 60 * 1000;
 const MAX_UPLOADS = 20;
 const uploads = new Map<string, {
@@ -294,7 +261,7 @@ const uploads = new Map<string, {
 
 async function uploadURL(user: User, target: string) {
 	checkEnabled(user);
-	const [dexName, name, rest] = args(target, 3, `/dexes upload [dex], [pokemon, item or type], [kind], [settings JSON]`);
+	const [dexName, name, rest] = args(target, 3, `/crq dexupload [dex], [pokemon, item or type], [kind], [settings JSON]`);
 	const [kind, settings] = Utils.splitFirst(rest, ',').map(part => part.trim());
 	const loaded = await Dexes.editable(user, dexName);
 	const upload = {
@@ -316,7 +283,7 @@ async function uploadURL(user: User, target: string) {
 
 async function forkHTML(user: User, target: string) {
 	checkEnabled(user);
-	const usage = `/dexes fork [your dex], [from dex], [pokemon|move|ability|item|condition|type], [name], [overwrite]`;
+	const usage = `/crq dexfork [your dex], [from dex], [pokemon|move|ability|item|condition|type], [name], [overwrite]`;
 	const [dexName, sourceName, kind, rest] = args(target, 4, usage);
 	const [name, flag] = rest.split(',').map(part => part.trim());
 	const source = Dexes.getDex(sourceName);
@@ -331,7 +298,7 @@ async function forkHTML(user: User, target: string) {
 
 async function forkLineHTML(user: User, target: string) {
 	checkEnabled(user);
-	const [dexName, sourceName, rest] = args(target, 3, `/dexes forkline [your dex], [from dex], [pokemon], [overwrite]`);
+	const [dexName, sourceName, rest] = args(target, 3, `/crq dexforkline [your dex], [from dex], [pokemon], [overwrite]`);
 	const [name, flag] = rest.split(',').map(part => part.trim());
 	const source = Dexes.getDex(sourceName);
 	const { loaded, copied, added, warnings, missing } = await Dexes.forkLine(
@@ -357,7 +324,7 @@ async function receiveUpload(request: http.IncomingMessage, response: http.Serve
 	const token = /^\/dexes\/upload\/([0-9a-f]{32})$/.exec(request.url || '')?.[1];
 	const upload = token ? uploads.get(token) : undefined;
 	if (request.method !== 'POST' || !upload || upload.expires < Date.now()) {
-		return reply(404, { error: `That upload link is wrong or has run out. Get a new one with /dexes upload.` });
+		return reply(404, { error: `That upload link is wrong or has run out. Try again.` });
 	}
 	uploads.delete(token!);
 	const chunks: Buffer[] = [];
@@ -393,316 +360,11 @@ export function destroy() {
 
 export const commands: Chat.ChatCommands = {
 	dexes: {
-		''(target, room, user) {
-			return this.parse(`/dexes list`);
-		},
-		async list(target, room, user) {
-			this.runBroadcast();
-			const account = await viewer(user);
-			const list = [...Dexes.dexes.values()].filter(loaded => Dexes.listed(loaded, account));
-			const page = Math.max(1, parseInt(target) || 1);
-			let buf = dexTable(list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), `There are no dexes here.`);
-			if (list.length > page * PAGE_SIZE) {
-				buf += `<br /><button class="button" name="send" value="/dexes list ${page + 1}">More</button>`;
-			}
-			return this.sendReplyBox(buf);
-		},
-		async search(target, room, user) {
-			this.runBroadcast();
-			if (!toID(target)) return this.parse(`/help dexes`);
-			const list = Dexes.search(target, await viewer(user)).slice(0, PAGE_SIZE);
-			return this.sendReplyBox(dexTable(list, Utils.html`No dexes have "${target}" in their names.`));
-		},
-		async user(target, room, user) {
-			this.runBroadcast();
-			if (!toID(target)) return this.parse(`/help dexes`);
-			const list = await Dexes.dexesOf(target, await viewer(user));
-			return this.sendReplyBox(dexTable(list, Utils.html`${target} has no dexes you can see.`));
-		},
-		async visibility(target, room, user) {
-			checkEnabled(user);
-			const [dexName, visibility] = args(target, 2, `/dexes visibility [dex], [public|private]`);
-			const loaded = await Dexes.setVisibility(await owned(user, dexName), toID(visibility));
-			this.sendReply(loaded.row.visibility === 'private' ?
-				`${loaded.row.name} is private: it isn't listed or searchable, but anyone with its exact name can see, use and fork it.` :
-				`${loaded.row.name} is public.`);
-		},
-		async fork(target, room, user) {
-			this.sendReplyBox(await forkHTML(user, target));
-		},
-		async forkline(target, room, user) {
-			this.sendReplyBox(await forkLineHTML(user, target));
-		},
-		async detach(target, room, user) {
-			checkEnabled(user);
-			const usage = `/dexes detach [dex], [pokemon|move|ability|item|condition|type], [name]`;
-			const [dexName, kind, name] = args(target, 3, usage);
-			const loaded = await Dexes.editable(user, dexName);
-			const table = toAnyTable(kind);
-			const entry = Dexes.entriesOf(loaded, table).get(toID(name));
-			if (!entry?.trackdex) throw new Chat.ErrorMessage(`${name} in ${loaded.row.name} isn't following anything.`);
-			await Dexes.detach(loaded, table, toID(name));
-			this.sendReply(`${entry.data.name} in ${loaded.row.name} no longer follows changes to the original.`);
-		},
-		async lock(target, room, user, connection, cmd) {
-			checkEnabled(user);
-			const usage = `/dexes ${cmd} [dex], [pokemon|move|ability|item|condition|type], [name]`;
-			const [dexName, kind, name] = args(target, 3, usage);
-			const table = toAnyTable(kind);
-			const loaded = await Dexes.setLocked(await owned(user, dexName), table, name, cmd === 'lock');
-			const entry = Dexes.entriesOf(loaded, table).get(toID(name))!;
-			this.sendReply(entry.locked ?
-				`${entry.data.name} in ${loaded.row.name} is locked: other users can't fork it, and forks they already made stop following it.` :
-				`${entry.data.name} in ${loaded.row.name} is unlocked: anyone can fork it.`);
-		},
-		unlock: 'lock',
-		async editor(target, room, user, connection, cmd) {
-			checkEnabled(user);
-			const [dexName, name] = args(target, 2, `/dexes ${cmd} [dex], [username]`);
-			const add = cmd === 'editor';
-			const loaded = Dexes.getDex(dexName);
-			if (add || toID(name) !== user.id) await owned(user, dexName);
-			const updated = await Dexes.setEditor(loaded, name, add);
-			this.sendReply(add ?
-				`${name} can now edit ${updated.row.name}. Only you can delete it, change who edits it, or make it private.` :
-				`${name} can no longer edit ${updated.row.name}.`);
-		},
-		removeeditor: 'editor',
-		info(target, room, user) {
-			this.runBroadcast();
-			const loaded = Dexes.getDex(target);
-			const dex = summary(loaded);
-			let buf = Utils.html`<strong>${dex.name}</strong>${dex.official ? ' (official)' : ''}, set in ${dex.base}, owned by ${dex.owner}`;
-			buf += `. ${dex.visibility === 'private' ? 'Private' : 'Public'}.`;
-			if (loaded.editors.size) buf += Utils.html` Edited by ${[...loaded.editors.values()].join(', ')}.`;
-			buf += `<br /><small>${dex.counts.map(count =>
-				`${count.name}: ${count.total} total, ${count.custom} custom, ${count.modified} modified`).join(' &middot; ')}</small>.`;
-			buf += ` Version <code>${loaded.data.hash}</code>.`;
-			for (const entry of loaded.entries.values()) {
-				buf += Utils.html`<br /><strong>${entry.data.name}</strong>${entry.inheritsfrom ? ` (based on ${entry.inheritsfrom})` : ''}`;
-				buf += `${originHTML(entry)} ${spriteHTML(loaded, entry.sprites)}`;
-			}
-			if (loaded.effects.TypeChart.size) {
-				buf += `<br />Types: `;
-				buf += [...loaded.effects.TypeChart.values()]
-					.map(entry => Utils.html`<strong>${entry.data.name}</strong>` + originHTML(entry)).join(', ');
-			}
-			for (const table in EFFECT_NAMES) {
-				const effects = [...loaded.effects[table as EffectTable].values()];
-				if (!effects.length) continue;
-				buf += `<br />${table}: `;
-				buf += effects.map(entry => Utils.html`<strong>${entry.data.name}</strong>` +
-					(entry.inheritsfrom ? Utils.html` (based on ${entry.inheritsfrom})` : '') + originHTML(entry) +
-					(entry.sprites.item ? ' ' + spriteHTML(loaded, { item: entry.sprites.item }) : '')).join(', ');
-			}
-			buf += `<br />Formats: `;
-			buf += dex.formats.map(format => Utils.html`<code>${format.name}</code>`).join(', ') || '(none)';
-			if (loaded.stale.length) {
-				buf += `<br />These changes stopped working after an update and are being skipped: `;
-				buf += loaded.stale.map(problem => Utils.html`${problem}`).join('; ');
-			}
-			return this.sendReplyBox(buf);
-		},
-		async create(target, room, user) {
-			checkEnabled(user);
-			const [name, rest] = args(target, 2, `/dexes create [name], [world], [engine mod]`);
-			const [on, engine] = Utils.splitFirst(rest, ',').map(part => part.trim());
-			const loaded = await Dexes.createDex(user, name, on, engine || undefined);
-			this.sendReply(`Made ${loaded.row.name}, with the ${loaded.data.species.length} Pokemon in ${Dexes.baseName(loaded.row)}.`);
-		},
-		async rename(target, room, user) {
-			checkEnabled(user);
-			const [dexName, name] = args(target, 2, `/dexes rename [dex], [new name]`);
-			const loaded = await owned(user, dexName);
-			const oldName = loaded.row.name;
-			const updated = await Dexes.setName(loaded, name);
-			this.sendReply(`Renamed ${oldName} to ${updated.row.name}. Its formats, battles and the dexes set in it keep working.`);
-		},
-		async world(target, room, user) {
-			checkEnabled(user);
-			const [dexName, rest] = args(target, 2, `/dexes world [dex], [world], [engine mod]`);
-			const [on, engine] = Utils.splitFirst(rest, ',').map(part => part.trim());
-			const { loaded, stale } = await Dexes.setBase(await owned(user, dexName), on, engine || undefined);
-			this.sendReply(`${loaded.row.name} is now set in ${Dexes.baseName(loaded.row)}, with ${loaded.data.species.length} Pokemon.`);
-			if (stale.length) this.sendReply(`These changes don't work in the new world and are being skipped: ${stale.join('; ')}`);
-		},
-		async description(target, room, user) {
-			checkEnabled(user);
-			const [dexName, description] = Utils.splitFirst(target, ',').map(part => part.trim());
-			if (!toID(dexName)) throw new Chat.ErrorMessage(`Usage: /dexes description [dex], [text]`);
-			const loaded = await Dexes.setDescription(await Dexes.editable(user, dexName), description);
-			this.sendReply(loaded.row.description ? `Saved the description of ${loaded.row.name}.` : `Removed the description of ${loaded.row.name}.`);
-		},
-		async clear(target, room, user) {
-			checkEnabled(user);
-			const loaded = await Dexes.clearDex(await owned(user, target));
-			this.sendReply(`Cleared ${loaded.row.name}: it has the ${loaded.data.species.length} Pokemon in ${Dexes.baseName(loaded.row)} and no custom or edited entries. Its formats are kept.`);
-		},
 		async official(target, room, user) {
 			this.checkCan('bypassall');
 			const [dexName, value] = args(target, 2, `/dexes official [dex], [on|off]`);
 			const loaded = await Dexes.setOfficial(Dexes.getDex(dexName), toID(value) === 'on');
 			this.sendReply(`${loaded.row.name} is ${loaded.row.official ? 'now' : 'no longer'} official.`);
-		},
-		async delete(target, room, user) {
-			checkEnabled(user);
-			const loaded = Dexes.getDex(target);
-			if (loaded.row.ownerid !== await Dexes.accountOf(user) && !user.can('bypassall')) {
-				throw new Chat.ErrorMessage(`Only the owner of ${loaded.row.name} can delete it.`);
-			}
-			await Dexes.deleteDex(loaded);
-			this.sendReply(`Deleted ${loaded.row.name}. Replays of its battles keep working.`);
-		},
-		async add(target, room, user, connection, cmd) {
-			checkEnabled(user);
-			const [dexName, names] = args(target, 2, `/dexes ${cmd} [dex], [pokemon], [pokemon]...`);
-			const loaded = await Dexes.editable(user, dexName);
-			const list = names.split(',').map(name => name.trim());
-			const updated = cmd === 'add' ? (await Dexes.addPokemon(loaded, '', list)).loaded : await Dexes.deletePokemon(loaded, list);
-			this.sendReply(`${cmd === 'add' ? 'Added' : 'Deleted'} ${Chat.count(list, 'Pokemon', 'Pokemon')}. ${updated.row.name} has ${updated.data.species.length} now.`);
-		},
-		remove: 'add',
-		async addfrom(target, room, user) {
-			checkEnabled(user);
-			const [dexName, from, names] = args(target, 3, `/dexes addfrom [dex], [gen1-9 or official dex], [pokemon], [pokemon]...`);
-			const loaded = await Dexes.editable(user, dexName);
-			const { loaded: updated, skipped } = await Dexes.addPokemon(loaded, from, names.split(',').map(name => name.trim()));
-			this.sendReply(`${updated.row.name} has ${updated.data.species.length} Pokemon now.`);
-			if (skipped.length) this.sendReply(`Skipped: ${skipped.join('; ')}`);
-		},
-		async pokemon(target, room, user) {
-			checkEnabled(user);
-			const [dexName, input] = args(target, 2, `/dexes pokemon [dex], [JSON]`);
-			const { loaded, entry } = await Dexes.putEntry(await Dexes.editable(user, dexName), parseJSON(input));
-			this.sendReply(`Saved ${entry.data.name} in ${loaded.row.name}.`);
-		},
-		async bulkpokemon(target, room, user) {
-			checkEnabled(user);
-			const [dexName, input] = args(target, 2, `/dexes bulkpokemon [dex], [JSON list]`);
-			let inputs;
-			try {
-				inputs = JSON.parse(input);
-			} catch {}
-			if (!Array.isArray(inputs)) throw new Chat.ErrorMessage(`That needs to be a JSON list, like [{"name": "Pikachu"}].`);
-			const { loaded, entries } = await Dexes.putEntries(await Dexes.editable(user, dexName), inputs);
-			this.sendReply(`Saved ${Chat.count(entries, 'Pokemon', 'Pokemon')} in ${loaded.row.name}.`);
-		},
-		async deletepokemon(target, room, user) {
-			checkEnabled(user);
-			const [dexName, name] = args(target, 2, `/dexes deletepokemon [dex], [pokemon]`);
-			const loaded = await Dexes.deletePokemon(await Dexes.editable(user, dexName), [name]);
-			this.sendReply(`Deleted ${name} from ${loaded.row.name}.`);
-		},
-		async resetpokemon(target, room, user) {
-			checkEnabled(user);
-			const [dexName, name] = args(target, 2, `/dexes resetpokemon [dex], [pokemon]`);
-			const loaded = await Dexes.deleteEntry(await Dexes.editable(user, dexName), name);
-			this.sendReply(`Reset ${name} in ${loaded.row.name} to its base data.`);
-		},
-		async move(target, room, user, connection, cmd) {
-			checkEnabled(user);
-			const [dexName, input] = args(target, 2, `/dexes ${cmd} [dex], [JSON]`);
-			const table = toTable(cmd);
-			const { loaded, entry } = await Dexes.putEffect(await Dexes.editable(user, dexName), table, parseJSON(input));
-			this.sendReply(`Saved the ${EFFECT_NAMES[table]} ${entry.data.name} in ${loaded.row.name}.`);
-		},
-		ability: 'move',
-		item: 'move',
-		condition: 'move',
-		async type(target, room, user) {
-			checkEnabled(user);
-			const [dexName, input] = args(target, 2, `/dexes type [dex], [JSON]`);
-			const { loaded, entry } = await Dexes.putType(await Dexes.editable(user, dexName), parseJSON(input));
-			this.sendReply(`Saved the ${entry.data.name} type in ${loaded.row.name}.`);
-		},
-		async deletetype(target, room, user) {
-			checkEnabled(user);
-			const [dexName, name] = args(target, 2, `/dexes deletetype [dex], [type]`);
-			const loaded = await Dexes.deleteEffect(await Dexes.editable(user, dexName), 'TypeChart', name);
-			this.sendReply(`Removed ${name} from ${loaded.row.name}'s custom and edited types.`);
-		},
-		async deletemove(target, room, user, connection, cmd) {
-			checkEnabled(user);
-			const [dexName, name] = args(target, 2, `/dexes ${cmd} [dex], [name]`);
-			const table = toTable(cmd.slice(6));
-			const loaded = await Dexes.deleteEffects(await Dexes.editable(user, dexName), table, [name]);
-			this.sendReply(`Deleted ${name} from ${loaded.row.name}.`);
-		},
-		async resetmove(target, room, user, connection, cmd) {
-			checkEnabled(user);
-			const [dexName, name] = args(target, 2, `/dexes ${cmd} [dex], [name]`);
-			const table = toTable(cmd.slice(5));
-			const loaded = await Dexes.deleteEffect(await Dexes.editable(user, dexName), table, name);
-			this.sendReply(`Reset ${name} in ${loaded.row.name} to its base data.`);
-		},
-		resetability: 'resetmove',
-		resetitem: 'resetmove',
-		resetcondition: 'resetmove',
-		async addeffect(target, room, user) {
-			checkEnabled(user);
-			const [dexName, kind, from, names] = args(target, 4, `/dexes addeffect [dex], [move|ability|item], [source], [name], [name]...`);
-			const table = toTable(kind);
-			if (!Dexes.LIST_TABLES.includes(table as Dexes.ListTable)) throw new Chat.ErrorMessage(`Conditions come with what needs them.`);
-			const { loaded, skipped } = await Dexes.addEffects(
-				await Dexes.editable(user, dexName), table as Dexes.ListTable, from, names.split(',').map(name => name.trim())
-			);
-			this.sendReply(`Updated the ${table.toLowerCase()} in ${loaded.row.name}.`);
-			if (skipped.length) this.sendReply(`Skipped: ${skipped.join('; ')}`);
-		},
-		deleteability: 'deletemove',
-		deleteitem: 'deletemove',
-		deletecondition: 'deletemove',
-		code(target, room, user) {
-			this.runBroadcast();
-			const [dexName, kind, name] = args(target, 3, `/dexes code [dex], [move|ability|item|condition], [name]`);
-			const editor = Dexes.effectEditor(Dexes.getDex(dexName), toTable(kind), name);
-			let buf = Utils.html`<strong>${editor.name}</strong>`;
-			if (editor.base && !editor.official) buf += Utils.html` (from ${editor.base})`;
-			for (const handler of editor.handlers) {
-				buf += Utils.html`<br /><br /><code>${handler.path}</code>`;
-				if (handler.event !== handler.path.split('.').pop()) buf += Utils.html` works as <code>${handler.event}</code>`;
-				if (handler.events.length) {
-					buf += ` (can work on another stat: ${handler.events.map(event => Utils.html`<code>${event}</code>`).join(', ')})`;
-				}
-				if (!handler.editable) {
-					buf += ` uses code from outside itself, so its values can't be changed.`;
-					continue;
-				}
-				if (!handler.slots.length) buf += ` has nothing to change.`;
-				for (const slot of handler.slots) {
-					const end = slot.column + slot.length;
-					buf += Utils.html`<br /><code>${handler.path}:${slot.index}</code> ${slot.kind} <strong>${JSON.stringify(slot.value)}</strong>`;
-					if (slot.value !== slot.original) buf += Utils.html` (was ${JSON.stringify(slot.original)})`;
-					buf += Utils.html`: <code>${slot.line.slice(0, slot.column)}<strong>${slot.line.slice(slot.column, end)}</strong>`;
-					buf += Utils.html`${slot.line.slice(end)}</code>`;
-				}
-			}
-			return this.sendReplyBox(buf);
-		},
-		async sprite(target, room, user) {
-			checkEnabled(user);
-			const [dexName, name, kind, rest] = args(
-				target, 4, `/dexes sprite [dex], [pokemon, item or type], [kind], [base64 PNG or GIF], [settings JSON]`
-			);
-			const [image, settings] = Utils.splitFirst(rest, ',').map(part => part.trim());
-			const loaded = await Dexes.setSprite(
-				user, await Dexes.editable(user, dexName), name, toKind(kind), image, settings ? parseJSON(settings) : {}
-			);
-			const slot = Dexes.spriteSlot(loaded, name, toKind(kind));
-			const entry = slot.table === 'Pokedex' ? Dexes.getEntry(loaded, slot.name) : Dexes.getEffect(loaded, slot.table, slot.name);
-			this.sendReplyBox(Utils.html`Set the ${toKind(kind)} sprite of ${name}: ` +
-				spriteHTML(loaded, { [slot.key]: entry.sprites[slot.key] }));
-		},
-		async upload(target, room, user) {
-			const url = await uploadURL(user, target);
-			this.sendReplyBox(Utils.html`Send the PNG or GIF to <code>${url}</code> in the next ${UPLOAD_TIME / 60 / 1000} minutes, ` +
-				Utils.html`like <code>curl --data-binary @sprite.png ${url}</code>. The link works once.`);
-		},
-		async clearsprite(target, room, user) {
-			checkEnabled(user);
-			const [dexName, name, kind] = args(target, 3, `/dexes clearsprite [dex], [pokemon, item or type], [kind]`);
-			await Dexes.setSprite(user, await Dexes.editable(user, dexName), name, toKind(kind), null);
-			this.sendReply(`Removed the ${toKind(kind)} sprite of ${name}.`);
 		},
 		async deletesprite(target, room, user) {
 			checkEnabled(user);
@@ -714,19 +376,6 @@ export const commands: Chat.ChatCommands = {
 			const { image, uses } = await Dexes.deleteSprite(user, entry.sprites[slot.key]);
 			this.sendReply(`Deleted ${image.uploadername}'s ${image.kind} sprite from everywhere it was used (${uses}).`);
 		},
-		async format(target, room, user) {
-			checkEnabled(user);
-			const [dexName, input] = args(target, 2, `/dexes format [dex], [JSON]`);
-			const { formatid, lost } = await Dexes.putFormat(await Dexes.editable(user, dexName), parseJSON(input));
-			this.sendReply(`Saved ${Dex.formats.get(formatid).name} (${formatid}). Challenge someone in it with /challenge [user], ${formatid}`);
-			if (lost.length) this.sendReply(`Code in the original format doesn't carry over: ${lost.join(', ')}.`);
-		},
-		async deleteformat(target, room, user) {
-			checkEnabled(user);
-			const [dexName, name] = args(target, 2, `/dexes deleteformat [dex], [format]`);
-			const loaded = await Dexes.deleteFormat(await Dexes.editable(user, dexName), name);
-			this.sendReply(`Deleted that format from ${loaded.row.name}.`);
-		},
 		async rebuildfiles(target, room, user) {
 			this.checkCan('bypassall');
 			const { snapshots, written, sprites } = await Dexes.rebuildFiles();
@@ -736,48 +385,8 @@ export const commands: Chat.ChatCommands = {
 		},
 	},
 	dexeshelp: [
-		`/dexes list [page] - Lists public dexes, and your private ones.`,
-		`/dexes search [text] - Finds public dexes with that text in their names.`,
-		`/dexes user [username] - Lists a user's public dexes, including ones they help edit.`,
-		`/dexes info [dex] - Shows a dex's custom Pokemon and formats.`,
-		`/dexes editor [dex], [username] - Lets another user edit a dex you own: its Pokemon, moves, abilities, items, conditions, types, sprites and formats. Only the owner can delete the dex, make it private or change its editors. Up to ${Dexes.MAX_EDITORS}. They need to have logged in with Discord.`,
-		`/dexes removeeditor [dex], [username] - Stops someone editing a dex you own. Editors can also remove themselves.`,
-		`/dexes visibility [dex], [public|private] - Private dexes aren't listed or searchable, but anyone with the exact name can still see, challenge in and fork them.`,
-		`/dexes fork [your dex], [from dex], [pokemon|move|ability|item|condition|type], [name], [overwrite] - Copies something from another dex, with the custom things it needs, including ones from that dex's world. Moves, abilities, items and conditions built into the other dex's engine mod are copied with their code, along with the conditions and types that code uses. Forks follow changes to the original until you edit them. "overwrite" replaces your own versions.`,
-		`/dexes forkline [your dex], [from dex], [pokemon], [overwrite] - Forks a Pokemon's whole evolution line, like /dexes fork, and adds the line's unedited Pokemon to your dex.`,
-		`/dexes detach [dex], [pokemon|move|ability|item|condition|type], [name] - Stops a fork following the original.`,
-		`/dexes lock [dex], [pokemon|move|ability|item|condition|type], [name] - Stops other users forking something you made. Anything forked from someone else can't be locked, even after edits. Also: unlock.`,
-		`/dexes create [name], [world], [engine mod] - Makes a dex set in a world. A world is a mod, like gen9, with every Pokemon in it, or another dex. A dex set in another keeps only its own changes, so changes to the other dex reach it, and starts with copies of its formats. Locked things in the other dex can't be edited or copied in it.`,
-		`A world can join several dexes, with their names joined by +, like "Insurgence + Uranium". Their Pokemon are all in it; where they change the same thing, the first one listed wins, except that learnsets are combined, evolutions added together, and abilities and type matchups fill in what earlier ones leave empty. The engine mod runs the battles, and is the first dex's mod unless you name one, like championsmariomon, to play a dex with another mod's mechanics.`,
-		`/dexes rename [dex], [new name] - Renames a dex you own. Its formats, battles, replays and the dexes set in it keep working.`,
-		`/dexes world [dex], [world], [engine mod] - Changes the world of a dex you own, like /dexes create. Its Pokemon go back to the new world's, and custom or edited things that don't work on it are skipped until fixed or cleared.`,
-		`/dexes description [dex], [text] - Sets the description shown on a dex's page, up to ${Dexes.MAX_DESCRIPTION} characters. Leave the text out to remove it.`,
-		`/dexes clear [dex] - Deletes every custom or edited entry in a dex you own and puts back its world's Pokemon. Its formats are kept.`,
 		`/dexes official [dex], [on|off] - Official dexes, like a fangame's, have no limits: on their size, formats, editors, description or sprites. Requires: ~`,
-		`/dexes delete [dex] - Deletes a dex you own.`,
-		`/dexes add [dex], [pokemon], ... - Puts Pokemon from a dex's world into it, with their formes.`,
-		`/dexes addfrom [dex], [source], [pokemon], ... - Adds Pokemon from a main game, like gen4, or an official dex. From an official dex, its custom and edited Pokemon are forked; from another generation, a Pokemon comes as it was there. Pokemon already in the dex are skipped.`,
-		`/dexes remove [dex], [pokemon], ... - Deletes Pokemon from a dex, like /dexes deletepokemon.`,
-		`/dexes pokemon [dex], [JSON] - Makes or edits a Pokemon. Using an existing Pokemon's name edits it for this dex. Fields: name, inheritsFrom, types, baseStats, abilities, eggGroups, weightkg, heightm, color, gender, genderRatio, prevo, evos, evoType, evoLevel, evoItem, evoMove, evoCondition, baseSpecies, forme, requiredItem, requiredAbility, requiredMove, battleOnly, changesFrom, sameNumberAs, tier, doublesTier, natDexTier, tags, maxHP, learnset. null clears a field. A forme's name is its baseSpecies, a dash and its forme, like Venusaur-Delta, unless forme is set; formes share their base's dex number, and can chain, like Venusaur-Delta-Mega. sameNumberAs shares another Pokemon's dex number without being its forme, so Species Clause counts them as one. A Mega gets its requiredItem from the Mega Stone that points to it.`,
-		`/dexes bulkpokemon [dex], [JSON list] - Makes or edits many Pokemon at once, each like /dexes pokemon. Useful for learnsets.`,
-		`/dexes deletepokemon [dex], [pokemon] - Deletes a Pokemon from a dex, with its edits. A Pokemon from the dex's world goes with its formes, and can be added back.`,
-		`/dexes resetpokemon [dex], [pokemon] - Undoes every edit to a Pokemon from the dex's world.`,
-		`/dexes move [dex], [JSON] - Makes or edits a move. Using an existing move's name edits it for this dex; "inheritsFrom" copies another move, code and all, and the copy counts as that move wherever the engine or another effect checks for it. Set any attribute, like "basePower" or "secondary"; null clears it. "slots" changes values in the code, like {"onHit:0": "Fire"}, numbered as in /dexes code. "events" moves a stat handler to another stat, like {"onModifySpe": "atk"}.`,
-		`/dexes ability [dex], [JSON] - Makes or edits an ability, like /dexes move.`,
-		`/dexes item [dex], [JSON] - Makes or edits an item, like /dexes move. "spriteFrom" uses another item's icon.`,
-		`/dexes condition [dex], [JSON] - Makes or edits a condition, like a status or weather, like /dexes move.`,
-		`/dexes type [dex], [JSON] - Makes or edits a type. "damageTaken" sets what it takes from other types, and "attacks" what it deals to them, as multipliers, like {"name": "Cosmic", "damageTaken": {"Dark": 2}, "attacks": {"Steel": 0.5}}. null undoes one. damageTaken can also make it immune (0) to things like sandstorm or par. If both sides set the same matchup, damageTaken wins. "color" (like "#7a5cc9") and "label" (up to 6 characters, like "COSMIC") set how a type's icon looks. "removed": true takes a type from the main games out of this dex, making its matchups neutral; null brings it back.`,
-		`/dexes deletemove [dex], [name] - Deletes a move from a dex, with its edits. A move from the dex's world can be added back. Also: deleteability, deleteitem, deletecondition (custom ones only; conditions come with what needs them), deletetype.`,
-		`/dexes resetmove [dex], [name] - Undoes every edit to a move from the dex's world. Also: resetability, resetitem, resetcondition.`,
-		`/dexes addeffect [dex], [move|ability|item], [source], [name], ... - Adds moves, abilities or items from the dex's world (leave the source empty), a main game like gen4, or an official dex. From an official dex, its custom and edited ones are forked; a move from another generation comes as it was there.`,
-		`/dexes code [dex], [move|ability|item|condition], [name] - Shows the values in its code you can change.`,
-		`/dexes sprite [dex], [pokemon, item or type], [kind], [base64 PNG or GIF], [settings JSON] - Sets a sprite, shown scaled to fit. Kinds: front, back, front-shiny, back-shiny (made at 96x96, up to 192x192), icon (40x30, up to 64x64), item (24x24, up to 64x64, items only), type (32x14, up to 64x64, types only, used instead of the type's drawn icon). A cosmetic forme, like Gastrodon-East, gets its own sprites. Official dexes have no limits, and can also add -f for a female sprite, like front-shiny-f or icon-f, or start with afd- for an April Fools' sprite, like afd-front. Sprites in the dexes you own count toward your ${Dexes.megabytes(Dexes.MAX_SPRITE_STORAGE)} of sprite storage, and their data toward your ${Dexes.megabytes(Dexes.MAX_DATA_STORAGE)} of data storage. Official dexes don't count.`,
-		`Optional settings: {"artist": "who drew it"}. Official dexes can also set "y": -16 (moves it up or down) and "gen": 3 (placed like that generation's sprites). To change them, set the sprite again.`,
-		`/dexes upload [dex], [pokemon, item or type], [kind], [settings JSON] - Gives you a link to send a sprite to, for sprites too big for /dexes sprite, up to ${MAX_SPRITE_BYTES / 1024}KB. It works once, for ${UPLOAD_TIME / 60 / 1000} minutes, while you stay logged in.`,
-		`/dexes clearsprite [dex], [pokemon, item or type], [kind] - Stops using a sprite here.`,
 		`/dexes deletesprite [dex], [pokemon, item or type], [kind] - Deletes a sprite you uploaded, everywhere it was forked to.`,
-		`/dexes format [dex], [JSON] - Makes or edits a format. Fields: name, from, gameType, ruleset, banlist, unbanlist, restricted, bestOfDefault, teraPreviewDefault, debug. "debug" makes a Custom Game: debug messages, and stats that can go past 65535. "from" copies the rules and bans of a format on this server, like "gen9ou", before the other fields apply.`,
-		`/dexes deleteformat [dex], [format] - Deletes a format.`,
 		`/dexes rebuildfiles - Rewrites missing snapshot and sprite files from the database. Requires: ~`,
 	],
 };
