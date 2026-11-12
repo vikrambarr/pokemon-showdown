@@ -519,17 +519,10 @@ describe('Dexes', () => {
 		assert(!details.outright.includes('mewtwo'));
 		assert(details.legal.pokemon.includes('bulbasaur'));
 
-		({ loaded } = await Dexes.putType(loaded, { name: 'Cosmic', damageTaken: { Dark: 2 }, color: '#3B3F8F', label: 'cosmic' }));
-		const cosmic = Dexes.clientData(loaded).TypeChart.cosmic;
-		assert.deepEqual([cosmic.color, cosmic.label], ['#3b3f8f', 'COSMIC']);
-		({ loaded } = await Dexes.putType(loaded, { name: 'Cosmic', damageTaken: { Dark: 1 } }));
-		assert.equal(Dexes.clientData(loaded).TypeChart.cosmic.color, '#3b3f8f');
-		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', color: 'blue' }), /hex color/);
-		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', label: 'TOOLONG' }), /1 to 6/);
+		({ loaded } = await Dexes.putType(loaded, { name: 'Cosmic', damageTaken: { Dark: 2 } }));
+		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', color: '#3b3f8f' }), /isn't something you can set/);
 		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', removed: true }), /Delete Cosmic instead/);
 
-		({ loaded } = await Dexes.putType(loaded, { name: 'Fire', color: '#112233', label: 'BLAZE' }));
-		assert.deepEqual([loaded.dex.types.get('Fire').color, loaded.dex.types.get('Fire').label], ['#112233', 'BLAZE']);
 		({ loaded } = await Dexes.putType(loaded, { name: 'Fairy', attacks: { Cosmic: 2 }, removed: true }));
 		assert(!loaded.dex.types.names().includes('Fairy'));
 		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Dragon'), 0);
@@ -547,7 +540,7 @@ describe('Dexes', () => {
 		loaded = await Dexes.setSprite(owner, loaded, 'water', 'type', png(32, 14));
 		const water = Dexes.clientData(loaded);
 		assert(water.images[water.typeSprites.water]);
-		({ loaded } = await Dexes.putType(loaded, { name: 'Water', color: '#123456' }));
+		({ loaded } = await Dexes.putType(loaded, { name: 'Water', damageTaken: { Fire: 1 } }));
 		assert(Dexes.clientData(loaded).typeSprites.water);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Shadow', 'type', png(32, 14)), /has no type called/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Water', 'type', png(65, 14)), /at most 64x64/);
