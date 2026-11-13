@@ -3,7 +3,7 @@ import { FS } from '../../lib';
 import { SQL, type PGDatabase } from '../../lib/database';
 
 const BATTLE_SPRITE = { width: 96, height: 96, max: 192 };
-const ICON_SPRITE = { width: 40, height: 30, max: 64 };
+const ICON_SPRITE = { width: 40, height: 30, max: 40 };
 
 export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, max: number } } = {
 	'front': BATTLE_SPRITE,
@@ -20,7 +20,7 @@ export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, ma
 	'afd-back-shiny': BATTLE_SPRITE,
 	'icon': ICON_SPRITE,
 	'icon-f': ICON_SPRITE,
-	'item': { width: 24, height: 24, max: 64 },
+	'item': { width: 64, height: 64, max: 64 },
 	'type': { width: 32, height: 14, max: 64 },
 };
 
