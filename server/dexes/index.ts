@@ -3,7 +3,8 @@ import * as crypto from 'crypto';
 import { FS, Utils } from '../../lib';
 import { SQL, PGDatabase } from '../../lib/database';
 import {
-	baseEffect, buildBase, buildDex, buildFormat, EFFECT_TABLES, isBuiltDex, isObject, releaseDex, type DexLayer, type EffectTable,
+	baseEffect, buildBase, buildDex, buildFormat, EFFECT_TABLES, fusedEngine, isBuiltDex, isObject, releaseDex, type DexLayer,
+	type EffectTable,
 } from '../../sim/dex-custom';
 import { handlersOf } from '../../sim/dex-handlers';
 import type { ModdedDex } from '../../sim/dex';
@@ -67,7 +68,7 @@ export const VISIBILITIES = ['public', 'private'];
 const GAME_TYPES = ['singles', 'doubles', 'triples', 'multi', 'freeforall'];
 const FORMAT_LISTS = ['ruleset', 'banlist', 'unbanlist', 'restricted'];
 const FORMAT_FLAGS = ['bestOfDefault', 'teraPreviewDefault', 'itemClauseDefault', 'debug'];
-const ENGINES: { [engine: string]: string } = { '': 'Standard', fusion: 'Fusions', champions: 'Champions' };
+const ENGINES: { [engine: string]: string } = { '': 'Standard', champions: 'Champions' };
 
 export const dexes = new Map<ID, LoadedDex>();
 const formatDexes = new Map<ID, ID>();
@@ -159,7 +160,7 @@ function baseKey(row: DexRow) {
 
 export function baseOf(row: DexRow): ModdedDex {
 	const parents = parentLayers(row);
-	if (!parents.length) return Dex.mod(row.mod);
+	if (!parents.length) return fusedEngine(Dex, row.mod);
 	if (parents.length === 1 && parents[0].row.mod === row.mod) return parents[0].dex;
 	const key = baseKey(row);
 	if (!bases.has(key)) bases.set(key, buildBase({ mod: row.mod, parents: parents.map(parent => parent.data.hash) }, Dex));
@@ -251,10 +252,8 @@ function formatData(loaded: LoadedDex, data: FormatData, formatid: ID): FormatDa
 	};
 }
 
-const isFusionRule = (spec: string) => !spec.startsWith('!') && toID(spec) === 'infinitefusionmod';
-
 export function formatEngine(data: FormatData) {
-	return (data as AnyObject).engine || ((data.ruleset || []).some(isFusionRule) ? 'fusion' : '');
+	return (data as AnyObject).engine || '';
 }
 
 function engineMod(loaded: LoadedDex, engine?: string) {
@@ -1893,12 +1892,9 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 		if (!enginesOf(loaded).includes(input.engine)) {
 			throw new Chat.ErrorMessage(`"engine" must be one of: ${enginesOf(loaded).map(engine => engine || '""').join(', ')}.`);
 		}
-		data.ruleset = data.ruleset.filter((spec: string) => toID(spec) !== 'infinitefusionmod');
-		if (input.engine === 'fusion') data.ruleset.push('Infinite Fusion Mod');
-		if (input.engine === 'champions') data.engine = 'champions';
+		if (input.engine) data.engine = input.engine;
 		else delete data.engine;
 	}
-	if (data.engine && data.ruleset.some(isFusionRule)) throw new Chat.ErrorMessage(`A format can only have one engine.`);
 	try {
 		Dex.formats.getRuleTable(buildFormat(formatDex(loaded, data as FormatData), formatData(loaded, data as FormatData, '' as ID)));
 	} catch (e: any) {

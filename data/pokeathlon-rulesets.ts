@@ -6,6 +6,19 @@ declare module '../sim/pokemon' {
 	}
 }
 
+type FusionMoves = { [move: string]: { [key: string]: string[] }[] };
+
+declare global {
+	interface ModdedBattleScriptsData {
+		fusionMoves?: FusionMoves;
+		mysteryGiftMoves?: FusionMoves;
+		forecastFormes?: { [species: string]: string[] };
+		formeLinks?: {
+			[species: string]: { battleOnly?: string, requiredMove?: string, requiredAbility?: string, requiredItem?: string },
+		};
+	}
+}
+
 export const Rulesets: import('../sim/dex-formats').ModdedFormatDataTable = {
 	noeventmoves: {
 		effectType: 'ValidatorRule',
@@ -36,15 +49,22 @@ export const Rulesets: import('../sim/dex-formats').ModdedFormatDataTable = {
 			}
 		},
 	},
-	infinitefusionmod: {
+	fusionsmod: {
 		effectType: "Rule",
-		name: "Infinite Fusion Mod",
-		desc: `Pok&eacute;mon can fuse with other Pok&eacute;mon!`,
+		name: "Fusions Mod",
+		desc: `Pok&eacute;mon can fuse with other Pok&eacute;mon, and use the moves and abilities of both.`,
+		ruleset: ['Fusion Move Legality'],
 		onBegin() {
-			this.add('rule', 'Infinite Fusion Mod: Pok\u00e9mon can fuse with other Pok\u00e9mon!');
+			this.add('rule', 'Fusions Mod: Pok\u00e9mon can fuse with other Pok\u00e9mon!');
+		},
+		onSwitchOut(pokemon) {
+			if (!pokemon.m.fusionBase) return;
+			pokemon.m.fusion = pokemon.set.fusion = pokemon.m.fusionBase;
+			delete pokemon.m.fusionBase;
+			pokemon.details = pokemon.getUpdatedDetails();
 		},
 		onValidateSet(set) {
-			if (this.format.id.includes("custom") || this.format.name.includes("CG")) return;
+			if (!this.ruleTable.has('obtainable')) return;
 			const problems: string[] = [];
 			const setHas: { [k: string]: true } = {};
 
@@ -88,7 +108,7 @@ export const Rulesets: import('../sim/dex-formats').ModdedFormatDataTable = {
 			}
 
 			const ability = this.dex.abilities.get(set.ability);
-			if (!abilityPool.has(ability.name)) {
+			if (this.dex.gen > 2 && !abilityPool.has(ability.name)) {
 				problems.push(`${species.name}/${fusion.name} only has access to the following abilities: ${Array.from(abilityPool).join(', ')}.`);
 			}
 
@@ -139,17 +159,16 @@ export const Rulesets: import('../sim/dex-formats').ModdedFormatDataTable = {
 			return { ...newSpecies, types: [...typesSet] };
 		},
 	},
-	ifmovelegality: {
+	fusionmovelegality: {
 		effectType: 'ValidatorRule',
-		name: 'IF Move Legality',
+		name: 'Fusion Move Legality',
 		desc: "Allows Pok&eacute;mon to use any move that their fused mon has.",
 		ruleset: ['OM Unobtainable Moves'],
 		checkCanLearn(move, species, setSources, set) {
 			const fusion = this.dex.species.get(set.fusion);
 			const baseCanLearn = this.checkCanLearn(move, species, this.allSources(species), set);
-			const tutorMoves = (this.format.mod.includes("pokeathlon") || this.format.mod.includes("chaos")) ?
-				{ ...fusionMoves, ...PoAfusionMoves } : fusionMoves;
-			const mgMoves = (this.format.mod.includes("pokeathlon") || this.format.mod.includes("chaos")) ? {} : mysteryGiftMoves;
+			const tutorMoves: FusionMoves = this.dex.data.Scripts.fusionMoves || {};
+			const mgMoves: FusionMoves = this.dex.data.Scripts.mysteryGiftMoves || {};
 			if (move.id in mgMoves) {
 				const data = mgMoves[move.id];
 				for (const possibleSource of data) {
@@ -755,119 +774,6 @@ export const Rulesets: import('../sim/dex-formats').ModdedFormatDataTable = {
 			return problems;
 		},
 	},
-};
-
-export const mysteryGiftMoves: { [key: string]: { [key: string]: string[] }[] } = {
-	"rapidspin": [{ "mysteryGift": ["carbink"] }],
-};
-export const fusionMoves: { [key: string]: { [key: string]: string[] }[] } = {
-	"attackorder": [{ "fusion": ["beedrill"] }],
-	"pollenpuff": [{ "fusion": ["butterfree", "celebi", "parasect", "vileplume", "breloom"] }],
-	"lunge": [{ "fusion": ["spinarak", "ariados", "joltik", "galvantula", "venomoth", "volcarona", "pinsir", "parasect", "ledian", "doduo", "dodrio", "stantler"] }],
-	"defendorder": [{ "fusion": ["beedrill"] }],
-	"healorder": [{ "fusion": ["beedrill"] }],
-	"powder": [{ "fusion": ["butterfree", "venomoth", "volcarona", "parasect", "breloom"] }],
-	"tailglow": [{ "fusion": ["mareep", "flaaffy", "ampharos", "lanturn", "zekrom", "reshiram"] }],
-	"darkestlariat": [{ "fusion": ["snorlax", "regigigas", "poliwrath", "machamp", "electivire", "dusknoir", "swampert", "krookodile", "golurk"] }],
-	"partingshot": [{ "fusion": ["meowth", "persian", "sandile", "krokorok", "krookodile", "umbreon"] }],
-	"topsyturvy": [{ "fusion": ["hitmontop", "wobbuffet"] }],
-	"zingzap": [{ "fusion": ["pichu", "pikachu", "raichu", "voltorb", "electrode"] }, { "fusion": ["sandslash", "golem"], "type": ["Electric"] }],
-	"paraboliccharge": [{ "fusion": ["pichu", "pikachu", "raichu", "magnemite", "magneton", "magnezone", "mareep", "flaaffy", "ampharos", "elekid", "electabuzz", "electivire", "zapdos", "chinchou", "lanturn", "raikou", "klink", "klang", "klinklang", "rotom", "stunfisk"] }],
-	"electrify": [{ "fusion": ["klink", "klang", "klinklang"] }, { "type": ["Electric"] }],
-	"aromaticmist": [{ "fusion": ["weezing", "bulbasaur", "ivysaur", "venusaur", "chikorita", "bayleef", "meganium", "gloom", "vileplume", "bellossom", "roselia", "roserade"] }],
-	"floralhealing": [{ "fusion": ["sunflora", "bellossom", "roselia", "roserade"] }],
-	"secretsword": [{ "fusion": ["honedge", "doublade", "aegislash", "gallade", "farfetchd", "absol", "bisharp", "kingambit"] }],
-	"matblock": [{ "fusion": ["machop", "machoke", "machamp", "tyrogue", "hitmonlee", "hitmonchan", "hitmontop"] }],
-	"mindblown": [{ "fusion": ["voltorb", "electrode", "exeggutor"] }],
-	"shelltrap": [{ "fusion": ["magcargo", "forretress"] }],
-	"heatcrash": [{ "fusion": ["blaziken", "reshiram", "groudon", "charizard", "golurk", "regigigas", "rhydon", "rhyperior", "snorlax"] }],
-	"shadowbone": [{ "fusion": ["marowak"], "type": ["Ghost"] }],
-	"spiritshackle": [{ "fusion": ["banette", "spiritomb", "dusknoir", "shedinja", "cofagrigus"] }],
-	"trickortreat": [{ "fusion": ["gastly", "haunter", "gengar", "mimikyu", "zorua", "zoroark"] }, { "type": ["Grass", "Ghost"] }],
-	"tropkick": [{ "fusion": ["hitmonlee", "hitmontop", "roserade"] }, { "type": ["Grass", "Fighting"] }],
-	"strengthsap": [{ "fusion": ["oddish", "gloom", "vileplume", "bellossom", "hoppip", "skiploom", "jumpluff", "bellsprout", "weepinbell", "victreebel", "paras", "parasect", "drifblim", "breloom"] }],
-	"icehammer": [{ "type": ["Ice"], "learns": ["crabhammer", "woodhammer"] }],
-	"multiattack": [{ "fusion": ["arceus", "mew", "genesect"] }],
-	"instruct": [{ "fusion": ["chimchar", "monferno", "infernape", "kadabra", "alakazam", "slowking"] }],
-	"psychicterrain": [{ "type": ["Psychic"] }],
-	"mistyterrain": [{ "type": ["Fairy"] }],
-	"speedswap": [{ "fusion": ["pikachu", "raichu", "abra", "kadabra", "alakazam", "porygon", "porygon2", "porygonz", "mewtwo", "mew", "joltik", "galvantula"] }],
-	"sparklingaria": [{ "fusion": ["jynx", "jigglypuff", "wigglytuff"], "type": ["Water"] }, { "fusion": ["lapras"] }],
-
-	"hyperspacefury": [{ "fusion": ["giratina", "palkia", "dialga", "arceus"] }],
-	"coreenforcer": [{ "fusion": ["giratina", "palkia", "dialga", "rayquaza"] }],
-	"plasmafists": [{ "fusion": ["electabuzz", "electivire", "zekrom"] }, { "fusion": ["rotom"], "learns": ["thunderpunch"] }],
-	"lightofruin": [{ "fusion": ["arceus", "mew", "celebi", "jirachi"] }],
-	"fleurcannon": [{ "fusion": ["gardevoir", "gallade", "sylveon", "wigglytuff"] }],
-	"naturesmadness": [{ "fusion": ["celebi", "kyogre", "groudon", "absol"] }],
-	"geomancy": [{ "fusion": ["celebi"] }],
-	"vcreate": [{ "fusion": ["entei", "hooh", "typhlosion"] }],
-	"magmastorm": [{ "fusion": ["magcargo", "typhlosion", "magmortar", "magmar", "entei", "groudon"] }, { "learns": ["eruption"] }],
-	"searingshot": [{ "fusion": ["magmortar"] }],
-	"oblivionwing": [{ "fusion": ["murkrow", "honchkrow"] }, { "type": ["Dark", "Flying"] }],
-	"moongeistbeam": [{ "fusion": ["cleffa", "clefairy", "clefable"], "type": ["Dark"] }, { "fusion": ["darkrai", "misdreavus", "mismagius"] }],
-	"spectralthief": [{ "fusion": ["haunter", "gengar", "banette", "giratina", "honedge", "doublade", "aegislash"] }],
-	"seedflare": [{ "fusion": ["jumpluff", "sunflora"] }],
-	"landswrath": [{ "fusion": ["groudon"] }],
-	"thousandarrows": [{ "fusion": ["sandslash", "jolteon", "ferrothorn"], "type": ["Ground"] }],
-	"thousandwaves": [{ "fusion": ["stunfisk", "quagsire", "swampert"] }],
-	"freezeshock": [{ "fusion": ["kyurem", "articuno"], "type": ["Electric"] }],
-	"iceburn": [{ "fusion": ["kyurem", "articuno"], "type": ["Fire"] }],
-	"happyhour": [{ "fusion": ["meowth", "jirachi", "delibird", "munchlax", "snorlax", "pikachu", "raichu"] }],
-	"holdhands": [{ "fusion": ["charmander", "bulbasaur", "squirtle", "pikachu", "togepi"] }],
-	"sunsteelstrike": [{ "fusion": ["charizard", "volcarona", "flareon", "ninetales", "entei", "hooh", "rapidash"], "type": ["Steel"] }],
-	"doubleironbash": [{ "type": ["Steel"], "learns": ["doubleslap"] }],
-	"steameruption": [{ "type": ["Water"], "learns": ["eruption"] }],
-};
-export const PoAfusionMoves: { [key: string]: { [key: string]: string[] }[] } = {
-	"zapcannon": [{ "fusion": ["silretro"], "learns": ["inferno"] }],
-	"retroblast": [{ "learns": ["thunderbolt"], "type": ["Rock"] }],
-	"superheatedcrash": [{ "learns": ["flareblitz", "heatcrash"], "type": ["Water"] }],
-	"stoneaxe": [{ "fusion": ["kleavordelta"], "type": ["Rock"] }],
-	"floatyfall": [{ "fusion": ["tofagrif"], "learns": ["gravity"] }],
-	"thunderouskick": [{ "fusion": ["sekrilon"], "learns": ["thunder"] }],
-	"heatcrash": [{ "fusion": ["omecha"], "type": ["Fire"] }],
-	"syrupbomb": [{ "fusion": ["mochimechi"], "type": ["Grass"] }],
-	"shadowpunch": [{ "fusion": ["hoppyre"], "type": ["Fighting"] }],
-	"saltcure": [{ "fusion": ["mosster"], "learns": ["smellingsalts"] }],
-	"pyropounce": [{ "learns": ["bounce"], "type": ["Fire"] }],
-	"riftjump": [{ "learns": ["bounce"], "type": ["Electric"] }],
-	"purify": [{ "fusion": ["pestri"] }],
-	"mistyexplosion": [{ "fusion": ["furumo"] }],
-	"heatwave": [{ "fusion": ["snowiibay"] }],
-	"mindwipe": [{ "learns": ["haze"], "type": ["Psychic"] }],
-	"surgingstrikes": [{ "fusion": ["crayzigater"] }],
-	"infernalparade": [{ "fusion": ["calobera"], "type": ["Fire"] }],
-	"accelerock": [{ "fusion": ["crenibex"] }],
-	"chillyreception": [{ "fusion": ["heracrosssubarctic"], "learns": ["yawn"] }],
-	"luminacrash": [{ "fusion": ["anneliark"] }],
-	"esperwing": [{ "fusion": ["twinova"] }],
-	"pollenpuff": [{ "fusion": ["butterfree", "celebi", "parasect", "parashukado", "vileplume", "breloom"] }],
-	"lunge": [{ "fusion": ["spinarak", "ariados", "joltik", "galvantula", "venomoth", "volcarona", "pinsir", "parasect", "parashukado", "ledian", "doduo", "dodrio", "stantler"] }],
-	"powder": [{ "fusion": ["butterfree", "venomoth", "volcarona", "parasect", "parashukado", "breloom"] }],
-	"strengthsap": [{ "fusion": ["sweepdol", "oddish", "gloom", "vileplume", "bellossom", "hoppip", "skiploom", "jumpluff", "bellsprout", "weepinbell", "victreebel", "paras", "parasect", "parashukado", "drifblim", "breloom"] }],
-	"ruination": [{ "fusion": ["catastropede"] }],
-	"clangoroussoul": [{ "fusion": ["hydroupa"] }],
-	"earthpower": [{ "fusion": ["magnegauss"] }],
-	"spudmortar": [{ "learns": ["energyball"], "type": ["Electric", "Ground"] }],
-	"phantasmalgust": [{ "learns": ["hurricane"], "type": ["Ghost"] }],
-	"venomousroar": [{ "learns": ["roar"], "type": ["Poison"] }],
-	"severingwind": [{ "learns": ["slash"], "type": ["Flying"] }],
-	"healorder": [{ "fusion": ["nestitan", "beedrill"], "type": ["Bug"] }],
-	"topsyturvy": [{ "fusion": ["pandiz", "hitmontop", "wobbuffet"] }],
-	"pixietrick": [{ "type": ["Dark", "Fairy"] }],
-	"magmastorm": [{ "fusion": ["saturoceras", "magcargo", "typhlosion", "magmortar", "magmar", "entei", "groudon"] }, { "learns": ["eruption"] }],
-	"pheroblast": [{ "type": ["Bug"] }],
-	"meltdown": [{ "learns": ["explosion", "selfdestruct"], "type": ["Fire"] }],
-	"throwingknives": [{ "learns": ["rockblast", "bulletseed"], "type": ["Steel"] }],
-	"shockbombs": [{ "learns": ["rockblast", "bulletseed"], "type": ["Electric"] }],
-	"boulderbash": [{ "learns": ["doublehit"], "type": ["Rock"] }],
-	"heavycleave": [{ "learns": ["cut"], "type": ["Steel"] }],
-	"cometstrike": [{ "type": ["Rock"] }],
-	"spiritsiphon": [{ "learns": ["gigadrain", "drainingkiss"], "type": ["Ghost"] }],
-	"ceaselessedge": [{ "fusion": ["cloudinyte"] }],
-	"skypierce": [{ "learns": ["sacredsword"], "type": ["Flying"] }],
-	"wringout": [{ "fusion": ["sauphozoa"], "learns": ["coil"] }],
 };
 
 Pokemon.prototype.fusionChange = function (

@@ -1,49 +1,4 @@
 export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTable = {
-	disguise: {
-		inherit: true,
-		onDamage(damage, target, source, effect) {
-			if (effect?.effectType === 'Move' &&
-				['mimikyu', 'mimikyutotem', 'mimikyuorion', 'mimikyutemporal'].includes(target.species.id)) {
-				this.add('-activate', target, 'ability: Disguise');
-				this.effectState.busted = true;
-				return 0;
-			}
-		},
-		onCriticalHit(target, source, move) {
-			if (!target) return;
-			if (!['mimikyu', 'mimikyutotem', 'mimikyuorion', 'mimikyutemporal'].includes(target.species.id)) {
-				return;
-			}
-			const hitSub = target.volatiles['substitute'] && !move.flags['bypasssub'] && !(move.infiltrates && this.gen >= 6);
-			if (hitSub) return;
-
-			if (!target.runImmunity(move)) return;
-			return false;
-		},
-		onEffectiveness(typeMod, target, type, move) {
-			if (!target || move.category === 'Status') return;
-			if (!['mimikyu', 'mimikyutotem', 'mimikyuorion', 'mimikyutemporal'].includes(target.species.id)) {
-				return;
-			}
-
-			const hitSub = target.volatiles['substitute'] && !move.flags['bypasssub'] && !(move.infiltrates && this.gen >= 6);
-			if (hitSub) return;
-
-			if (!target.runImmunity(move)) return;
-			return 0;
-		},
-		onUpdate(pokemon) {
-			if (['mimikyu', 'mimikyutotem', 'mimikyuorion', 'mimikyutemporal'].includes(pokemon.species.id) &&
-				this.effectState.busted) {
-				let speciesid = 'Mimikyu-Busted';
-				if (pokemon.species.id === 'mimikyutotem') speciesid = 'Mimikyu-Busted-Totem';
-				if (pokemon.species.id === 'mimikyuorion') speciesid = 'Mimikyu-Orion-Busted';
-				if (pokemon.species.id === 'mimikyutemporal') speciesid = 'Mimikyu-Temporal-Busted';
-				pokemon.formeChange(speciesid, this.effect, true);
-				this.damage(pokemon.baseMaxhp / 8, pokemon, pokemon, this.dex.species.get(speciesid));
-			}
-		},
-	},
 	oblivious: {
 		inherit: true,
 		onTryBoost(boost, target, source, effect) {

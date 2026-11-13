@@ -14,6 +14,9 @@ const EXCLUDED: { [mod: string]: { [table: string]: string[] } } = {
 export const Scripts: ModdedBattleScriptsData = {
 	gen: 9,
 	inherit: 'gen9',
+	fusionMoves: Pokeathlon.fusionMoves,
+	forecastFormes: Mariomon.forecastFormes,
+	formeLinks: Insurgence.formeLinks,
 	init() {
 		const base: AnyObject = this.mod('gen9').data;
 		const tables = ['Moves', 'Abilities', 'Items', 'Conditions', 'Rulesets'] as const;

@@ -4,6 +4,7 @@ const assert = require('assert').strict;
 const { Battle } = require('../../dist/sim/battle');
 const { BattleStream } = require('../../dist/sim/battle-stream');
 const { buildDex, buildFormat, releaseDex } = require('../../dist/sim/dex-custom');
+const { Fusions } = require('../../dist/data/fusions');
 const { parseHandler } = require('../../dist/sim/dex-handlers');
 const { TeamValidator } = require('../../dist/sim/team-validator');
 
@@ -147,7 +148,7 @@ describe('Custom dexes', () => {
 		assert.equal(scarf.onModifySpe, undefined);
 		assert.equal(scarf.onModifyAtk, Dex.data.Items.choicescarf.onModifySpe);
 		const eviolite = dex.items.get('eviolite');
-		assert.equal(eviolite.onModifyDef, Dex.data.Items.eviolite.onModifySpD);
+		assert.equal(String(eviolite.onModifyDef), String(Dex.data.Items.eviolite.onModifySpD));
 		assert.equal(eviolite.onModifySpDPriority, Dex.data.Items.eviolite.onModifyDefPriority);
 		releaseDex(dex);
 
@@ -423,4 +424,97 @@ describe('Custom dexes', () => {
 		assert(!Dex.dexes[owner.currentMod]);
 		assert(!Object.keys(Dex.dexes).some(id => id.startsWith(owner.currentMod + 'tiers')));
 	});
+
+	it('should have a fusion version for every generation whose own code differs', () => {
+		const missing = [];
+		for (const table of ['Abilities', 'Items', 'Moves', 'Conditions']) {
+			const ids = new Set(Object.values(Fusions).flatMap(tables => Object.keys(tables[table] || {})));
+			for (const id of ids) {
+				for (let gen = 1; gen <= 8; gen++) {
+					const own = Dex.mod(`gen${gen}`).data[table][id];
+					if (!own) continue;
+					for (const [path, written] of fusionHandlers(table, id, gen)) {
+						const upstream = Dex.mod(`gen${written}`).data[table][id];
+						const handler = entry => (path.length > 1 ? entry?.condition?.[path[1]] : entry?.[path[0]])?.toString();
+						if (handler(own) !== handler(upstream)) missing.push(`${table} ${id} ${path.join('.')} gen${gen}`);
+					}
+				}
+			}
+		}
+		assert.deepEqual(missing, []);
+	});
+
+	it('should change fused halves through abilities, items and moves, and restore them on switching out', () => {
+		const dex = buildDex({ ...DATA, hash: 'simfusions' });
+		const format = buildFormat(dex, { name: '[Sim Test] Fusions', ruleset: ['Fusions Mod', 'Cancel Mod'] });
+		const battleWith = (p1, p2) => {
+			const battle = new Battle({ format, seed: [1, 2, 3, 4] });
+			battle.setPlayer('p1', { team: p1.map(fill) });
+			battle.setPlayer('p2', { team: p2.map(fill) });
+			return battle;
+		};
+		const fill = set => ({ evs: { hp: 4 }, nature: 'Hardy', item: '', ...set });
+		try {
+			let battle = battleWith(
+				[{ species: 'Snorlax', fusion: 'Mimikyu', ability: 'Disguise', moves: ['splash'] }],
+				[{ species: 'Chansey', ability: 'Natural Cure', moves: ['watergun'] }]
+			);
+			battle.makeChoices('move 1', 'move 1');
+			assert.equal(battle.p1.active[0].m.fusion, 'Mimikyu-Busted');
+			battle.destroy();
+
+			const thunderbolt = item => {
+				const lightBall = battleWith(
+					[{ species: 'Snorlax', fusion: 'Pikachu', ability: 'Static', item, moves: ['thunderbolt'] }],
+					[{ species: 'Chansey', ability: 'Natural Cure', moves: ['splash'] }]
+				);
+				lightBall.makeChoices('move 1', 'move 1');
+				const damage = lightBall.p2.active[0].maxhp - lightBall.p2.active[0].hp;
+				lightBall.destroy();
+				return damage;
+			};
+			assert(thunderbolt('Light Ball') >= thunderbolt('') * 1.9);
+
+			battle = battleWith(
+				[
+					{ species: 'Snorlax', fusion: 'Wishiwashi', ability: 'Schooling', moves: ['splash'] },
+					{ species: 'Pikachu', ability: 'Static', moves: ['splash'] },
+				],
+				[{ species: 'Chansey', ability: 'Natural Cure', moves: ['splash'] }]
+			);
+			const fused = battle.p1.active[0];
+			assert.equal(fused.m.fusion, 'Wishiwashi-School');
+			battle.makeChoices('switch 2', 'move 1');
+			assert.equal(fused.m.fusion, 'Wishiwashi');
+			assert.equal(fused.set.fusion, 'Wishiwashi');
+			battle.destroy();
+
+			battle = battleWith(
+				[{ species: 'Snorlax', fusion: 'Kyogre', ability: 'Drizzle', item: 'Blue Orb', moves: ['splash'] }],
+				[{ species: 'Chansey', ability: 'Natural Cure', moves: ['knockoff'] }]
+			);
+			battle.makeChoices('move 1', 'move 1');
+			assert.equal(battle.p1.active[0].m.fusion, 'Kyogre-Primal');
+			assert.equal(battle.p1.active[0].item, 'blueorb');
+			battle.destroy();
+		} finally {
+			releaseDex(dex);
+		}
+	});
 });
+
+function fusionHandlers(table, id, gen) {
+	const handlers = new Map();
+	for (let written = 9; written >= gen; written--) {
+		const entry = Fusions[written]?.[table]?.[id];
+		if (!entry) continue;
+		for (const key of Object.keys(entry)) {
+			if (key === 'condition') {
+				for (const conditionKey of Object.keys(entry.condition)) handlers.set(`condition.${conditionKey}`, written);
+			} else if (key !== 'inherit') {
+				handlers.set(key, typeof entry[key] === 'function' ? written : null);
+			}
+		}
+	}
+	return [...handlers].filter(([, written]) => written).map(([key, written]) => [key.split('.'), written]);
+}

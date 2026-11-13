@@ -573,20 +573,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 			this.add('-activate', source, 'move: Court Change');
 		},
 	},
-	relicsong: {
-		inherit: true,
-		onAfterMoveSecondarySelf(pokemon) {
-			if (['Meloetta', 'Meloetta-Delta'].includes(pokemon.baseSpecies.baseSpecies) && !pokemon.transformed) {
-				let meloettaForme = '';
-				if (pokemon.baseSpecies.baseSpecies === 'Meloetta') {
-					meloettaForme = pokemon.species.id === 'meloettapirouette' ? '' : '-Pirouette';
-				} if (pokemon.baseSpecies.baseSpecies === 'Meloetta-Delta') {
-					meloettaForme = pokemon.species.id === 'meloettadeltamagician' ? '-Delta' : '-Delta-Magician';
-				}
-				pokemon.formeChange('Meloetta' + meloettaForme, this.effect, false, '0', '[msg]');
-			}
-		},
-	},
 	achillesheel: {
 		num: 34,
 		accuracy: 100,
