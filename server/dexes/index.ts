@@ -67,6 +67,7 @@ export const VISIBILITIES = ['public', 'private'];
 const GAME_TYPES = ['singles', 'doubles', 'triples', 'multi', 'freeforall'];
 const FORMAT_LISTS = ['ruleset', 'banlist', 'unbanlist', 'restricted'];
 const FORMAT_FLAGS = ['bestOfDefault', 'teraPreviewDefault', 'itemClauseDefault', 'debug'];
+const ENGINES: { [engine: string]: string } = { '': 'Standard', fusion: 'Fusions', champions: 'Champions' };
 
 export const dexes = new Map<ID, LoadedDex>();
 const formatDexes = new Map<ID, ID>();
@@ -232,7 +233,10 @@ export function load() {
 
 function reregister() {
 	const ordered = [...currentDexes().values()].sort((a, b) => depthOf(a) - depthOf(b));
-	for (const loaded of [...ordered].reverse()) releaseDex(loaded.dex);
+	for (const loaded of [...ordered].reverse()) {
+		releaseEngines(loaded);
+		releaseDex(loaded.dex);
+	}
 	bases.clear();
 	for (const loaded of ordered) {
 		loaded.dex = buildDex(loaded.data, Dex);
@@ -247,9 +251,45 @@ function formatData(loaded: LoadedDex, data: FormatData, formatid: ID): FormatDa
 	};
 }
 
+const isFusionRule = (spec: string) => !spec.startsWith('!') && toID(spec) === 'infinitefusionmod';
+
+function formatEngine(data: FormatData) {
+	return (data as AnyObject).engine || ((data.ruleset || []).some(isFusionRule) ? 'fusion' : '');
+}
+
+function engineMod(loaded: LoadedDex, engine?: string) {
+	if (engine !== 'champions') return null;
+	const own = Dex.mod(loaded.row.mod).currentMod;
+	return Object.keys(Dex.dexes).find(id => {
+		if (!id.startsWith('champions') || isBuiltDex(id) || id.includes('tiers')) return false;
+		const parent = Dex.mod(id).includeData().parentMod;
+		return !!parent && Dex.mod(parent).currentMod === own;
+	}) || null;
+}
+
+function enginesOf(loaded: LoadedDex) {
+	return Object.keys(ENGINES).filter(engine => engine !== 'champions' || engineMod(loaded, engine));
+}
+
+const engineDexes = new WeakMap<LoadedDex, Map<string, ModdedDex>>();
+
+function formatDex(loaded: LoadedDex, data: FormatData) {
+	const mod = engineMod(loaded, (data as AnyObject).engine);
+	if (!mod) return loaded.dex;
+	const built = engineDexes.get(loaded) || new Map<string, ModdedDex>();
+	engineDexes.set(loaded, built);
+	if (!built.has(mod)) built.set(mod, buildDex({ hash: loaded.data.hash, engine: mod }, Dex));
+	return built.get(mod)!;
+}
+
+function releaseEngines(loaded: LoadedDex) {
+	for (const dex of engineDexes.get(loaded)?.values() || []) releaseDex(dex);
+	engineDexes.delete(loaded);
+}
+
 function register(loaded: LoadedDex) {
 	for (const [formatid, data] of loaded.formats) {
-		Dex.formats.rulesetCache.set(formatid, buildFormat(loaded.dex, formatData(loaded, data, formatid)));
+		Dex.formats.rulesetCache.set(formatid, buildFormat(formatDex(loaded, data), formatData(loaded, data, formatid)));
 		formatDexes.set(formatid, loaded.row.dexid);
 	}
 }
@@ -259,6 +299,7 @@ function unregister(loaded: LoadedDex) {
 		Dex.formats.rulesetCache.delete(formatid);
 		formatDexes.delete(formatid);
 	}
+	releaseEngines(loaded);
 	releaseDex(loaded.dex);
 }
 
@@ -507,7 +548,7 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 	const data = draft ? validateFormat(loaded, { name: saved.name, ...draft }, saved) : saved;
 	const key = `${loaded.data.hash}:${loaded.row.name}:${json(data)}`;
 	if (formatDetailsCache.get(id)?.key === key) return formatDetailsCache.get(id)!.details;
-	const validator = new TeamValidator(draft ? buildFormat(loaded.dex, formatData(loaded, data, id)) : Dex.formats.get(id));
+	const validator = new TeamValidator(draft ? buildFormat(formatDex(loaded, data), formatData(loaded, data, id)) : Dex.formats.get(id));
 	const { dex, ruleTable } = validator;
 	const inDex = new Set(loaded.data.species);
 	const legal: { [kind: string]: ID[] } = { pokemon: [], move: [], ability: [], item: [] };
@@ -578,7 +619,8 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 		}
 	}
 	const details = {
-		id, name: data.name, dex: loaded.row.name, dexid: loaded.row.dexid, mod: loaded.row.mod,
+		id, name: data.name, dex: loaded.row.name, dexid: loaded.row.dexid, mod: engineMod(loaded, (data as AnyObject).engine) || loaded.row.mod,
+		engine: formatEngine(data), engines: enginesOf(loaded).map(engine => ({ id: engine, name: ENGINES[engine] })),
 		gameType: data.gameType || 'singles', ruleset: data.ruleset || [],
 		banlist: data.banlist || [], unbanlist: data.unbanlist || [], restricted: data.restricted || [],
 		tiers: (data as AnyObject).tiers || {},
@@ -633,7 +675,8 @@ export function battleData(formatid: string) {
 	const data = loaded?.formats.get(toID(formatid));
 	if (!loaded || !data) return undefined;
 	for (const layer of ancestorsOf(loaded)) saveLayer(layer);
-	return { hash: loaded.data.hash, format: formatData(loaded, data, toID(formatid)) };
+	const engine = engineMod(loaded, (data as AnyObject).engine);
+	return { hash: loaded.data.hash, format: formatData(loaded, data, toID(formatid)), ...(engine ? { engine } : {}) };
 }
 
 function saveLayer(loaded: LoadedDex) {
@@ -1833,19 +1876,31 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 			}
 		} else if (FORMAT_FLAGS.includes(field)) {
 			if (typeof value !== 'boolean') throw new Chat.ErrorMessage(`"${field}" must be true or false.`);
+		} else if (field === 'engine') {
+			continue;
 		} else if (field === 'tiers') {
 			const tiers = validateTiers(loaded, value);
 			if (tiers) data.tiers = tiers;
 			else delete data.tiers;
 			continue;
 		} else {
-			throw new Chat.ErrorMessage(`"${field}" isn't something you can set. You can set: name, from, gameType, tiers, ${[...FORMAT_LISTS, ...FORMAT_FLAGS].join(', ')}.`);
+			throw new Chat.ErrorMessage(`"${field}" isn't something you can set. You can set: name, from, gameType, engine, tiers, ${[...FORMAT_LISTS, ...FORMAT_FLAGS].join(', ')}.`);
 		}
 		data[field] = value;
 	}
 	if (!data.ruleset) data.ruleset = ['Standard'];
+	if (input.engine !== undefined) {
+		if (!enginesOf(loaded).includes(input.engine)) {
+			throw new Chat.ErrorMessage(`"engine" must be one of: ${enginesOf(loaded).map(engine => engine || '""').join(', ')}.`);
+		}
+		data.ruleset = data.ruleset.filter((spec: string) => toID(spec) !== 'infinitefusionmod');
+		if (input.engine === 'fusion') data.ruleset.push('Infinite Fusion Mod');
+		if (input.engine === 'champions') data.engine = 'champions';
+		else delete data.engine;
+	}
+	if (data.engine && data.ruleset.some(isFusionRule)) throw new Chat.ErrorMessage(`A format can only have one engine.`);
 	try {
-		Dex.formats.getRuleTable(buildFormat(loaded.dex, formatData(loaded, data as FormatData, '' as ID)));
+		Dex.formats.getRuleTable(buildFormat(formatDex(loaded, data as FormatData), formatData(loaded, data as FormatData, '' as ID)));
 	} catch (e: any) {
 		throw new Chat.ErrorMessage(`That format doesn't work: ${e.message}`);
 	}
@@ -1919,7 +1974,10 @@ function mutation<T extends (...args: any[]) => Promise<any>>(action: T): T {
 				return result;
 			} catch (err) {
 				await connection.query('ROLLBACK').catch(err => Monitor.crashlog(err, 'Rolling back a dex edit'));
-				for (const loaded of context.dexes.values()) releaseDex(loaded.dex);
+				for (const loaded of context.dexes.values()) {
+					if (previous.get(loaded.row.dexid) !== loaded) releaseEngines(loaded);
+					releaseDex(loaded.dex);
+				}
 				pruneBases();
 				throw err;
 			} finally {

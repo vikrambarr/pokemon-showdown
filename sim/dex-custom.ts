@@ -36,7 +36,7 @@ export interface DexLayer {
 	format?: FormatData;
 }
 
-export type DexData = DexLayer | { hash: string, format?: FormatData };
+export type DexData = DexLayer | { hash: string, format?: FormatData, engine?: string };
 
 const NOT_INHERITED = ['num', 'name', 'gen', 'isNonstandard'];
 const MERGED_TABLES = ['Pokedex', 'Learnsets', 'FormatsData', 'TypeChart', ...EFFECT_TABLES] as const;
@@ -352,7 +352,52 @@ function canMegaEvo(this: BattleActions, pokemon: Pokemon) {
 	return megaEvolution && megaEvolution !== species.name ? megaEvolution : null;
 }
 
+function copyPrevoMoves(dex: ModdedDex, engine: ModdedDex) {
+	const { Pokedex, Learnsets } = dex.data;
+	for (const id in Pokedex) {
+		if (!Learnsets[id]?.learnset) continue;
+		for (let prevo = Pokedex[id].prevo; prevo; prevo = Pokedex[toID(prevo)]?.prevo) {
+			const prevoid = toID(prevo);
+			const own: AnyObject = engine.data.Learnsets[prevoid]?.learnset || {};
+			for (const [moveid, sources] of Object.entries(Learnsets[prevoid]?.learnset || {})) {
+				if (own[moveid] || (Learnsets[id].learnset as AnyObject)[moveid]) continue;
+				(dex.modData('Learnsets', id).learnset as AnyObject)[moveid] = sources;
+			}
+		}
+	}
+}
+
+function buildEngineDex(hash: string, engine: string, base: typeof Dex) {
+	const id = `${engine}engine${hash}`;
+	const cached = built.get(id);
+	if (cached) {
+		cached.refs++;
+		return cached.dex;
+	}
+	const parent = buildDex({ hash }, base, engine);
+	const dex = new base.ModdedDex(id);
+	dex.parentMod = parent.currentMod;
+	dex.gen = parent.gen;
+	const dataCache: AnyObject = {};
+	for (const [table, entries] of Object.entries(parent.data)) dataCache[table] = { ...entries };
+	dex.dataCache = dataCache as ModdedDex['dataCache'];
+	dex.getAlias = alias => parent.getAlias(alias);
+	dex.forGen = gen => (!gen || gen === dex.gen ? dex : base.forGen(gen));
+	base.dexes[id] = dex;
+	try {
+		dataCache.Scripts.init?.call(dex);
+		if (id.startsWith('champions')) copyPrevoMoves(dex, base.mod(engine));
+	} catch (err) {
+		delete base.dexes[id];
+		releaseDex(parent);
+		throw err;
+	}
+	built.set(id, { dex, base, refs: 1, parents: [parent] });
+	return dex;
+}
+
 export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex {
+	if ('engine' in input && input.engine) return buildEngineDex(input.hash, input.engine, base);
 	const data = 'mod' in input ? input : loadLayer(input.hash);
 	const id = `${engine || data.mod}dex${input.hash}`;
 	const cached = built.get(id);

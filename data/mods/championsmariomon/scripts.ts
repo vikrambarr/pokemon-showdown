@@ -1,4 +1,3 @@
-import { Utils } from '../../../lib';
 import { Abilities } from '../champions/abilities';
 import { Conditions } from '../champions/conditions';
 import { Items } from '../champions/items';
@@ -10,15 +9,21 @@ export const Scripts: ModdedBattleScriptsData = {
 	inherit: 'gen9mariomon',
 	init() {
 		const tables: { [table: string]: AnyObject } = { Moves, Abilities, Items, Conditions };
-		for (const table in tables) {
+		const text = (value: unknown) => JSON.stringify(value, (key, part) => (typeof part === 'function' ? `${part}` : part));
+		const changed = (entry: AnyObject, official: AnyObject = {}) => Object.fromEntries(
+			Object.entries(entry).filter(([key, value]) => key !== 'isNonstandard' && text(value) !== text(official[key]))
+		);
+		for (const table in this.currentMod === 'championsmariomon' ? tables : {}) {
 			const data: AnyObject = this.data[table as 'Moves'];
+			const champions: AnyObject = this.mod('champions').data[table as 'Moves'];
+			const official: AnyObject = this.mod('gen9').data[table as 'Moves'];
 			for (const id in tables[table]) {
-				const { inherit, isNonstandard, ...entry } = Utils.deepClone(tables[table][id]);
-				if (entry.condition?.inherit) {
-					delete entry.condition.inherit;
-					entry.condition = { ...data[id].condition, ...entry.condition };
+				const entry = changed(champions[id], official[id]);
+				const condition = official[id]?.condition;
+				if (entry.condition && condition && Object.keys(condition).every(key => key in entry.condition)) {
+					entry.condition = { ...data[id].condition, ...changed(entry.condition, condition) };
 				}
-				data[id] = inherit ? { ...data[id], ...entry } : entry;
+				data[id] = { ...data[id], ...entry };
 			}
 		}
 		Champions.init!.call(this);

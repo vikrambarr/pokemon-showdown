@@ -742,6 +742,52 @@ describe('Dexes', () => {
 		await Dexes.deleteDex(loaded);
 	});
 
+	it('should run a format on its own engine', async () => {
+		await fixture();
+		let loaded = Dexes.getDex('mochadex');
+		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltling', inheritsFrom: 'Pichu', learnset: { spore: ['9L1'] } }));
+		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltlet', prevo: 'Voltling' }));
+		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Volt Jab', type: 'Electric', category: 'Physical', basePower: 70, pp: 40 }));
+		const ou = formatOf('Mocha Dex', 'OU');
+		assert.deepEqual(Dexes.formatDetails(ou).engines.map(engine => engine.id), ['', 'fusion', 'champions']);
+		assert.equal(Dexes.formatDetails(ou).engine, '');
+
+		let formatid;
+		({ loaded, formatid } = await Dexes.putFormat(loaded, {
+			name: 'Champions', ruleset: ['Flat Rules'], gameType: 'doubles', engine: 'champions',
+		}));
+		const engineDex = Dex.forFormat(Dex.formats.get(formatid));
+		assert(engineDex.currentMod.startsWith('champions'));
+		assert.equal(Dexes.formatDetails(formatid).mod, 'champions');
+		assert.equal(Dexes.formatDetails(formatid).engine, 'champions');
+		assert.equal(Dexes.battleData(formatid).engine, 'champions');
+		assert.deepEqual(engineDex.species.getLearnsetData('voltlet').learnset.spore, ['9L1']);
+		assert.equal(loaded.dex.species.getLearnsetData('voltlet').learnset.spore, undefined);
+		assert.equal(engineDex.moves.get('Volt Jab').pp, 20);
+		assert.equal(loaded.dex.moves.get('Volt Jab').pp, 40);
+		const result = await TeamValidatorAsync.get(formatid).validateTeam(Teams.pack([{
+			species: 'Voltlet', ability: 'Static', moves: ['spore', 'thunderbolt'], evs: { hp: 4 }, nature: 'Modest',
+		}]));
+		assert(!result.includes(`can't learn`) && !result.includes('crashed'), result);
+		const battle = new (require('../../dist/sim/battle').Battle)({ formatid, seed: [1, 2, 3, 4] });
+		assert(battle.dex.currentMod.startsWith('champions'));
+		battle.destroy();
+		await assert.rejects(Dexes.putFormat(loaded, {
+			name: 'Champions', ruleset: ['Flat Rules', 'Infinite Fusion Mod'],
+		}), /only have one engine/);
+
+		({ loaded } = await Dexes.putFormat(loaded, { name: 'Champions', engine: 'fusion' }));
+		assert.deepEqual(loaded.formats.get(formatid).ruleset, ['Flat Rules', 'Infinite Fusion Mod']);
+		assert.equal(loaded.formats.get(formatid).engine, undefined);
+		assert.equal(Dexes.formatDetails(formatid).engine, 'fusion');
+		assert.equal(Dexes.battleData(formatid).engine, undefined);
+		assert(Dex.formats.getRuleTable(Dex.formats.get(formatid)).has('infinitefusionmod'));
+		({ loaded } = await Dexes.putFormat(loaded, { name: 'Champions', engine: '' }));
+		assert.deepEqual(loaded.formats.get(formatid).ruleset, ['Flat Rules']);
+		assert.equal(Dexes.formatDetails(formatid).engine, '');
+		await assert.rejects(Dexes.putFormat(loaded, { name: 'Champions', engine: 'gen9mariomon' }), /"engine" must be one of/);
+	});
+
 	it('should build a fangame dex on an engine mod', async () => {
 		await fixture();
 		const bro = {
