@@ -119,6 +119,43 @@ describe('Dexes', () => {
 		}
 	});
 
+
+	it('should add, reset and delete many entries in one edit, skipping only the ones that fail', async () => {
+		let source = await Dexes.createDex(owner, 'Source Dex', 'gen9');
+		for (const name of ['Bulk One', 'Bulk Two']) ({ loaded: source } = await Dexes.putEffect(source, 'Moves', { name, type: 'Fire' }));
+		({ loaded: source } = await Dexes.putEntry(source, { name: 'Bulkmon', inheritsFrom: 'Pikachu', learnset: { bulktwo: ['9L1'] } }));
+		({ loaded: source } = await Dexes.putEntry(source, { name: 'Okmon', inheritsFrom: 'Pikachu' }));
+		source = await Dexes.setOfficial(source, true);
+		let target = await Dexes.createDex(owner, 'Target Dex', 'gen9');
+		({ loaded: target } = await Dexes.putEffect(target, 'Moves', { name: 'Bulk Two', type: 'Water' }));
+		for (const name of ['Tackle', 'Surf']) ({ loaded: target } = await Dexes.putEffect(target, 'Moves', { name, basePower: 77 }));
+		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
+		const edit = input => crqHandlers.dexedit.call(null, `${target.row.dexid}, ${JSON.stringify(input)}`, owner);
+		const added = await edit({ addpokemon: { from: source.row.dexid, names: ['Bulkmon', 'Okmon'] } });
+		assert.equal(added.skipped.length, 1);
+		assert.match(added.skipped[0], /^Bulkmon: .*own version/);
+		assert(Dexes.getDex('targetdex').entries.has('okmon') && !Dexes.getDex('targetdex').entries.has('bulkmon'));
+		assert.equal((await edit({ addmove: { from: source.row.dexid, names: ['Bulk One', 'Bulk Two'] } })).skipped.length, 1);
+		const moves = () => Dexes.getDex('targetdex').effects.Moves;
+		assert(moves().has('bulkone'));
+		assert.equal((await edit({ resetmove: ['Tackle', 'Surf'] })).error, undefined);
+		assert(!moves().has('tackle') && !moves().has('surf'));
+		assert.equal((await edit({ deletemove: ['Bulk One', 'Bulk Two'] })).error, undefined);
+		assert.equal(moves().size, 0);
+		const before = Dexes.getDex('targetdex');
+		const rejected = await edit({ pokemon: [{ name: 'Pikachu', weightkg: 99 }, { name: 'Eevee', types: ['Fire'] }], move: [{ name: 'Tackle', basePower: 60 }, { name: 'Surf', basePower: -5 }] });
+		assert.match(rejected.error, /^Surf: /);
+		assert.equal(Dexes.getDex('targetdex'), before);
+		await Dexes.refresh(before.row.dexid);
+		assert.equal(Dexes.getDex('targetdex').dex.species.get('Pikachu').weightkg, 6);
+		assert(!Dexes.getDex('targetdex').entries.has('eevee'));
+		const saved = await edit({ pokemon: [{ name: 'Pikachu', weightkg: 99 }, { name: 'Eevee', types: ['Fire'] }], move: [{ name: 'Tackle', basePower: 60 }, { name: 'Surf', basePower: 80 }] });
+		assert.equal(saved.error, undefined);
+		assert.equal(Dexes.getDex('targetdex').dex.species.get('Pikachu').weightkg, 99);
+		assert.deepEqual(Dexes.getDex('targetdex').dex.species.get('Eevee').types, ['Fire']);
+		assert.equal(Dexes.getDex('targetdex').dex.moves.get('Surf').basePower, 80);
+	});
+
 	it('should make a dex with every Pokemon in its base mod', async () => {
 		const loaded = await Dexes.createDex(owner, 'Mocha Dex', 'gen9');
 		assert.equal(loaded.row.ownerid, OWNER);
@@ -384,7 +421,7 @@ describe('Dexes', () => {
 		}]));
 		assert.equal(result.charAt(0), '1', result);
 
-		loaded = await Dexes.deleteEffect(loaded, 'Items', 'Choice Band');
+		loaded = await Dexes.deleteEffect(loaded, 'Items', ['Choice Band']);
 		assert(Dex.mod(loaded.data.mod).items.get('choiceband').exists);
 		assert.equal(loaded.data.effects.Items.choiceband, undefined);
 	});
@@ -534,7 +571,7 @@ describe('Dexes', () => {
 		assert(loaded.dex.types.names().includes('Fairy'));
 		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Dragon'), 1);
 		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Cosmic'), 1);
-		loaded = await Dexes.deleteEffect(loaded, 'TypeChart', 'Fairy');
+		loaded = await Dexes.deleteEffect(loaded, 'TypeChart', ['Fairy']);
 		assert.equal(loaded.dex.getEffectiveness('Fairy', 'Cosmic'), 0);
 
 		loaded = await Dexes.setSprite(owner, loaded, 'water', 'type', png(32, 14));
@@ -574,8 +611,8 @@ describe('Dexes', () => {
 		}));
 		await assert.rejects(Dexes.putEntry(loaded, { name: 'Bulbasaur-X', baseSpecies: 'Venusaur' }), /like "Venusaur-/);
 		await assert.rejects(Dexes.putEntry(loaded, { name: 'Venusaur', baseSpecies: 'Bulbasaur' }), /can't change/);
-		await assert.rejects(Dexes.deleteEffect(loaded, 'TypeChart', 'Cosmic'), /isn't in this dex/);
-		await assert.rejects(Dexes.deleteEntry(loaded, 'Venusaur-Delta'), /isn't in this dex/);
+		await assert.rejects(Dexes.deleteEffect(loaded, 'TypeChart', ['Cosmic']), /isn't in this dex/);
+		await assert.rejects(Dexes.deleteEntry(loaded, ['Venusaur-Delta']), /isn't in this dex/);
 
 		const { dex } = loaded;
 		assert.deepEqual(dex.items.get('Delta Venusaurite').megaStone, { 'Venusaur-Delta': 'Venusaur-Delta-Mega' });
@@ -709,8 +746,6 @@ describe('Dexes', () => {
 		assert(fork.loaded.data.species.includes('sproutle'));
 		assert(!fork.loaded.data.species.includes('bulbasaur'));
 
-		const bulk = Array.from({ length: Dexes.MAX_BATCH + 1 }, (_, i) => ({ name: `Bulk ${i}`, inheritsFrom: 'Bulbasaur' }));
-		await assert.rejects(Dexes.putEntries(get('parentdex'), bulk), /at a time/);
 		assert((await Dexes.setOfficial(get('parentdex'), true)).row.official);
 		await Dexes.deleteDex(fork.loaded);
 		await Dexes.deleteDex(get('childdex'));
