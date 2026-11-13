@@ -276,6 +276,8 @@ const InnateMoves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 export const Scripts: ModdedBattleScriptsData = {
 	inherit: 'gen7',
 	gen: 7,
+	fusionMoves: Parent.fusionMoves,
+	mysteryGiftMoves: Parent.mysteryGiftMoves,
 	init() {
 		Parent.init!.call(this);
 		const own: AnyObject = this.mod('gen9infinitefusion').data;

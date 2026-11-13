@@ -1,18 +1,4 @@
 export const Conditions: import('../../../sim/dex-conditions').ModdedConditionDataTable = {
-	arceus: {
-		inherit: true,
-		onType(types, pokemon) {
-			if (pokemon.m.fusion || pokemon.transformed || pokemon.ability !== 'multitype' && this.gen >= 8) return types;
-			let type: string | undefined = 'Normal';
-			if (pokemon.ability === 'multitype') {
-				type = pokemon.getItem().onPlate;
-				if (!type) {
-					type = 'Normal';
-				}
-			}
-			return [type];
-		},
-	},
 	partiallytrapped: {
 		name: 'partiallytrapped',
 		duration: 5,

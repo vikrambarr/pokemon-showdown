@@ -749,7 +749,7 @@ describe('Dexes', () => {
 		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltlet', prevo: 'Voltling' }));
 		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Volt Jab', type: 'Electric', category: 'Physical', basePower: 70, pp: 40 }));
 		const ou = formatOf('Mocha Dex', 'OU');
-		assert.deepEqual(Dexes.formatDetails(ou).engines.map(engine => engine.id), ['', 'fusion', 'champions']);
+		assert.deepEqual(Dexes.formatDetails(ou).engines.map(engine => engine.id), ['', 'champions']);
 		assert.equal(Dexes.formatDetails(ou).engine, '');
 
 		let formatid;
@@ -772,20 +772,41 @@ describe('Dexes', () => {
 		const battle = new (require('../../dist/sim/battle').Battle)({ formatid, seed: [1, 2, 3, 4] });
 		assert(battle.dex.currentMod.startsWith('champions'));
 		battle.destroy();
-		await assert.rejects(Dexes.putFormat(loaded, {
-			name: 'Champions', ruleset: ['Flat Rules', 'Infinite Fusion Mod'],
-		}), /only have one engine/);
-
-		({ loaded } = await Dexes.putFormat(loaded, { name: 'Champions', engine: 'fusion' }));
-		assert.deepEqual(loaded.formats.get(formatid).ruleset, ['Flat Rules', 'Infinite Fusion Mod']);
-		assert.equal(loaded.formats.get(formatid).engine, undefined);
-		assert.equal(Dexes.formatDetails(formatid).engine, 'fusion');
-		assert.equal(Dexes.battleData(formatid).engine, undefined);
-		assert(Dex.formats.getRuleTable(Dex.formats.get(formatid)).has('infinitefusionmod'));
 		({ loaded } = await Dexes.putFormat(loaded, { name: 'Champions', engine: '' }));
-		assert.deepEqual(loaded.formats.get(formatid).ruleset, ['Flat Rules']);
+		assert.equal(loaded.formats.get(formatid).engine, undefined);
 		assert.equal(Dexes.formatDetails(formatid).engine, '');
-		await assert.rejects(Dexes.putFormat(loaded, { name: 'Champions', engine: 'gen9mariomon' }), /"engine" must be one of/);
+		await assert.rejects(Dexes.putFormat(loaded, { name: 'Champions', engine: 'fusion' }), /"engine" must be one of/);
+	});
+
+	it('should give a format fusions with one rule', async () => {
+		await fixture();
+		let loaded = Dexes.getDex('mochadex');
+		let formatid;
+		({ loaded, formatid } = await Dexes.putFormat(loaded, { name: 'Fusions', ruleset: ['Standard', 'Fusions Mod'] }));
+		assert.deepEqual(loaded.formats.get(formatid).ruleset, ['Standard', 'Fusions Mod']);
+		const ruleTable = Dex.formats.getRuleTable(Dex.formats.get(formatid));
+		for (const rule of ['fusionsmod', 'fusionmovelegality', 'fusionspeciesclause']) assert(ruleTable.has(rule), rule);
+		for (const rule of ['obtainableabilities', 'speciesclause', 'nicknameclause']) assert(!ruleTable.has(rule), rule);
+		assert(Dexes.formatDetails(formatid).rules.includes('fusionsmod'));
+		const validator = TeamValidatorAsync.get(formatid);
+		const fused = { species: 'Voltlet', fusion: 'Charizard', ability: 'Blaze', moves: ['flamethrower'], evs: { hp: 4 }, nature: 'Modest' };
+		assert.equal((await validator.validateTeam(Teams.pack([fused]))).charAt(0), '1');
+		assert.match(await validator.validateTeam(Teams.pack([{ ...fused, fusion: '' }])), /can't learn Flamethrower/);
+		assert.match(await validator.validateTeam(Teams.pack([{ ...fused, ability: 'Levitate' }])), /only has access/);
+		assert.match(await validator.validateTeam(Teams.pack([fused, { ...fused, species: 'Charizard', fusion: 'Pikachu' }])), /Fusion Species Clause/);
+		assert.match(await validator.validateTeam(Teams.pack([{ ...fused, fusion: 'Pikachu', moves: ['zingzap'] }])), /can't learn Zing Zap/);
+
+		({ loaded, formatid } = await Dexes.putFormat(loaded, { name: 'Fusions', ruleset: ['Standard', 'Fusions Mod', '!Fusion Species Clause'] }));
+		assert(!Dex.formats.getRuleTable(Dex.formats.get(formatid)).has('fusionspeciesclause'));
+
+		let old = await Dexes.createDex(owner, 'Old Dex', 'gen2');
+		({ loaded: old, formatid } = await Dexes.putFormat(old, { name: 'OU', ruleset: ['Standard', 'Fusions Mod'] }));
+		assert(Dex.formats.getRuleTable(Dex.formats.get(formatid)).has('obtainableabilities'));
+		const gen2 = await TeamValidatorAsync.get(formatid).validateTeam(Teams.pack([{
+			species: 'Pikachu', fusion: 'Charizard', moves: ['flamethrower'],
+		}]));
+		assert.equal(gen2.charAt(0), '1', gen2);
+		await Dexes.deleteDex(old);
 	});
 
 	it('should build a fangame dex on an engine mod', async () => {

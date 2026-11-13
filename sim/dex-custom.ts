@@ -6,6 +6,8 @@ import type { LearnsetData, SpeciesData, SpeciesFormatsData } from './dex-specie
 import type { BattleActions } from './battle-actions';
 import type { Pokemon } from './pokemon';
 import { Rulesets as PokeathlonRulesets } from '../data/pokeathlon-rulesets';
+import { Fusions } from '../data/fusions';
+import { fusionCheck } from './fusions';
 import { countedAs } from './counts-as';
 import {
 	checkSlot, compileHandler, eventTargets, EVENT_SUFFIXES, handlersOf, parseHandler, render,
@@ -80,7 +82,7 @@ function renameSelf(value: any, from: string, id: string, name: string): any {
 export function inheritedEffect(parent: ModdedDex, table: EffectTable, inherit: string | null | undefined) {
 	const sourceName = inherit || '';
 	const [mod, id] = sourceName.includes(':') ? sourceName.split(':') : ['', sourceName];
-	const source = mod ? (parent.dexes[toID(mod)] && !isBuiltDex(toID(mod)) ? parent.mod(toID(mod)) : null) : parent;
+	const source = mod ? (Dex.dexes[toID(mod)] && !isBuiltDex(toID(mod)) ? parent.mod(toID(mod)) : null) : parent;
 	const baseid = toID(id);
 	return { baseid, base: baseid && source ? source.data[table][baseid] as AnyObject | undefined : undefined };
 }
@@ -265,8 +267,10 @@ export function loadLayer(hash: string): DexLayer {
 	return JSON.parse(fs.readFileSync(path, 'utf8'));
 }
 
+const fusedEngines = new Set<string>();
+
 export function isBuiltDex(mod: string) {
-	return built.has(mod);
+	return built.has(mod) || fusedEngines.has(mod);
 }
 
 function mergeEntry(
@@ -296,7 +300,7 @@ export function buildBase(
 	data: Pick<DexLayer, 'mod' | 'parent' | 'parents'>, base = Dex, engine = data.mod
 ): ModdedDex {
 	const hashes = data.parents || (data.parent ? [data.parent] : []);
-	if (!hashes.length) return base.mod(engine);
+	if (!hashes.length) return fusedEngine(base, engine);
 	if (hashes.length === 1) return buildDex({ hash: hashes[0] }, base, engine);
 	const id = `${engine}dex${hashes.join('')}`;
 	const cached = built.get(id);
@@ -305,7 +309,7 @@ export function buildBase(
 		return cached.dex;
 	}
 	const parents = hashes.map(hash => buildDex({ hash }, base, engine));
-	const original = base.mod(engine);
+	const original = fusedEngine(base, engine);
 	const dex = new base.ModdedDex(id);
 	dex.parentMod = original.currentMod;
 	dex.gen = original.gen;
@@ -367,6 +371,83 @@ function copyPrevoMoves(dex: ModdedDex, engine: ModdedDex) {
 	}
 }
 
+const FUSION_TABLES = ['Abilities', 'Items', 'Moves', 'Conditions'];
+
+function fusionVersion(table: string, id: string, gen: number) {
+	const entries: AnyObject[] = [];
+	for (let fusionGen = 9; fusionGen >= gen; fusionGen--) {
+		const entry = (Fusions[fusionGen] as AnyObject | undefined)?.[table]?.[id];
+		if (entry) entries.push(entry);
+	}
+	if (!entries.length) return null;
+	const conditions = entries.map(entry => entry.condition).filter(Boolean);
+	const condition = conditions.length ? Object.assign({}, ...conditions) : undefined;
+	return Object.assign({}, ...entries, { condition }) as AnyObject;
+}
+
+function fuseEntry(entry: AnyObject, upstream: AnyObject | undefined, fusion: AnyObject): AnyObject | null {
+	const condition = fusion.condition && entry.condition && upstream?.condition &&
+		fuseEntry(entry.condition, upstream.condition, fusion.condition);
+	const isUpstream = (key: string) => typeof fusion[key] === 'function' && entry[key] === upstream?.[key];
+	if (!condition && !Object.keys(fusion).some(key => isUpstream(key) && upstream?.[key])) return null;
+	const fused: AnyObject = { ...entry };
+	if (condition) fused.condition = condition;
+	for (const key of Object.keys(fusion)) {
+		if (key !== 'condition' && isUpstream(key)) fused[key] = fusion[key];
+	}
+	return fused;
+}
+
+function fuseEffects(data: AnyObject, base: typeof Dex, gen: number) {
+	for (const table of FUSION_TABLES) {
+		const entries: AnyObject = data[table] = { ...data[table] };
+		const ids = new Set(Object.values(Fusions).flatMap(tables => Object.keys((tables as AnyObject)[table] || {})));
+		for (const id of ids) {
+			if (!entries[id]) continue;
+			for (let upstreamGen = gen; upstreamGen <= 9; upstreamGen++) {
+				const fusion = fusionVersion(table, id, upstreamGen);
+				const fused = fusion && fuseEntry(entries[id], (base.mod(`gen${upstreamGen}`).data as AnyObject)[table][id], fusion);
+				if (fused) {
+					entries[id] = fused;
+					break;
+				}
+			}
+		}
+	}
+}
+
+export function fusedEngine(base: typeof Dex, engine: string) {
+	const original = base.mod(engine);
+	const id = `${original.currentMod}fusions`;
+	if (base.dexes[id]) return base.dexes[id];
+	const dex = new base.ModdedDex(id);
+	dex.parentMod = original.currentMod;
+	dex.gen = original.gen;
+	const dataCache: AnyObject = { ...original.data };
+	fuseEffects(dataCache, base, original.gen);
+	fusionChecks(dataCache);
+	dex.dataCache = dataCache as ModdedDex['dataCache'];
+	dex.getAlias = alias => original.getAlias(alias);
+	dex.forGen = gen => (!gen || gen === dex.gen ? dex : base.forGen(gen));
+	base.dexes[id] = dex;
+	fusedEngines.add(id);
+	return dex;
+}
+
+function fusionChecks(data: AnyObject) {
+	const items: AnyObject = {};
+	for (const [id, entry] of Object.entries(data.Items as AnyObject)) {
+		let checked: AnyObject | null = null;
+		for (const key of Object.keys(entry)) {
+			if (typeof entry[key] !== 'function') continue;
+			const check = fusionCheck(key, entry[key]);
+			if (check !== entry[key]) (checked ||= { ...entry })[key] = check;
+		}
+		items[id] = checked || entry;
+	}
+	data.Items = items;
+}
+
 function buildEngineDex(hash: string, engine: string, base: typeof Dex) {
 	const id = `${engine}engine${hash}`;
 	const cached = built.get(id);
@@ -387,6 +468,7 @@ function buildEngineDex(hash: string, engine: string, base: typeof Dex) {
 	try {
 		dataCache.Scripts.init?.call(dex);
 		if (id.startsWith('champions')) copyPrevoMoves(dex, base.mod(engine));
+		fusionChecks(dataCache);
 	} catch (err) {
 		delete base.dexes[id];
 		releaseDex(parent);
@@ -437,7 +519,7 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 					desc: "Only Pok&eacute;mon, moves, abilities and items in this dex can be used",
 					onValidateSet(set) {
 						const { outOfBattleSpecies, tierSpecies } = this.getValidationSpecies(set);
-						const fusion = this.ruleTable.has('infinitefusionmod') && set.fusion ? [this.dex.species.get(set.fusion)] : [];
+						const fusion = this.ruleTable.has('fusionsmod') && set.fusion ? [this.dex.species.get(set.fusion)] : [];
 						for (const forme of [outOfBattleSpecies, tierSpecies, ...fusion]) {
 							if (!species.has(forme.isCosmeticForme ? toID(forme.baseSpecies) : forme.id)) {
 								return [`${forme.name} isn't in this dex.`];
@@ -482,6 +564,7 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 			(dex.dataCache as AnyObject)[table] = entries;
 		}
 		countCopies(dex.dataCache);
+		fusionChecks(dex.dataCache);
 		const cosmetic = new Map(Object.entries(data.Pokedex).flatMap(([speciesid, entry]) => (
 			(entry.cosmeticFormes || []).map(forme => [toID(forme), speciesid as ID] as const)
 		)));
@@ -550,9 +633,40 @@ export function buildFormat(dex: ModdedDex, formatData: FormatData): Format {
 	const battle = formatData.debug ? { trunc: Math.trunc } : undefined;
 	const tiers = (formatData as AnyObject).tiers;
 	const formatDex = isObject(tiers) && Object.keys(tiers).length ? tieredDex(dex, tiers) : dex;
-	const format = new formatDex.Format({
-		...formatData, battle, effectType: 'Format', mod: formatDex.currentMod, ruleset, baseRuleset: ruleset,
-	});
-	if (formatData.id) (format as AnyObject).id = formatData.id;
-	return format;
+	const build = (rules: string[]) => {
+		const format = new formatDex.Format({
+			...formatData, battle, effectType: 'Format', mod: formatDex.currentMod, ruleset: rules, baseRuleset: rules,
+		});
+		if (formatData.id) (format as AnyObject).id = formatData.id;
+		return format;
+	};
+	const isReplaced = (rule: string) => rule.trim().startsWith('!') && FUSION_REPLACEMENTS.includes(toID(rule));
+	const probe = ruleset.filter(rule => !isReplaced(rule));
+	const format = build(probe);
+	const fusionRules = fusionRuleset(formatDex, format);
+	if (!fusionRules.length && probe.length === ruleset.length) return format;
+	return build([...probe, ...fusionRules, ...ruleset.filter(isReplaced)]);
+}
+
+const FUSION_REPEALS: [string, string | null][] = [
+	['obtainableabilities', null], ['speciesclause', 'fusionspeciesclause'], ['nicknameclause', null],
+];
+const FUSION_REPLACEMENTS = FUSION_REPEALS.map(([, replacement]) => replacement).filter(Boolean) as string[];
+
+function fusionRuleset(dex: ModdedDex, format: Format) {
+	let ruleTable;
+	try {
+		ruleTable = dex.formats.getRuleTable(format);
+	} catch {
+		return [];
+	}
+	if (!ruleTable.has('fusionsmod')) return [];
+	const rules = [];
+	for (const [ruleid, replacement] of FUSION_REPEALS) {
+		if (!ruleTable.has(ruleid) || (replacement && ruleTable.has(replacement))) continue;
+		if (ruleid === 'obtainableabilities' && dex.gen <= 2) continue;
+		rules.push(`!${dex.formats.get(ruleid).name}`);
+		if (replacement) rules.push(dex.formats.get(replacement).name);
+	}
+	return rules;
 }

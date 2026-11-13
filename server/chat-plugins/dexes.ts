@@ -4,7 +4,7 @@ import { Utils } from '../../lib';
 import * as Dexes from '../dexes';
 import * as Credits from '../dexes/credits';
 import { engineChecks } from '../dexes/effects';
-import type { EffectTable } from '../../sim/dex-custom';
+import { fusedEngine, type EffectTable } from '../../sim/dex-custom';
 import { STATUSES, handlersOf, parseHandler } from '../../sim/dex-handlers';
 import { MAX_SPRITE_BYTES, checkKind, toKind, toSettings } from '../dexes/sprites';
 
@@ -201,7 +201,7 @@ const UNCOMPARED = new Set([
 function gameOf(loaded: Dexes.LoadedDex) {
 	let game = Dex.mod(loaded.row.mod);
 	while (!game.isBase && !/^gen\d+$/.test(game.currentMod)) game = Dex.mod(game.parentMod);
-	return game;
+	return fusedEngine(Dex, game.currentMod);
 }
 
 function serialize(value: unknown) {
