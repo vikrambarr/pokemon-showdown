@@ -1722,6 +1722,10 @@ function socketReceive(worker: ProcessManager.StreamWorker, workerid: number, so
 	// but that is no longer supported
 	const roomId = message.slice(0, pipeIndex) || '';
 	message = message.slice(pipeIndex + 1);
+	if (message.length > 100 * 1024 && !(user.registered && message.startsWith('/crq dexedit '))) {
+		connection.popup(`Your message must be below 100KB`);
+		return;
+	}
 
 	const room = Rooms.get(roomId) || null;
 	const multilineMessage = Chat.multiLinePattern.test(message);

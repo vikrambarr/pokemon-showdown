@@ -27,6 +27,7 @@ function parseJSON(target: string) {
 }
 
 const toList = (value: unknown) => (Array.isArray(value) ? value : [value]).map(String);
+const toInputs = (value: unknown) => (Array.isArray(value) ? value : [value]) as AnyObject[];
 
 function args(target: string, count: number, usage: string) {
 	const parts = Utils.splitFirst(target, ',', count - 1).map(part => part.trim());
@@ -70,6 +71,61 @@ const COUNTED: [Dexes.Table, string][] = [
 ];
 
 const GETTERS = { Moves: 'moves', Abilities: 'abilities', Items: 'items', Conditions: 'conditions', TypeChart: 'types' } as const;
+
+async function applyEdit(user: User, dexid: string, edit: AnyObject) {
+	let loaded = await Dexes.editable(user, dexid);
+	const owner = ['name', 'visibility', 'base', 'clear', 'delete'].some(key => edit[key] !== undefined) ||
+		(edit.editor && (edit.add || toID(edit.editor) !== user.id));
+	if (owner) loaded = await owned(user, dexid);
+	if (edit.delete) {
+		await Dexes.deleteDex(loaded);
+		return { id: null };
+	}
+	if (edit.name !== undefined && edit.name !== loaded.row.name) loaded = await Dexes.setName(loaded, `${edit.name}`);
+	if (edit.visibility !== undefined && edit.visibility !== loaded.row.visibility) {
+		loaded = await Dexes.setVisibility(loaded, `${edit.visibility}`);
+	}
+	if (edit.description !== undefined) loaded = await Dexes.setDescription(loaded, `${edit.description}`);
+	if (edit.editor) loaded = await Dexes.setEditor(loaded, `${edit.editor}`, !!edit.add);
+	if (edit.clear) loaded = await Dexes.clearDex(loaded);
+	let stale: string[] = [];
+	if (edit.base !== undefined) ({ loaded, stale } = await Dexes.setBase(loaded, `${edit.base}`));
+	const skipped: string[] = [];
+	if (edit.addpokemon) {
+		const added = await Dexes.addPokemon(loaded, `${edit.addpokemon.from || ''}`, toList(edit.addpokemon.names));
+		loaded = added.loaded;
+		skipped.push(...added.skipped);
+	}
+	if (edit.pokemon) ({ loaded } = await Dexes.putEntries(loaded, toInputs(edit.pokemon)));
+	for (const op of edit.tiers ? toInputs(edit.tiers) : []) loaded = await Dexes.setTiers(loaded, op);
+	if (edit.deletepokemon) loaded = await Dexes.deletePokemon(loaded, toList(edit.deletepokemon));
+	if (edit.resetpokemon) loaded = await Dexes.deleteEntry(loaded, toList(edit.resetpokemon));
+	for (const kind in EFFECT_TABLES) {
+		const table = EFFECT_TABLES[kind];
+		if (edit[kind]) ({ loaded } = await Dexes.putEffects(loaded, table, toInputs(edit[kind])));
+		const add = edit[`add${kind}`];
+		if (add) {
+			if (!Dexes.LIST_TABLES.includes(table as Dexes.ListTable)) throw new Chat.ErrorMessage(`Conditions come with what needs them.`);
+			const added = await Dexes.addEffects(loaded, table as Dexes.ListTable, `${add.from || ''}`, toList(add.names));
+			loaded = added.loaded;
+			skipped.push(...added.skipped);
+		}
+		if (edit[`delete${kind}`]) loaded = await Dexes.deleteEffects(loaded, table, toList(edit[`delete${kind}`]));
+		if (edit[`reset${kind}`]) loaded = await Dexes.deleteEffect(loaded, table, toList(edit[`reset${kind}`]));
+	}
+	for (const input of edit.type ? toInputs(edit.type) : []) ({ loaded } = await Dexes.putType(loaded, input));
+	if (edit.deletetype) loaded = await Dexes.deleteEffect(loaded, 'TypeChart', [`${edit.deletetype}`]);
+	if (edit.sprite) {
+		const { name, kind, image, settings } = edit.sprite;
+		loaded = await Dexes.setSprite(user, loaded, `${name}`, toKind(`${kind}`), image ? `${image}` : null, settings || {});
+	}
+	let formatid;
+	for (const input of edit.format ? toInputs(edit.format) : []) ({ loaded, formatid } = await Dexes.putFormat(loaded, input));
+	if (edit.deleteformat) loaded = await Dexes.deleteFormat(loaded, `${edit.deleteformat}`);
+	return {
+		id: loaded.row.dexid, ...(stale.length ? { stale } : {}), ...(formatid ? { formatid } : {}), ...(skipped.length ? { skipped } : {}),
+	};
+}
 
 function shownIds(loaded: Dexes.LoadedDex, table: keyof typeof GETTERS, layers = Dexes.ancestorsOf(loaded)) {
 	const removed = new Set(loaded.data.lists?.[table as Dexes.ListTable]?.removed || []);
@@ -445,58 +501,7 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		checkEnabled(user);
 		const [dexid, input] = Utils.splitFirst(target, ',').map(part => part.trim());
 		const edit = parseJSON(input);
-		let loaded = await Dexes.editable(user, dexid);
-		const owner = ['name', 'visibility', 'base', 'clear', 'delete'].some(key => edit[key] !== undefined) ||
-			(edit.editor && (edit.add || toID(edit.editor) !== user.id));
-		if (owner) loaded = await owned(user, dexid);
-		if (edit.delete) {
-			await Dexes.deleteDex(loaded);
-			return { id: null };
-		}
-		if (edit.name !== undefined && edit.name !== loaded.row.name) loaded = await Dexes.setName(loaded, `${edit.name}`);
-		if (edit.visibility !== undefined && edit.visibility !== loaded.row.visibility) {
-			loaded = await Dexes.setVisibility(loaded, `${edit.visibility}`);
-		}
-		if (edit.description !== undefined) loaded = await Dexes.setDescription(loaded, `${edit.description}`);
-		if (edit.editor) loaded = await Dexes.setEditor(loaded, `${edit.editor}`, !!edit.add);
-		if (edit.clear) loaded = await Dexes.clearDex(loaded);
-		let stale: string[] = [];
-		if (edit.base !== undefined) ({ loaded, stale } = await Dexes.setBase(loaded, `${edit.base}`));
-		const skipped: string[] = [];
-		if (edit.addpokemon) {
-			const added = await Dexes.addPokemon(loaded, `${edit.addpokemon.from || ''}`, toList(edit.addpokemon.names));
-			loaded = added.loaded;
-			skipped.push(...added.skipped);
-		}
-		if (edit.pokemon) ({ loaded } = await Dexes.putEntry(loaded, edit.pokemon));
-		if (edit.tiers) loaded = await Dexes.setTiers(loaded, edit.tiers);
-		if (edit.deletepokemon) loaded = await Dexes.deletePokemon(loaded, toList(edit.deletepokemon));
-		for (const name of edit.resetpokemon ? toList(edit.resetpokemon) : []) loaded = await Dexes.deleteEntry(loaded, name);
-		for (const kind in EFFECT_TABLES) {
-			const table = EFFECT_TABLES[kind];
-			if (edit[kind]) ({ loaded } = await Dexes.putEffect(loaded, table, edit[kind]));
-			const add = edit[`add${kind}`];
-			if (add) {
-				if (!Dexes.LIST_TABLES.includes(table as Dexes.ListTable)) throw new Chat.ErrorMessage(`Conditions come with what needs them.`);
-				const added = await Dexes.addEffects(loaded, table as Dexes.ListTable, `${add.from || ''}`, toList(add.names));
-				loaded = added.loaded;
-				skipped.push(...added.skipped);
-			}
-			if (edit[`delete${kind}`]) loaded = await Dexes.deleteEffects(loaded, table, toList(edit[`delete${kind}`]));
-			for (const name of edit[`reset${kind}`] ? toList(edit[`reset${kind}`]) : []) loaded = await Dexes.deleteEffect(loaded, table, name);
-		}
-		if (edit.type) ({ loaded } = await Dexes.putType(loaded, edit.type));
-		if (edit.deletetype) loaded = await Dexes.deleteEffect(loaded, 'TypeChart', `${edit.deletetype}`);
-		if (edit.sprite) {
-			const { name, kind, image, settings } = edit.sprite;
-			loaded = await Dexes.setSprite(user, loaded, `${name}`, toKind(`${kind}`), image ? `${image}` : null, settings || {});
-		}
-		let formatid;
-		if (edit.format) ({ loaded, formatid } = await Dexes.putFormat(loaded, edit.format));
-		if (edit.deleteformat) loaded = await Dexes.deleteFormat(loaded, `${edit.deleteformat}`);
-		return {
-			id: loaded.row.dexid, ...(stale.length ? { stale } : {}), ...(formatid ? { formatid } : {}), ...(skipped.length ? { skipped } : {}),
-		};
+		return Dexes.transaction(() => applyEdit(user, dexid, edit));
 	},
 	async dexformat(target, user) {
 		const [formatid, draft] = Utils.splitFirst(target, ',').map(part => part.trim());

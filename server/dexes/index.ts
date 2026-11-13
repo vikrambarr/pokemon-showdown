@@ -55,7 +55,6 @@ export interface LoadedDex {
 	dex: ModdedDex;
 }
 
-export const MAX_BATCH = 512;
 export const MAX_FORMATS = 16;
 export const MAX_SPRITE_STORAGE = 10 * 1024 * 1024;
 export const MAX_DATA_STORAGE = 1024 * 1024;
@@ -1015,16 +1014,23 @@ async function setSpeciesImpl(loaded: LoadedDex, ids: Set<ID>, add: boolean) {
 	return save(loaded);
 }
 
-async function putEntriesImpl(loaded: LoadedDex, inputs: unknown[]) {
-	if (!inputs.length || (inputs.length > MAX_BATCH && !loaded.row.official)) {
-		throw new Chat.ErrorMessage(`Send 1 to ${MAX_BATCH} Pokemon at a time.`);
+function named<T>(input: unknown, validate: () => T) {
+	try {
+		return validate();
+	} catch (e: any) {
+		if (!(e instanceof Chat.ErrorMessage) || !isObject(input) || !input.name) throw e;
+		throw new Chat.ErrorMessage(`${input.name}: ${e.message}`);
 	}
+}
+
+async function putEntriesImpl(loaded: LoadedDex, inputs: unknown[]) {
+	if (!inputs.length) throw new Chat.ErrorMessage(`Send at least one Pokemon.`);
 	const base = baseOf(loaded.row);
 	const entries = new Map(loaded.entries);
 	const changed = new Map<ID, SpeciesEntry>();
 	for (const input of inputs) {
 		if (!isObject(input)) throw new Chat.ErrorMessage(`Each Pokemon needs to be a JSON object, like {"name": "Pikachu"}.`);
-		const entry = validateEntry(input, base, entries, loaded.dex);
+		const entry = named(input, () => validateEntry(input, base, entries, loaded.dex));
 		if (!entry.num && !base.data.Pokedex[entry.speciesid]) {
 			entry.num = newNum('Pokedex', entries.values());
 		}
@@ -1049,14 +1055,18 @@ export function getEntry(loaded: LoadedDex, name: string) {
 	return entry;
 }
 
-async function deleteEntryImpl(loaded: LoadedDex, name: string) {
-	const entry = getEntry(loaded, name);
+async function deleteEntryImpl(loaded: LoadedDex, names: string[]) {
+	const ids = names.map(name => getEntry(loaded, name).speciesid);
 	const entries = new Map(loaded.entries);
-	entries.delete(entry.speciesid);
+	for (const id of ids) entries.delete(id);
 	check(compile(loaded.row, entries, loaded.effects));
-	await database().query(SQL`DELETE FROM dex_species
-		WHERE dexid = ${loaded.row.dexid} AND speciesid = ${entry.speciesid}`);
-	return saved(loaded, 'Pokedex', entry.speciesid);
+	for (const id of ids) {
+		await database().query(SQL`DELETE FROM dex_species
+			WHERE dexid = ${loaded.row.dexid} AND speciesid = ${id}`);
+	}
+	const updated = await save(loaded);
+	for (const id of ids) await propagate(loaded.row.dexid, 'Pokedex', id);
+	return currentDexes().get(updated.row.dexid) || updated;
 }
 
 async function deletePokemonImpl(loaded: LoadedDex, names: string[]) {
@@ -1133,6 +1143,27 @@ async function setListed(loaded: LoadedDex, table: ListTable, ids: ID[]) {
 	return save(loaded);
 }
 
+async function forkAll(loaded: LoadedDex, source: LoadedDex, table: Table, names: string[], skipped: string[]) {
+	try {
+		const found = new Map<string, Fork>();
+		for (const name of names) dependencies(source, table, toID(name), loaded, found);
+		return { loaded: (await copyInto(loaded, [...found.values()])).loaded, names };
+	} catch (e: any) {
+		if (!(e instanceof Chat.ErrorMessage)) throw e;
+	}
+	const forked: string[] = [];
+	for (const name of names) {
+		try {
+			({ loaded } = await forkEntry(loaded, source, table, name));
+			forked.push(name);
+		} catch (e: any) {
+			if (!(e instanceof Chat.ErrorMessage)) throw e;
+			skipped.push(`${name}: ${e.message}`);
+		}
+	}
+	return { loaded, names: forked };
+}
+
 async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string, names: string[]) {
 	const base = baseOf(target.row);
 	const { gen, source } = sourceOf(from);
@@ -1140,6 +1171,7 @@ async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string,
 	const skipped: string[] = [];
 	const listed: ID[] = [];
 	const inputs: AnyObject[] = [];
+	const forks: string[] = [];
 	let loaded = target;
 	for (const name of names) {
 		const id = toID(name);
@@ -1148,13 +1180,7 @@ async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string,
 			continue;
 		}
 		if (source && (ancestorsOf(source).some(layer => entriesOf(layer, table).has(id)) || !base.data[table][id])) {
-			try {
-				({ loaded } = await forkEntry(loaded, source, table, name));
-				if (base.data[table][id]) listed.push(id);
-			} catch (e: any) {
-				if (!(e instanceof Chat.ErrorMessage)) throw e;
-				skipped.push(`${name}: ${e.message}`);
-			}
+			forks.push(name);
 			continue;
 		}
 		const original = base.data[table][id] as AnyObject | undefined;
@@ -1174,12 +1200,22 @@ async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string,
 		}
 		listed.push(id);
 	}
-	for (const input of inputs) {
-		try {
-			({ loaded } = await putEffect(loaded, 'Moves', input));
-		} catch (e: any) {
-			if (!(e instanceof Chat.ErrorMessage)) throw e;
-			skipped.push(`${input.name}: ${e.message}`);
+	if (source && forks.length) {
+		const forked = await forkAll(loaded, source, table, forks, skipped);
+		loaded = forked.loaded;
+		listed.push(...forked.names.map(toID).filter(id => base.data[table][id]));
+	}
+	try {
+		if (inputs.length) ({ loaded } = await putEffects(loaded, 'Moves', inputs));
+	} catch (e: any) {
+		if (!(e instanceof Chat.ErrorMessage)) throw e;
+		for (const input of inputs) {
+			try {
+				({ loaded } = await putEffect(loaded, 'Moves', input));
+			} catch (err: any) {
+				if (!(err instanceof Chat.ErrorMessage)) throw err;
+				skipped.push(`${input.name}: ${err.message}`);
+			}
 		}
 	}
 	if (listed.length) loaded = await setListed(loaded, table, listed);
@@ -1239,6 +1275,7 @@ async function addPokemonImpl(target: LoadedDex, from: string, names: string[]) 
 	const skipped: string[] = [];
 	const plain = new Set<ID>();
 	const inputs: AnyObject[] = [];
+	const forks: string[] = [];
 	let loaded = target;
 	for (const name of names) {
 		const id = toID(name);
@@ -1247,12 +1284,7 @@ async function addPokemonImpl(target: LoadedDex, from: string, names: string[]) 
 			continue;
 		}
 		if (source && ancestorsOf(source).some(layer => layer.entries.has(id))) {
-			try {
-				({ loaded } = await forkEntry(loaded, source, 'Pokedex', name));
-			} catch (e: any) {
-				if (!(e instanceof Chat.ErrorMessage)) throw e;
-				skipped.push(`${name}: ${e.message}`);
-			}
+			forks.push(name);
 			continue;
 		}
 		if (game) {
@@ -1271,6 +1303,7 @@ async function addPokemonImpl(target: LoadedDex, from: string, names: string[]) 
 			skipped.push(`${name} isn't in ${baseName(loaded.row)}`);
 		}
 	}
+	if (source && forks.length) loaded = (await forkAll(loaded, source, 'Pokedex', forks, skipped)).loaded;
 	if (inputs.length) ({ loaded } = await putEntries(loaded, inputs));
 	if (plain.size) loaded = await setSpecies(loaded, plain, true);
 	return { loaded, skipped };
@@ -1362,21 +1395,33 @@ async function deleteSpriteImpl(user: User, uploadid: string) {
 	return { image, uses: species.length + effects.length };
 }
 
-async function putEffectImpl(loaded: LoadedDex, table: EffectTable, input: AnyObject) {
+async function putEffectsImpl(loaded: LoadedDex, table: EffectTable, inputs: AnyObject[]) {
 	const base = baseOf(loaded.row);
 	const lookup = lookupTables(base, loaded.data.Pokedex, loaded.effects);
-	const entry = validateEffect(input, table, base, loaded.effects[table], lookup, loaded.row.official);
-	if (!base.data[table][entry.effectid]) {
-		entry.num ||= newNum(table);
-		entry.data.num = entry.num;
+	const effects = { ...loaded.effects, [table]: new Map(entriesOf(loaded, table)) } as Effects;
+	const changed: EffectEntry[] = [];
+	for (const input of inputs) {
+		const entry = named(input, () => validateEffect(input, table, base, effects[table], lookup, loaded.row.official));
+		if (!base.data[table][entry.effectid]) {
+			entry.num ||= newNum(table, effects[table].values());
+			entry.data.num = entry.num;
+		}
+		effects[table].set(entry.effectid, entry);
+		changed.push(entry);
 	}
-	const effects = { ...loaded.effects, [table]: new Map([...loaded.effects[table], [entry.effectid, entry]]) };
 	const stale: string[] = [];
 	check(compile(loaded.row, loaded.entries, effects, stale));
 	const broken = stale.filter(problem => !loaded.stale.includes(problem));
 	if (broken.length) throw new Chat.ErrorMessage(`These changes don't work: ${broken.join('; ')}`);
-	await writeEntry(loaded.row.dexid, table, entry);
-	return { loaded: await saved(loaded, table, entry.effectid), entry };
+	for (const entry of changed) await writeEntry(loaded.row.dexid, table, entry);
+	const updated = await save(loaded);
+	for (const entry of changed) await propagate(loaded.row.dexid, table, entry.effectid);
+	return { loaded: currentDexes().get(updated.row.dexid) || updated, entries: changed };
+}
+
+async function putEffectImpl(loaded: LoadedDex, table: EffectTable, input: AnyObject) {
+	const { loaded: updated, entries } = await putEffects(loaded, table, [input]);
+	return { loaded: updated, entry: entries[0] };
 }
 
 export function getEffect<T extends EffectTable | 'TypeChart'>(loaded: LoadedDex, table: T, name: string) {
@@ -1395,14 +1440,18 @@ async function putTypeImpl(loaded: LoadedDex, input: AnyObject) {
 	return { loaded: await saved(loaded, 'TypeChart', entry.effectid), entry };
 }
 
-async function deleteEffectImpl(loaded: LoadedDex, table: EffectTable | 'TypeChart', name: string) {
-	const entry = getEffect(loaded, table, name);
+async function deleteEffectImpl(loaded: LoadedDex, table: EffectTable | 'TypeChart', names: string[]) {
+	const ids = names.map(name => getEffect(loaded, table, name).effectid);
 	const effects = { ...loaded.effects, [table]: new Map(entriesOf(loaded, table)) } as Effects;
-	effects[table].delete(entry.effectid);
+	for (const id of ids) effects[table].delete(id);
 	check(compile(loaded.row, loaded.entries, effects));
-	await database().query(SQL`DELETE FROM dex_effects
-		WHERE dexid = ${loaded.row.dexid} AND effecttable = ${table} AND effectid = ${entry.effectid}`);
-	return saved(loaded, table, entry.effectid);
+	for (const id of ids) {
+		await database().query(SQL`DELETE FROM dex_effects
+			WHERE dexid = ${loaded.row.dexid} AND effecttable = ${table} AND effectid = ${id}`);
+	}
+	const updated = await save(loaded);
+	for (const id of ids) await propagate(loaded.row.dexid, table, id);
+	return currentDexes().get(updated.row.dexid) || updated;
 }
 
 function originOf(source: LoadedDex, entry: Entry): Origin {
@@ -1878,6 +1927,8 @@ export const deleteEffects = mutation(deleteEffectsImpl);
 export const addPokemon = mutation(addPokemonImpl);
 export const setSprite = mutation(setSpriteImpl);
 export const deleteSprite = mutation(deleteSpriteImpl);
+export const transaction = mutation(async <T>(action: () => Promise<T>) => action());
+export const putEffects = mutation(putEffectsImpl);
 export const putEffect = mutation(putEffectImpl);
 export const putType = mutation(putTypeImpl);
 export const deleteEffect = mutation(deleteEffectImpl);
