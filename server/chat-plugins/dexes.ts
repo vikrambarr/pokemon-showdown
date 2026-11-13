@@ -340,7 +340,9 @@ function summary(loaded: Dexes.LoadedDex) {
 		species: loaded.data.species.length,
 		entries: loaded.entries.size,
 		counts: countsOf(loaded),
-		formats: [...loaded.formats.keys()].map(formatid => ({ id: formatid, name: Dex.formats.get(formatid).name })),
+		formats: [...loaded.formats].map(([formatid, data]) => ({
+			id: formatid, name: Dex.formats.get(formatid).name, ...(Dexes.formatEngine(data) ? { engine: Dexes.formatEngine(data) } : {}),
+		})),
 	};
 }
 

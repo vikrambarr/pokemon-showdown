@@ -253,7 +253,7 @@ function formatData(loaded: LoadedDex, data: FormatData, formatid: ID): FormatDa
 
 const isFusionRule = (spec: string) => !spec.startsWith('!') && toID(spec) === 'infinitefusionmod';
 
-function formatEngine(data: FormatData) {
+export function formatEngine(data: FormatData) {
 	return (data as AnyObject).engine || ((data.ruleset || []).some(isFusionRule) ? 'fusion' : '');
 }
 
