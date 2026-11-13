@@ -115,3 +115,18 @@ CREATE TABLE IF NOT EXISTS dex_layers (
 	data JSONB NOT NULL,
 	created BIGINT NOT NULL
 );
+
+ALTER TABLE dex_sprite_uploads ADD COLUMN IF NOT EXISTS credited BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS dex_credits (
+	uploadid TEXT NOT NULL,
+	position INTEGER NOT NULL,
+	accountid TEXT,
+	name TEXT NOT NULL,
+	addedby TEXT NOT NULL,
+	added BIGINT NOT NULL,
+	PRIMARY KEY (uploadid, position)
+);
+
+CREATE INDEX IF NOT EXISTS dex_credits_accountid ON dex_credits (accountid);
+CREATE INDEX IF NOT EXISTS dex_credits_addedby ON dex_credits (addedby);

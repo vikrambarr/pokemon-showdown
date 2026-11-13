@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as http from 'http';
 import { Utils } from '../../lib';
 import * as Dexes from '../dexes';
+import * as Credits from '../dexes/credits';
 import { engineChecks } from '../dexes/effects';
 import type { EffectTable } from '../../sim/dex-custom';
 import { STATUSES, handlersOf, parseHandler } from '../../sim/dex-handlers';
@@ -514,6 +515,22 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		const loaded = Dexes.findDex(target);
 		if (!loaded) return null;
 		return dexEntries(loaded);
+	},
+	async dexcredits(target, user) {
+		const ids = target.split(',').map(id => id.trim()).filter(id => /^[\w-]{1,64}$/.test(id)).slice(0, 50);
+		return { credits: await Credits.creditsOf(ids), ...await Credits.editable(user, ids) };
+	},
+	async dexsetcredits(target, user) {
+		checkEnabled(user);
+		const [uploadid, input] = Utils.splitFirst(target, ',').map(part => part.trim());
+		return { uploadid, credits: await Credits.setCredits(user, uploadid, parseJSON(input).credits) };
+	},
+	async dexeditors(target) {
+		return { people: await Credits.people(target.trim()) };
+	},
+	async dexcreditsearch(target, user) {
+		const [dexid, query] = Utils.splitFirst(target, ',').map(part => part.trim());
+		return { profiles: await Credits.suggestions(user, dexid, query) };
 	},
 	async dexupload(target, user) {
 		return { url: await uploadURL(user, target) };
