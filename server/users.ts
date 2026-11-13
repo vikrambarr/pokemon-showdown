@@ -1441,7 +1441,8 @@ export class User extends Chat.MessageContext {
 		const now = Date.now();
 		const noThrottle = this.hasSysopAccess() || Config.nothrottle;
 
-		if (message.startsWith('/cmd userdetails') || message.startsWith('>> ') || noThrottle) {
+		if (message.startsWith('/cmd userdetails') || message.startsWith('>> ') || noThrottle ||
+			(this.registered && message.startsWith('/crq dex'))) {
 			// certain commands are exempt from the queue
 			Monitor.activeIp = connection.ip;
 			Chat.parse(message, room, this, connection);
@@ -1450,8 +1451,8 @@ export class User extends Chat.MessageContext {
 			return false; // but end the loop here
 		}
 
-		const throttleDelay = this.isPublicBot ? THROTTLE_DELAY_PUBLIC_BOT : this.trusted ? THROTTLE_DELAY_TRUSTED :
-			THROTTLE_DELAY;
+		const throttleDelay = this.isPublicBot ? THROTTLE_DELAY_PUBLIC_BOT : this.trusted || this.registered ?
+			THROTTLE_DELAY_TRUSTED : THROTTLE_DELAY;
 
 		if (this.chatQueueTimeout) {
 			if (!this.chatQueue) this.chatQueue = []; // this should never happen
@@ -1476,8 +1477,8 @@ export class User extends Chat.MessageContext {
 	}
 	startChatQueue(delay: number | null = null) {
 		if (delay === null) {
-			delay = (this.isPublicBot ? THROTTLE_DELAY_PUBLIC_BOT : this.trusted ? THROTTLE_DELAY_TRUSTED :
-				THROTTLE_DELAY) - (Date.now() - this.lastChatMessage);
+			delay = (this.isPublicBot ? THROTTLE_DELAY_PUBLIC_BOT : this.trusted || this.registered ?
+				THROTTLE_DELAY_TRUSTED : THROTTLE_DELAY) - (Date.now() - this.lastChatMessage);
 		}
 
 		this.chatQueueTimeout = setTimeout(
@@ -1519,8 +1520,8 @@ export class User extends Chat.MessageContext {
 			// room no longer exists; do nothing
 		}
 
-		const throttleDelay = this.isPublicBot ? THROTTLE_DELAY_PUBLIC_BOT : this.trusted ? THROTTLE_DELAY_TRUSTED :
-			THROTTLE_DELAY;
+		const throttleDelay = this.isPublicBot ? THROTTLE_DELAY_PUBLIC_BOT : this.trusted || this.registered ?
+			THROTTLE_DELAY_TRUSTED : THROTTLE_DELAY;
 
 		if (this.chatQueue?.length) {
 			this.chatQueueTimeout = setTimeout(() => this.processChatQueue(), throttleDelay);

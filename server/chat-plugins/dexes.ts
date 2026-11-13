@@ -205,7 +205,7 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 	if (entries) return entries;
 	const layers = Dexes.ancestorsOf(loaded);
 	entries = { id: loaded.row.dexid, custom: {}, modified: {} };
-	for (const table of ['Moves', 'Abilities', 'Items', 'Conditions'] as const) {
+	for (const table of ['Pokedex', 'Moves', 'Abilities', 'Items', 'Conditions'] as const) {
 		const { ids, custom, modified } = sortedIds(loaded, table, layers);
 		entries[table] = ids;
 		entries.custom[table] = custom;
@@ -501,7 +501,17 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		checkEnabled(user);
 		const [dexid, input] = Utils.splitFirst(target, ',').map(part => part.trim());
 		const edit = parseJSON(input);
-		return Dexes.transaction(() => applyEdit(user, dexid, edit));
+		const result: AnyObject = await Dexes.transaction(() => applyEdit(user, dexid, edit));
+		const loaded = result.id && Dexes.findDex(result.id);
+		if (loaded) {
+			result.hash = loaded.data.hash;
+			result.entries = dexEntries(loaded);
+			if (!loaded.row.official) {
+				result.dex = { ...summary(loaded), ...Dexes.clientData(loaded), parentids: loaded.row.parents };
+			}
+		}
+		result.dexes = await crqHandlers.dexes.call(this, '', user);
+		return result;
 	},
 	async dexformat(target, user) {
 		const [formatid, draft] = Utils.splitFirst(target, ',').map(part => part.trim());

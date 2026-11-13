@@ -130,7 +130,7 @@ describe('Dexes', () => {
 		({ loaded: target } = await Dexes.putEffect(target, 'Moves', { name: 'Bulk Two', type: 'Water' }));
 		for (const name of ['Tackle', 'Surf']) ({ loaded: target } = await Dexes.putEffect(target, 'Moves', { name, basePower: 77 }));
 		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
-		const edit = input => crqHandlers.dexedit.call(null, `${target.row.dexid}, ${JSON.stringify(input)}`, owner);
+		const edit = input => crqHandlers.dexedit.call({ connection: {} }, `${target.row.dexid}, ${JSON.stringify(input)}`, owner);
 		const added = await edit({ addpokemon: { from: source.row.dexid, names: ['Bulkmon', 'Okmon'] } });
 		assert.equal(added.skipped.length, 1);
 		assert.match(added.skipped[0], /^Bulkmon: .*own version/);
@@ -138,8 +138,13 @@ describe('Dexes', () => {
 		assert.equal((await edit({ addmove: { from: source.row.dexid, names: ['Bulk One', 'Bulk Two'] } })).skipped.length, 1);
 		const moves = () => Dexes.getDex('targetdex').effects.Moves;
 		assert(moves().has('bulkone'));
-		assert.equal((await edit({ resetmove: ['Tackle', 'Surf'] })).error, undefined);
+		const reset = await edit({ resetmove: ['Tackle', 'Surf'] });
+		assert.equal(reset.error, undefined);
 		assert(!moves().has('tackle') && !moves().has('surf'));
+		assert.equal(reset.hash, Dexes.getDex('targetdex').data.hash);
+		assert.equal(reset.dex.hash, reset.hash);
+		assert(reset.entries.Moves.includes('bulkone'));
+		assert(reset.dexes.some(summary => summary.id === target.row.dexid && summary.hash === reset.hash));
 		assert.equal((await edit({ deletemove: ['Bulk One', 'Bulk Two'] })).error, undefined);
 		assert.equal(moves().size, 0);
 		const before = Dexes.getDex('targetdex');
@@ -183,7 +188,7 @@ describe('Dexes', () => {
 		const entries = await crqHandlers.dexentries.call(null, mocha, owner);
 		assert(entries.world.includes('rotomwash') && !entries.world.includes('charizardmegax'));
 		assert(entries.needed.includes('par') && entries.needed.includes('raindance') && entries.needed.length < entries.Conditions.length);
-		const edit = input => crqHandlers.dexedit.call(null, `${mocha}, ${JSON.stringify(input)}`, owner);
+		const edit = input => crqHandlers.dexedit.call({ connection: {} }, `${mocha}, ${JSON.stringify(input)}`, owner);
 		assert.equal((await edit({ deletepokemon: ['Rotom', 'Charizard', 'Pikachu-Alola'] })).error, undefined);
 		const removed = Dexes.getDex('mochadex').data.species;
 		assert(!removed.includes('rotom') && !removed.includes('rotomwash') && !removed.includes('pikachualola'));
@@ -231,7 +236,7 @@ describe('Dexes', () => {
 		await Dexes.deleteDex(Dexes.getDex('uraniumtest'));
 		assert.match((await edit({ pokemon: { name: 'Pichu', prevo: 'Raichu' } })).error, /evolve into each other in a loop/);
 		assert.deepEqual((await crqHandlers.dexsource.call(null, `${mocha}, gen1`, owner)).species.length, 151);
-		assert.match((await crqHandlers.dexedit.call(null, `${mocha}, ${JSON.stringify({ addpokemon: { names: ['Charizard'] } })}`, editor)).error, /edit/);
+		assert.match((await crqHandlers.dexedit.call({ connection: {} }, `${mocha}, ${JSON.stringify({ addpokemon: { names: ['Charizard'] } })}`, editor)).error, /edit/);
 	});
 
 	it('should make custom Pokemon, edit existing ones, and play them in its formats', async () => {
