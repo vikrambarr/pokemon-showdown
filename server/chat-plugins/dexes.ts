@@ -67,7 +67,7 @@ async function owned(user: User, name: string) {
 }
 
 const COUNTED: [Dexes.Table, string][] = [
-	['Pokedex', 'Pok&eacute;mon'], ...Object.values(EFFECT_TABLES).map(table => [table, table] as [EffectTable, string]), ['TypeChart', 'Types'],
+	['Pokedex', 'Pok&eacute;mon'], ...Dexes.LIST_TABLES.map(table => [table, table] as [EffectTable, string]), ['TypeChart', 'Types'],
 ];
 
 const GETTERS = { Moves: 'moves', Abilities: 'abilities', Items: 'items', Conditions: 'conditions', TypeChart: 'types' } as const;
@@ -102,6 +102,9 @@ async function applyEdit(user: User, dexid: string, edit: AnyObject) {
 	if (edit.resetpokemon) loaded = await Dexes.deleteEntry(loaded, toList(edit.resetpokemon));
 	for (const kind in EFFECT_TABLES) {
 		const table = EFFECT_TABLES[kind];
+		if (table === 'Conditions' && edit[kind] && toInputs(edit[kind]).some(input => !loaded.dex.data.Conditions[toID(input?.name)])) {
+			throw new Chat.ErrorMessage(`Conditions come with what needs them.`);
+		}
 		if (edit[kind]) ({ loaded } = await Dexes.putEffects(loaded, table, toInputs(edit[kind])));
 		const add = edit[`add${kind}`];
 		if (add) {
@@ -154,6 +157,37 @@ function neededConditions(loaded: Dexes.LoadedDex, entries: AnyObject) {
 		}
 	}
 	return entries.Conditions.filter((id: ID) => needed.has(id));
+}
+
+const conditionsCache = new WeakMap<Dexes.LoadedDex, Map<string, ID[]>>();
+
+function conditionRefs(loaded: Dexes.LoadedDex) {
+	let refs = conditionsCache.get(loaded);
+	if (refs) return refs;
+	refs = new Map();
+	const data = loaded.dex.data;
+	for (const table of Dexes.LIST_TABLES) {
+		for (const id of shownIds(loaded, table)) {
+			const found = new Set<ID>();
+			for (const match of serialize(data[table][id]).matchAll(/(['"`])([^'"`\n]{1,40})\1/g)) {
+				const ref = toID(match[2]);
+				if (ref !== id && data.Conditions[ref] && !data.Pokedex[ref]) found.add(ref);
+			}
+			if (found.size) refs.set(`${table}:${id}`, [...found]);
+		}
+	}
+	conditionsCache.set(loaded, refs);
+	return refs;
+}
+
+function conditionEditor(loaded: Dexes.LoadedDex, id: ID) {
+	const users = [];
+	for (const [key, ids] of conditionRefs(loaded)) {
+		if (!ids.includes(id)) continue;
+		const [table, effectid] = key.split(':') as [Dexes.ListTable, ID];
+		users.push(loaded.dex.data[table][effectid].name);
+	}
+	return { ...Dexes.effectEditor(loaded, 'Conditions', id), users: users.sort() };
 }
 
 const countsCache = new WeakMap<Dexes.LoadedDex, AnyObject[]>();
@@ -536,7 +570,12 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		const loaded = Dexes.findDex(dexid);
 		const table = EFFECT_TABLES[toID(kind)];
 		if (!loaded || !table) return null;
-		return { dexid: loaded.row.dexid, ...Dexes.effectEditor(loaded, table, name) };
+		if (table === 'Conditions') return { dexid: loaded.row.dexid, ...conditionEditor(loaded, toID(name)) };
+		const conditions = conditionRefs(loaded).get(`${table}:${toID(name)}`) || [];
+		return {
+			dexid: loaded.row.dexid, ...Dexes.effectEditor(loaded, table, name),
+			conditions: Object.fromEntries(conditions.map(id => [id, conditionEditor(loaded, id)])),
+		};
 	},
 };
 

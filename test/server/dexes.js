@@ -316,7 +316,7 @@ describe('Dexes', () => {
 		assert.deepEqual(Dexes.clientData(loaded).sprites.voltlet, { front: image.uploadid });
 		assert.equal(Dexes.clientData(loaded).images[image.uploadid].uploader, 'Dex Owner');
 		assert.equal(Dexes.clientData(loaded).images[image.uploadid].file, `${image.sha}.png`);
-		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'icon', png(96, 96)), /at most 64x64/);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'icon', png(96, 96)), /at most 40x40/);
 		await assert.rejects(Dexes.setSprite(owner, loaded, 'Voltlet', 'front', 'bm90IGEgcG5n'), /PNG or GIF/);
 		const used = Dexes.spritesUsed(OWNER);
 		assert(used >= image.bytes && image.bytes > 0);
@@ -357,6 +357,7 @@ describe('Dexes', () => {
 		loaded = await Dexes.setSprite(owner, loaded, 'Leftovers', 'item', png(24, 24));
 		assert.deepEqual(loaded.effects.Items.get('leftovers').data, { name: 'Leftovers' });
 		assert.equal(Dexes.clientData(loaded).itemSprites.leftovers, loaded.effects.Items.get('leftovers').sprites.item);
+		await assert.rejects(Dexes.setSprite(owner, loaded, 'Leftovers', 'item', png(65, 65)), /at most 64x64/);
 		loaded = await Dexes.setSprite(owner, loaded, 'Pikachu', 'icon', png(40, 30));
 		assert.deepEqual(loaded.entries.get('pikachu').data, { name: 'Pikachu' });
 		assert.equal(loaded.data.Pokedex.pikachu.baseStats.spe, Dex.species.get('Pikachu').baseStats.spe);
@@ -543,6 +544,37 @@ describe('Dexes', () => {
 			Dexes.dexes.delete('dbroken');
 			Object.assign(Monitor, { crashlog });
 		}
+	});
+
+	it('should edit conditions only through what needs them, and copy a Pokemon\'s own condition with it', async () => {
+		await fixture();
+		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
+		const mocha = id('Mocha Dex');
+		const edit = input => crqHandlers.dexedit.call({ connection: {} }, `${mocha}, ${JSON.stringify(input)}`, owner);
+		const [dex] = await crqHandlers.dexes.call({ connection: {} }, 'mocha dex', owner);
+		assert(!dex.counts.some(count => count.table === 'Conditions'));
+
+		const wisp = await crqHandlers.dexeffect.call(null, `${mocha}, move, willowisp`, owner);
+		assert(wisp.conditions.brn.users.includes('Will-O-Wisp') && wisp.conditions.brn.users.includes('Scald'));
+		assert(wisp.conditions.brn.handlers.length);
+		const burn = await crqHandlers.dexeffect.call(null, `${mocha}, condition, brn`, owner);
+		assert.deepEqual(burn.users, wisp.conditions.brn.users);
+		assert.equal(burn.conditions, undefined);
+
+		assert.match((await edit({ condition: { name: 'Hot Sauce', duration: 3 } })).error, /come with what needs them/);
+		assert.equal((await edit({ condition: { name: 'brn', noCopy: true } })).error, undefined);
+
+		assert.equal((await edit({ pokemon: { name: 'Arceon', inheritsFrom: 'Arceus' } })).error, undefined);
+		let loaded = Dexes.getDex(mocha);
+		assert.equal(loaded.dex.data.Conditions.arceon.name, 'Arceon');
+		assert.equal(typeof loaded.dex.species.get('Arceon').onType, 'function');
+		const arceon = await crqHandlers.dexeffect.call(null, `${mocha}, condition, arceon`, owner);
+		assert(arceon.handlers.some(handler => handler.path === 'onType'));
+		assert.equal((await edit({ pokemon: { name: 'Arceon', types: ['Fire'] } })).error, undefined);
+		assert.equal((await edit({ deletepokemon: ['Arceon'] })).error, undefined);
+		loaded = Dexes.getDex(mocha);
+		assert.equal(loaded.dex.data.Conditions.arceon, undefined);
+		assert(!loaded.effects.Conditions.has('arceon'));
 	});
 
 	it('should count only what exists in a dex\'s generation, and tell outright bans from tag bans', async () => {

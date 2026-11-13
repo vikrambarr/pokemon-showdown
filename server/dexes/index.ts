@@ -1028,20 +1028,45 @@ async function putEntriesImpl(loaded: LoadedDex, inputs: unknown[]) {
 	const base = baseOf(loaded.row);
 	const entries = new Map(loaded.entries);
 	const changed = new Map<ID, SpeciesEntry>();
+	const effects = { ...loaded.effects, Conditions: new Map(loaded.effects.Conditions) };
+	const conditions: EffectEntry[] = [];
 	for (const input of inputs) {
 		if (!isObject(input)) throw new Chat.ErrorMessage(`Each Pokemon needs to be a JSON object, like {"name": "Pikachu"}.`);
 		const entry = named(input, () => validateEntry(input, base, entries, loaded.dex));
 		if (!entry.num && !base.data.Pokedex[entry.speciesid]) {
 			entry.num = newNum('Pokedex', entries.values());
 		}
+		const condition = !entries.has(entry.speciesid) && speciesCondition(loaded, entry);
+		if (condition) {
+			condition.num = condition.data.num = newNum('Conditions', effects.Conditions.values());
+			effects.Conditions.set(condition.effectid, condition);
+			conditions.push(condition);
+		}
 		entries.set(entry.speciesid, entry);
 		changed.set(entry.speciesid, entry);
 	}
-	check(compile(loaded.row, entries, loaded.effects));
+	check(compile(loaded.row, entries, effects));
 	for (const entry of changed.values()) await writeEntry(loaded.row.dexid, 'Pokedex', entry);
+	for (const condition of conditions) await writeEntry(loaded.row.dexid, 'Conditions', condition);
 	const updated = await save(loaded);
 	for (const id of changed.keys()) await propagate(loaded.row.dexid, 'Pokedex', id);
 	return { loaded: currentDexes().get(updated.row.dexid) || updated, entries: [...changed.values()] };
+}
+
+function speciesCondition(loaded: LoadedDex, entry: SpeciesEntry): EffectEntry | null {
+	const data = loaded.dex.data;
+	if (!entry.inheritsfrom || data.Conditions[entry.speciesid]) return null;
+	const from = [entry.inheritsfrom, toID(data.Pokedex[entry.inheritsfrom]?.baseSpecies)].find(id => data.Conditions[id]);
+	if (!from) return null;
+	const official = baseOf(loaded.row).data.Conditions[from];
+	const engine = !official && engineOf(loaded, 'Conditions', from);
+	const own = loaded.effects.Conditions.get(from);
+	const copy = own ? JSON.parse(json(own)) : { data: {}, slots: {}, events: {}, sprites: {} };
+	return {
+		...copy, effecttable: 'Conditions', effectid: entry.speciesid, num: 0, data: { ...copy.data, name: entry.data.name },
+		inheritsfrom: own?.inheritsfrom || (official ? from : engine ? `${engine}:${from}` : null),
+		origin: null, trackdex: null, trackid: null,
+	};
 }
 
 async function putEntryImpl(loaded: LoadedDex, input: AnyObject) {
@@ -1087,11 +1112,17 @@ async function deletePokemonImpl(loaded: LoadedDex, names: string[]) {
 	const inherited = new Set(parentsOf(loaded).flatMap(parent => parent.data.species));
 	const species = loaded.row.species.filter(id => !ids.has(id));
 	const removed = [...new Set([...loaded.row.removed, ...[...ids].filter(id => inherited.has(id))])];
-	check(compile({ ...loaded.row, species, removed }, entries, loaded.effects));
+	const effects = { ...loaded.effects, Conditions: new Map(loaded.effects.Conditions) };
+	const conditions = deleted.filter(id => !base.data.Conditions[id] && effects.Conditions.delete(id));
+	check(compile({ ...loaded.row, species, removed }, entries, effects));
 	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = ${json(removed)}
 		WHERE dexid = ${loaded.row.dexid}`);
 	for (const id of deleted) {
 		await database().query(SQL`DELETE FROM dex_species WHERE dexid = ${loaded.row.dexid} AND speciesid = ${id}`);
+	}
+	for (const id of conditions) {
+		await database().query(SQL`DELETE FROM dex_effects
+			WHERE dexid = ${loaded.row.dexid} AND effecttable = 'Conditions' AND effectid = ${id}`);
 	}
 	const updated = await save(loaded);
 	for (const id of deleted) await propagate(loaded.row.dexid, 'Pokedex', id);
