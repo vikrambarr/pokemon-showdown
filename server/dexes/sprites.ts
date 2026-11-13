@@ -164,6 +164,7 @@ export async function getUploads(db: PGDatabase, ids: string[]) {
 
 export async function remove(db: PGDatabase, image: Upload, afterCommit?: (remove: () => Promise<void>) => void) {
 	await db.query(SQL`DELETE FROM dex_sprite_uploads WHERE uploadid = ${image.uploadid}`);
+	await db.query(SQL`DELETE FROM dex_credits WHERE uploadid = ${image.uploadid}`);
 	const others = await db.queryOne<{ count: string }>(SQL`
 		SELECT count(*) FROM dex_sprite_uploads WHERE sha = ${image.sha}`);
 	if (Number(others?.count)) return;

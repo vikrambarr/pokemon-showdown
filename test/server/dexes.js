@@ -577,6 +577,51 @@ describe('Dexes', () => {
 		assert(!loaded.effects.Conditions.has('arceon'));
 	});
 
+	it('should credit accounts and names on a sprite, letting only its uploader and dex owner change them', async () => {
+		await fixture({ sprites: true, editorAccess: true });
+		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
+		const mocha = id('Mocha Dex');
+		const loaded = await Dexes.setSprite(owner, Dexes.getDex(mocha), 'Voltlet', 'back', png(96, 96), { artist: 'Old Artist' });
+		const { front, back } = loaded.entries.get('voltlet').sprites;
+		const profile = account => ({
+			discordid: account, name: account === OWNER ? 'Dex Owner' : 'Dex Editor', names: [], username: 'handle',
+			globalname: null, avatar: `https://cdn.example/${account}.png`,
+		});
+		LoginServer.request = async (action, data) => {
+			if (action === 'discord/profiles') return [{ profiles: data.ids.split(',').filter(each => [OWNER, EDITOR].includes(each)).map(profile) }];
+			if (action === 'discord/search') return [{ profiles: /edit/i.test(data.query) ? [profile(EDITOR)] : [] }];
+			return [null];
+		};
+		try {
+			const call = (cmd, target, who = owner) => crqHandlers[cmd].call({ connection: {} }, target, who);
+			const set = (credits, who) => call('dexsetcredits', `${front}, ${JSON.stringify({ credits })}`, who);
+			const listed = await call('dexcredits', `${front},${back}`);
+			assert.deepEqual(listed.credits, { [front]: [], [back]: [{ name: 'Old Artist' }] });
+			assert.deepEqual([listed.account, listed.editable], [OWNER, { [front]: true, [back]: true }]);
+			assert.deepEqual((await call('dexcredits', front, editor)).editable, { [front]: false });
+
+			const editorCredit = { account: EDITOR, name: 'Dex Editor', username: 'handle', avatar: `https://cdn.example/${EDITOR}.png` };
+			const saved = await set([{ account: EDITOR }, { name: 'Some Artist' }, { name: 'some artist' }, { account: EDITOR }]);
+			assert.deepEqual(saved.credits, [editorCredit, { name: 'Some Artist' }]);
+			assert.deepEqual((await call('dexcredits', front)).credits[front], saved.credits);
+			assert.match((await set([{ account: '999' }])).error, /doesn't exist/);
+			assert.match((await set([{ name: '  ' }])).error, /needs an account/);
+			assert.match((await set(new Array(9).fill({ name: 'X' }).map((each, i) => ({ name: `X${i}` })))).error, /at most 8/);
+			assert.match((await set([{ name: 'Someone Else' }], editor)).error, /Only the uploader/);
+			assert.deepEqual((await set([{ name: 'Some Artist' }], editor)).credits, [{ name: 'Some Artist' }]);
+			assert.match((await set([], editor)).error, /Only the uploader/);
+
+			assert.deepEqual((await set([], owner)).credits, []);
+			assert.deepEqual((await call('dexcredits', back)).credits[back], [{ name: 'Old Artist' }]);
+			const suggested = (await call('dexcreditsearch', `${mocha}, `)).profiles.map(each => each.account);
+			assert.deepEqual(suggested.sort(), [OWNER, EDITOR].sort());
+			assert.deepEqual((await call('dexcreditsearch', `${mocha}, Editor`)).profiles, [editorCredit]);
+			assert.deepEqual((await call('dexeditors', mocha)).people.map(each => each.account), [OWNER, EDITOR]);
+		} finally {
+			LoginServer.request = request;
+		}
+	});
+
 	it('should count only what exists in a dex\'s generation, and tell outright bans from tag bans', async () => {
 		await fixture();
 		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
