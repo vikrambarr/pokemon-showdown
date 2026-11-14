@@ -549,6 +549,11 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 	if (formatDetailsCache.get(id)?.key === key) return formatDetailsCache.get(id)!.details;
 	const validator = new TeamValidator(draft ? buildFormat(formatDex(loaded, data), formatData(loaded, data, id)) : Dex.formats.get(id));
 	const { dex, ruleTable } = validator;
+	const overrides = (data.ruleset || []).filter(spec => /^\s*!/.test(spec) &&
+		dex.formats.get(spec.replace(/^[\s!]+/, '').split('=')[0]).hasValue);
+	const defaults = overrides.length ? Dex.formats.getRuleTable(buildFormat(formatDex(loaded, data), formatData(loaded, {
+		...data, ruleset: data.ruleset!.filter(spec => !overrides.includes(spec)),
+	}, '' as ID))).valueRules : null;
 	const inDex = new Set(loaded.data.species);
 	const legal: { [kind: string]: ID[] } = { pokemon: [], move: [], ability: [], item: [] };
 	const banned: { [kind: string]: ID[] } = { pokemon: [], move: [], ability: [], item: [] };
@@ -625,6 +630,8 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 		tiers: (data as AnyObject).tiers || {},
 		rules: [...ruleTable.keys()].filter(rule => !/^[-+*!]/.test(rule) && !rule.includes(':')),
 		sources: Object.fromEntries([...ruleTable].filter(([rule, source]) => source && !/^[-+*!]/.test(rule) && !rule.includes(':'))),
+		values: Object.fromEntries(ruleTable.valueRules),
+		...defaults ? { defaults: Object.fromEntries(defaults) } : {},
 		bans, legal, banned, outright,
 	};
 	if (!draft) formatDetailsCache.set(id, { key, details });
@@ -632,6 +639,12 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 }
 
 const formatRulesCache = new Map<string, AnyObject>();
+
+const VALUE_OPTIONS: { [ruleid: string]: (dex: ModdedDex) => string[] } = {
+	forcemonotype: dex => [...dex.types.names()],
+	forceteratype: dex => [...dex.types.names()],
+	forcemonocolor: dex => Utils.sortBy([...new Set(dex.species.all().map(species => species.color).filter(Boolean))]),
+};
 
 export function formatRules(name: string) {
 	const formatid = toID(name);
@@ -644,11 +657,13 @@ export function formatRules(name: string) {
 	for (const ruleid in dex.data.Rulesets) {
 		if (['dexpokemon', 'dexsnapshot'].includes(ruleid)) continue;
 		const rule = dex.formats.get(ruleid);
-		if (!rule.exists || rule.effectType === 'Format' || rule.hasValue) continue;
-		const children = (rule.ruleset || []).filter(spec => !/^[-+*!^]/.test(spec) && !spec.includes('='))
-			.map(spec => toID(spec)).filter(id => id !== rule.id);
+		if (!rule.exists || rule.effectType === 'Format') continue;
+		const children = (rule.ruleset || []).filter(spec => !/^[-+*!^]/.test(spec))
+			.map(spec => toID(spec.split('=')[0])).filter(id => id !== rule.id);
+		const options = VALUE_OPTIONS[rule.id]?.(dex);
 		rulesets.push({
 			id: rule.id, name: rule.name, ...rule.desc ? { desc: rule.desc } : {}, ...children.length ? { children } : {},
+			...rule.hasValue ? { value: rule.hasValue } : {}, ...options ? { options } : {},
 		});
 	}
 	const tags = [];
