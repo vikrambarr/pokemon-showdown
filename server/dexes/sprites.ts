@@ -153,9 +153,9 @@ export async function upload(
 	await db.query(SQL`INSERT INTO dex_sprite_uploads
 		(uploadid, sha, kind, accountid, uploadername, dexid, dexname, artist, display, created) VALUES (
 		${uploadid}, ${image.sha}, ${kind}, ${accountid}, ${name}, ${dex.dexid}, ${dex.name},
-		${settings.artist}, ${JSON.stringify(settings.display)}, ${Date.now()}
+		${kind === 'type' ? null : settings.artist}, ${JSON.stringify(settings.display)}, ${Date.now()}
 	)`);
-	if (!settings.artist) {
+	if (!settings.artist && kind !== 'type') {
 		await db.query(SQL`INSERT INTO dex_credits (uploadid, position, accountid, name, addedby, added) VALUES (
 			${uploadid}, 0, ${accountid}, ${name}, ${accountid}, ${Date.now()}
 		)`);

@@ -80,9 +80,10 @@ export async function editable(user: User, uploadids: string[]) {
 
 export async function setCredits(user: User, uploadid: string, input: unknown) {
 	const account = await accountOf(user);
-	const upload = await database().queryOne<{ accountid: string, dexid: ID }>(SQL`
-		SELECT accountid, dexid FROM dex_sprite_uploads WHERE uploadid = ${uploadid}`);
+	const upload = await database().queryOne<{ accountid: string, dexid: ID, kind: string }>(SQL`
+		SELECT accountid, dexid, kind FROM dex_sprite_uploads WHERE uploadid = ${uploadid}`);
 	if (!upload) throw new Chat.ErrorMessage(`That sprite doesn't exist anymore.`);
+	if (upload.kind === 'type') throw new Chat.ErrorMessage(`Type icons don't have credits.`);
 	if (!Array.isArray(input) || input.length > MAX_CREDITS) {
 		throw new Chat.ErrorMessage(`Credits must be a list of at most ${MAX_CREDITS} people.`);
 	}
