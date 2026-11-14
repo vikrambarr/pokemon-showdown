@@ -200,7 +200,7 @@ export const Scripts: ModdedBattleScriptsData = {
 
 			baseDamage += 2;
 
-			if (move.spreadHit) {
+			if (move.spreadHit && this.battle.runEvent('SpreadHit', pokemon, target, move, true)) {
 				// multi-target modifier (doubles only)
 				const spreadModifier = this.battle.gameType === 'freeforall' ? 0.5 : 0.75;
 				this.battle.debug(`Spread modifier: ${spreadModifier}`);
@@ -288,6 +288,7 @@ export const Scripts: ModdedBattleScriptsData = {
 					baseDamage = this.battle.modify(baseDamage, 0.5);
 				}
 			}
+			baseDamage = this.battle.runEvent('ModifyStatusDamage', pokemon, target, move, baseDamage);
 
 			// Generation 5, but nothing later, sets damage to 1 before the final damage modifiers
 			if (this.battle.gen === 5 && !baseDamage) baseDamage = 1;

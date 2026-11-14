@@ -895,6 +895,7 @@ export class Pokemon {
 				!pokemon.transformed && !pokemon.abilityState.ending && !this.volatiles['commanding']) {
 				return true;
 			}
+			if (pokemon.getAbility().suppressesAbilities?.call(this.battle, pokemon)) return true;
 		}
 
 		return false;
@@ -1468,7 +1469,7 @@ export class Pokemon {
 			this.details = this.getUpdatedDetails();
 			let details = (this.illusion || this).details;
 			if (this.terastallized) details += `, tera:${this.terastallized}`;
-			this.battle.add('detailschange', this, details);
+			if (this.battle.runEvent('ShowDetails', this, null, source, true)) this.battle.add('detailschange', this, details);
 			this.updateMaxHp();
 			if (!source) {
 				// Tera forme
@@ -1487,7 +1488,9 @@ export class Pokemon {
 						this.battle.add('-primal', this, species.requiredItem);
 					}
 				} else {
-					this.battle.add('-mega', this, apparentSpecies, species.requiredItem);
+					if (this.battle.runEvent('Mega', this, null, source, true)) {
+						this.battle.add('-mega', this, apparentSpecies, species.requiredItem);
+					}
 					this.moveThisTurnResult = true; // Mega Evolution counts as an action for Truant
 				}
 				this.formeRegression = true;
@@ -1502,9 +1505,11 @@ export class Pokemon {
 				this.battle.add('-formechange', this, this.illusion ? this.illusion.species.name : species.name, message);
 			}
 		}
-		if (isPermanent && (!source || !['disguise', 'iceface'].includes(source.id))) {
+		if (isPermanent && (!source || !['disguise', 'iceface'].includes(source.id)) &&
+			this.battle.runEvent('FormeChangeAbility', this, null, source, true)) {
 			if (this.illusion && source) {
 				// Tera forme by Ogerpon or Terapagos breaks the Illusion
+				this.battle.runEvent('IllusionFormeChange', this, null, source);
 				this.ability = ''; // Don't allow Illusion to wear off
 			}
 			const ability = species.abilities[abilitySlot] || species.abilities['0'];
@@ -1652,6 +1657,7 @@ export class Pokemon {
 			sourceEffect = this.battle.effect;
 		}
 		moveid = toID(moveid);
+		if (this.battle.dex.moves.get(moveid).noDisable) return;
 
 		for (const moveSlot of this.moveSlots) {
 			if (moveSlot.id === moveid && moveSlot.disabled !== true) {
@@ -1713,13 +1719,15 @@ export class Pokemon {
 		ignoreImmunities = false
 	) {
 		if (!this.hp) return false;
-		if (!this.isActive && status) return false;
+		if (!this.isActive && status &&
+			!this.battle.runEvent('BenchStatus', this, source, this.battle.effect, false, true)) return false;
 		status = this.battle.dex.conditions.get(status);
 		if (this.battle.event) {
 			if (!source) source = this.battle.event.source;
 			if (!sourceEffect) sourceEffect = this.battle.effect;
 		}
 		if (!source) source = this;
+		status = this.battle.runEvent('ConvertStatus', this, source, sourceEffect, status) as Condition;
 
 		if (this.status === status.id) {
 			if ((sourceEffect as Move)?.status === this.status) {
@@ -1730,6 +1738,7 @@ export class Pokemon {
 			}
 			return false;
 		}
+		status = this.battle.runEvent('ModifySetStatus', this, source, sourceEffect, status) as Condition;
 
 		if (
 			!ignoreImmunities && status.id && !(source?.hasAbility('corrosion') && ['tox', 'psn'].includes(status.id))
@@ -2177,11 +2186,13 @@ export class Pokemon {
 		if ('gravity' in this.battle.field.pseudoWeather) return true;
 		if ('ingrain' in this.volatiles && this.battle.gen >= 4) return true;
 		if ('smackdown' in this.volatiles) return true;
+		if (this.battle.runEvent('Grounded', this, null, null, false)) return true;
 		const item = (this.ignoringItem() ? '' : this.item);
 		if (countsAs(this.battle.dex, 'Items', item, 'ironball')) return true;
 		// If a Fire/Flying type uses Burn Up and Roost, it becomes ???/Flying-type, but it's still grounded.
 		if (!negateImmunity && this.hasType('Flying') && !(this.hasType('???') && 'roost' in this.volatiles)) return false;
 		if (this.hasAbility(['levitate', 'eelevate']) && !this.battle.suppressingAbility(this)) return null;
+		if (this.battle.runEvent('Levitate', this, null, null, false) && !this.battle.suppressingAbility(this)) return null;
 		if ('magnetrise' in this.volatiles) return false;
 		if ('telekinesis' in this.volatiles) return false;
 		return !countsAs(this.battle.dex, 'Items', item, 'airballoon');
@@ -2278,7 +2289,7 @@ export class Pokemon {
 		}
 
 		const negateImmunity = !this.battle.runEvent('NegateImmunity', this, type);
-		const notImmune = type === 'Ground' ?
+		const notImmune = type === 'Ground' && this.battle.runEvent('GroundedImmunity', this, null, null, true) ?
 			this.isGrounded(negateImmunity) :
 			negateImmunity || this.battle.dex.getImmunity(type, this);
 		if (notImmune) return true;

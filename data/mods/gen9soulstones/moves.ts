@@ -204,10 +204,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		desc: "20% chance to burn the target.",
 		shortDesc: "20% chance to burn the target.",
 	},
-	wish: {
-		inherit: true,
-		type: "Cosmic",
-	},
 	relicsong: {
 		inherit: true,
 		basePower: 80,
@@ -3644,6 +3640,9 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		condition: {
 			onStart(pokemon) {
 				this.add('-start', pokemon, 'move: Vanguard');
+			},
+			onGrounded() {
+				return true;
 			},
 			onResidualOrder: 7,
 			onResidual(pokemon) {

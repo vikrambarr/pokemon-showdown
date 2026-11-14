@@ -1,4 +1,13 @@
 export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTable = {
+	resonant: {
+		onSpreadHit() {
+			return false;
+		},
+		flags: {},
+		name: "Resonant",
+		rating: 3.5,
+		num: -10028,
+	},
 	oblivious: {
 		inherit: true,
 		onTryBoost(boost, target, source, effect) {

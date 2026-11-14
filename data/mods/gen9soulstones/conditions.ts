@@ -9,16 +9,17 @@ export const Conditions: import('../../../sim/dex-conditions').ModdedConditionDa
 				this.add('-status', target, 'frb');
 			}
 		},
+		onModifyStatusDamage(damage, pokemon, target, move) {
+			if (move.category !== 'Special' || pokemon.hasAbility('attunement')) return;
+			if (this.gen < 6 || !this.dex.countsAs('Moves', move.id, 'facade')) return this.modify(damage, 0.5);
+		},
 		onResidualOrder: 10,
 		onResidual(pokemon) {
 			this.damage(pokemon.baseMaxhp / 16);
 		},
 	},
 	gem: {
-		name: 'gem',
-		duration: 1,
-		affectsFainted: true,
-		onBasePowerPriority: 14,
+		inherit: true,
 		onBasePower(basePower, user, target, move) {
 			this.debug('Gem Boost');
 			return this.chainModify(1.4);

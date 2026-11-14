@@ -1,19 +1,4 @@
 export const Conditions: import('../../../sim/dex-conditions').ModdedConditionDataTable = {
-	frb: {
-		name: 'frb',
-		effectType: 'Status',
-		onStart(target, source, sourceEffect) {
-			if (sourceEffect?.effectType === 'Ability') {
-				this.add('-status', target, 'frb', '[from] ability: ' + sourceEffect.name, `[of] ${source}`);
-			} else {
-				this.add('-status', target, 'frb');
-			}
-		},
-		onResidualOrder: 10,
-		onResidual(pokemon) {
-			this.damage(pokemon.baseMaxhp / 16);
-		},
-	},
 	raindance: {
 		inherit: true,
 		onFieldStart(field, source, effect) {

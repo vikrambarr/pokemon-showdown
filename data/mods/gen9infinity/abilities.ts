@@ -1,5 +1,19 @@
 export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTable = {
+	glitchout: {
+		onAccuracyMiss(pokemon) {
+			const glitchmoves = [
+				'swordsdance', 'mindreader', 'vanish', 'irondefense', 'nastyplot', 'amnesia', 'agility', 'whirlwind',
+				'stealthrock', 'spikes', 'toxicspikes', 'stickyweb', 'reflect', 'lightscreen',
+			];
+			this.actions.useMove(this.sample(glitchmoves), pokemon);
+		},
+		flags: {},
+		name: "Glitch Out",
+		rating: 2,
+		num: -10001,
+	},
 	stickyhold: {
+		inherit: true,
 		onTakeItem(item, pokemon, source) {
 			if (!this.activeMove) throw new Error("Battle.activeMove is null");
 			if (!pokemon.hp || pokemon.item === 'stickybarb') return;
@@ -8,10 +22,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 				return false;
 			}
 		},
-		flags: { breakable: 1 },
-		name: "Sticky Hold",
-		rating: 1.5,
-		num: 60,
 	},
 	purefocus: {
 		onModifySpAPriority: 5,

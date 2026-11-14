@@ -1,4 +1,33 @@
 export const Conditions: import('../../../sim/dex-conditions').ModdedConditionDataTable = {
+	preventswitch: {
+		name: 'preventswitch',
+		onSwitchOutPriority: 100,
+		onSwitchOut(pokemon) {
+			pokemon.removeVolatile('preventswitch');
+			return false;
+		},
+	},
+	tenkibo: {
+		name: 'Tenkibo',
+		onSwitchIn(pokemon) {
+			if (pokemon.species.id !== 'tenkibo') return;
+			const moveIndex = pokemon.baseMoves.indexOf('starlightblast' as ID);
+			if (moveIndex >= 0) {
+				const move = this.dex.moves.get('starlightcalling');
+				pokemon.baseMoveSlots[moveIndex] = {
+					move: move.name,
+					id: move.id,
+					pp: pokemon.baseMoveSlots[moveIndex].pp,
+					maxpp: move.noPPBoosts ? move.pp : move.pp * 8 / 5,
+					target: move.target,
+					disabled: false,
+					disabledSource: '',
+					used: false,
+				};
+				pokemon.moveSlots = pokemon.baseMoveSlots.slice();
+			}
+		},
+	},
 	confusion: {
 		inherit: true,
 		onBeforeMove(pokemon, target, move) {

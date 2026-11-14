@@ -159,6 +159,13 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		name: "Double Dip",
 		shortDesc: "If move misses, use move again with perfect accuracy. Single use.",
 		spritenum: -3,
+		onAccuracyMissPriority: 1,
+		onAccuracyMiss(pokemon, target, move) {
+			if (!move.ohko && move.category !== 'Status' && pokemon.useItem()) {
+				move.accuracy = true;
+				this.actions.useMove(move, pokemon);
+			}
+		},
 		fling: {
 			basePower: 60,
 			effect(target, source) {

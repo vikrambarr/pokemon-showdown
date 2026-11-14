@@ -1,4 +1,28 @@
 export const Conditions: import('../../../sim/dex-conditions').ModdedConditionDataTable = {
+	zoroark: {
+		name: 'Zoroark',
+		onShowDetails(relayVar, pokemon) {
+			if (pokemon.illusion) return false;
+		},
+		onMega(relayVar, pokemon, source, effect) {
+			if (!pokemon.illusion) return;
+			let megaForme;
+			for (const item of this.dex.items.all()) {
+				if (!item.exists || item.isNonstandard && !['Unobtainable', 'Past'].includes(item.isNonstandard)) continue;
+				const megaFormeName = item.megaStone?.[pokemon.illusion.species.name];
+				if (megaFormeName) megaForme = this.dex.species.get(megaFormeName);
+			}
+			if (megaForme) {
+				pokemon.illusion.setSpecies(megaForme, effect);
+				this.add('detailschange', pokemon, pokemon.illusion.getUpdatedDetails());
+				this.add('-mega', pokemon, megaForme.name, megaForme.requiredItem);
+			}
+			return false;
+		},
+		onIllusionFormeChange(pokemon) {
+			pokemon.addVolatile('ability:illusion');
+		},
+	},
 	wish: {
 		name: 'Wish',
 		duration: 2,

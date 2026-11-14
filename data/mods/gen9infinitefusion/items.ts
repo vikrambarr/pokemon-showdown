@@ -31,32 +31,4 @@ export const Items: import('../../../sim/dex-items').ModdedItemDataTable = {
 		},
 		itemUser: ["Necrozma"],
 	},
-	deepseascale: {
-		inherit: true,
-		isNonstandard: null,
-	},
-	deepseatooth: {
-		inherit: true,
-		isNonstandard: null,
-	},
-	leek: {
-		inherit: true,
-		isNonstandard: null,
-	},
-	luckypunch: {
-		inherit: true,
-		isNonstandard: null,
-	},
-	metalpowder: {
-		inherit: true,
-		isNonstandard: null,
-	},
-	quickpowder: {
-		inherit: true,
-		isNonstandard: null,
-	},
-	thickclub: {
-		inherit: true,
-		isNonstandard: null,
-	},
 };

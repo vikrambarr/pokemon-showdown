@@ -1,5 +1,4 @@
 import { BattleQueue } from '../../../sim/battle-queue';
-import { Scripts as Insurgence } from '../gen9insurgence/scripts';
 import { Rulesets } from '../../pokeathlon-rulesets';
 
 const ORDERS: { [choice: string]: number } = {
@@ -11,9 +10,7 @@ export const Scripts: ModdedBattleScriptsData = {
 	inherit: 'gen9',
 	init() {
 		Object.assign(this.data.Rulesets, Rulesets);
-	},
-	pokemon: {
-		formeChange: Insurgence.pokemon!.formeChange,
+		this.data.Conditions.zoroark = this.mod('gen9insurgence').data.Conditions.zoroark;
 	},
 	queue: {
 		resolveAction(action, midTurn) {

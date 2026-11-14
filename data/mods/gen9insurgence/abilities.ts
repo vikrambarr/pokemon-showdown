@@ -23,6 +23,15 @@ const eeveeabilities: { [k: string]: string } = {
 };
 
 export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTable = {
+	venomous: {
+		onSourceModifySetStatus(status) {
+			if (this.dex.countsAs('Conditions', status.id, 'psn')) return this.dex.conditions.get('tox');
+		},
+		flags: {},
+		name: "Venomous",
+		rating: 4,
+		num: -10007,
+	},
 	noguard: {
 		inherit: true,
 		onAnyInvulnerability(target, source, move) {
@@ -439,6 +448,9 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		onStart(target) {
 			this.add('-activate', target, 'ability: Omnitype');
 		},
+		onLevitate() {
+			return true;
+		},
 		onTryHit(source, target, move) {
 			source.setType([
 				'Bug', 'Dark', 'Dragon', 'Electric',
@@ -526,6 +538,9 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		rating: 2.5,
 	},
 	proteanmaxima: {
+		onFormeChangeAbility(relayVar, pokemon, source, effect) {
+			if (effect?.id === this.effect.id) return false;
+		},
 		onSwitchIn(pokemon) {
 			if (pokemon.species.id !== eeveelutions["Normal"] && pokemon.species.id in eeveeabilities) {
 				pokemon.addVolatile('ability:' + eeveeabilities[pokemon.species.id]);
@@ -551,15 +566,6 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 						break;
 					}
 				}
-
-				pokemon.baseMaxhp = Math.floor(Math.floor(
-					2 * pokemon.species.baseStats['hp'] + pokemon.set.ivs['hp'] + Math.floor(pokemon.set.evs['hp'] / 4) + 100
-				) * pokemon.level / 100 + 10);
-				const newMaxHP = pokemon.volatiles['dynamax'] ? (2 * pokemon.baseMaxhp) : pokemon.baseMaxhp;
-				pokemon.hp = newMaxHP - (pokemon.maxhp - pokemon.hp);
-				if (pokemon.hp < 1) pokemon.hp = 1;
-				pokemon.maxhp = newMaxHP;
-				this.add('-heal', pokemon, pokemon.getHealth, '[silent]');
 			}
 		},
 		flags: { failroleplay: 1, noreceiver: 1, noentrain: 1, notrace: 1, failskillswap: 1, cantsuppress: 1 },
