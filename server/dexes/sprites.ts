@@ -5,7 +5,7 @@ import { SQL, type PGDatabase } from '../../lib/database';
 const BATTLE_SPRITE = { width: 96, height: 96, max: 192 };
 const ICON_SPRITE = { width: 40, height: 30, max: 40 };
 
-export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, max: number } } = {
+export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, max: number, exact?: boolean } } = {
 	'front': BATTLE_SPRITE,
 	'back': BATTLE_SPRITE,
 	'front-shiny': BATTLE_SPRITE,
@@ -21,7 +21,7 @@ export const SPRITE_KINDS: { [kind: string]: { width: number, height: number, ma
 	'icon': ICON_SPRITE,
 	'icon-f': ICON_SPRITE,
 	'item': { width: 64, height: 64, max: 64 },
-	'type': { width: 32, height: 14, max: 64 },
+	'type': { width: 32, height: 14, max: 64, exact: true },
 };
 
 export const USER_KINDS = ['front', 'back', 'front-shiny', 'back-shiny', 'icon', 'item', 'type'];
@@ -117,7 +117,11 @@ export function decode(kind: string, input: string, official = false) {
 	} else {
 		throw new Chat.ErrorMessage(`Sprites must be PNG or GIF files.`);
 	}
-	const { max } = SPRITE_KINDS[kind];
+	const size = SPRITE_KINDS[kind];
+	if (size.exact && (width !== size.width || height !== size.height)) {
+		throw new Chat.ErrorMessage(`A ${kind} sprite must be ${size.width}x${size.height}; that image is ${width}x${height}.`);
+	}
+	const { max } = size;
 	if (!width || !height || !official && (width > max || height > max)) {
 		throw new Chat.ErrorMessage(`A ${kind} sprite can be at most ${max}x${max}; that image is ${width}x${height}.`);
 	}
@@ -151,6 +155,12 @@ export async function upload(
 		${uploadid}, ${image.sha}, ${kind}, ${accountid}, ${name}, ${dex.dexid}, ${dex.name},
 		${settings.artist}, ${JSON.stringify(settings.display)}, ${Date.now()}
 	)`);
+	if (!settings.artist) {
+		await db.query(SQL`INSERT INTO dex_credits (uploadid, position, accountid, name, addedby, added) VALUES (
+			${uploadid}, 0, ${accountid}, ${name}, ${accountid}, ${Date.now()}
+		)`);
+		await db.query(SQL`UPDATE dex_sprite_uploads SET credited = true WHERE uploadid = ${uploadid}`);
+	}
 	return uploadid;
 }
 
