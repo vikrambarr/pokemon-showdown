@@ -806,6 +806,8 @@ export class DexFormats {
 		const ruleTable = new RuleTable();
 
 		const ruleset = format.ruleset.slice();
+		const { engineRules } = this.dex.data.Scripts as ModdedBattleScriptsData;
+		if (engineRules && format.effectType === 'Format' && depth <= 2) ruleset.unshift(...engineRules);
 		for (const ban of format.banlist) {
 			ruleset.push('-' + ban);
 		}

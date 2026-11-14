@@ -1,15 +1,12 @@
 export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTable = {
-	icecleats: {
-		onModifySpe(spe, pokemon) {
-			if (this.field.isWeather(['hail', 'snowscape'])) {
-				return this.chainModify(2);
-			}
+	pixelperfect: {
+		onAccuracyMiss(pokemon, target, move) {
+			if (!move.ohko) this.boost({ accuracy: 1 }, pokemon);
 		},
 		flags: {},
-		name: "Ice Cleats",
-		shortDesc: "If Hail/Snow is active, this Pokemon's Speed is doubled.",
-		rating: 3,
-		num: 0,
+		name: "Pixel Perfect",
+		rating: 2.5,
+		num: -10019,
 	},
 	lernean: {
 		onUpdate(pokemon) {

@@ -337,69 +337,9 @@ export const Scripts: ModdedBattleScriptsData = {
 		},
 		formeChange(
 			speciesId: string | Species, source: Effect | null = null,
-			isPermanent?: boolean, abilitySlot = '0', message?: string
+			isPermanent?: boolean, abilitySlot?: string, message?: string
 		) {
-			const rawSpecies = this.battle.dex.species.get(speciesId);
-
-			const species = this.setSpecies(rawSpecies, source);
-			if (!species) return false;
-
-			if (this.battle.gen <= 2) return true;
-
-			const apparentSpecies =
-				this.illusion ? this.illusion.species.name : species.baseSpecies;
-			if (isPermanent) {
-				this.baseSpecies = rawSpecies;
-				this.details = this.getUpdatedDetails();
-				let details = (this.illusion || this).details;
-				if (this.terastallized) details += `, tera:${this.terastallized}`;
-				this.battle.add('detailschange', this, details);
-				this.updateMaxHp();
-				if (!source) {
-					this.formeRegression = true;
-				} else if (source.effectType === 'Item') {
-					this.canTerastallize = null;
-					if (source.zMove) {
-						this.battle.add('-burst', this, apparentSpecies, species.requiredItem);
-						this.moveThisTurnResult = true;
-					} else if (source.isPrimalOrb) {
-						if (this.illusion) {
-							this.ability = '';
-							this.battle.add('-primal', this.illusion, species.requiredItem);
-						} else {
-							this.battle.add('-primal', this, species.requiredItem);
-						}
-					} else {
-						this.battle.add('-mega', this, apparentSpecies, species.requiredItem);
-						this.moveThisTurnResult = true;
-					}
-					this.formeRegression = true;
-				} else if (source.effectType === 'Status') {
-					this.battle.add('-formechange', this, species.name, message);
-				}
-			} else {
-				if (source?.effectType === 'Ability') {
-					this.battle.add('-formechange', this, species.name, message, `[from] ability: ${source.name}`);
-				} else {
-					this.battle.add('-formechange', this, this.illusion ? this.illusion.species.name : species.name, message);
-				}
-			}
-			if (
-				isPermanent &&
-				(!source || !['disguise', 'iceface', 'ability:disguise', 'ability:iceface'].includes(source.id))
-			) {
-				if (this.illusion && source) {
-					this.ability = '';
-				}
-				const ability = species.abilities[abilitySlot] || species.abilities['0'];
-				if (source || !this.getAbility().flags['cantsuppress']) this.setAbility(ability, null, null, true);
-				this.baseAbility = toID(ability);
-			}
-			if (this.terastallized) {
-				this.knownType = true;
-				this.apparentType = this.terastallized;
-			}
-			return true;
+			return Pokemon.prototype.formeChange.call(this, speciesId, source, isPermanent, abilitySlot, message);
 		},
 	},
 };

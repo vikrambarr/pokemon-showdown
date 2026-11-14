@@ -1,4 +1,10 @@
 export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTable = {
+	runaway: {
+		inherit: true,
+		onImmunity(type) {
+			if (type === 'trapped') return false;
+		},
+	},
 	angerpoint: {
 		inherit: true,
 		onHit(target, source, move) {
@@ -46,6 +52,10 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		num: 0,
 	},
 	chaosemeralds: {
+		suppressesAbilities(pokemon) {
+			return (pokemon.species.id === 'supersonic' || pokemon.m.fusion === 'Super Sonic') &&
+				!pokemon.volatiles['gastroacid'] && !pokemon.transformed && !pokemon.abilityState.ending;
+		},
 		onDamagePriority: -40,
 		onDamage(damage, target, source, effect) {
 			if (

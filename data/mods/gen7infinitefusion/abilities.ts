@@ -1,5 +1,8 @@
 export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTable = {
 	disguise: {
+		onFormeChangeAbility(relayVar, pokemon, source, effect) {
+			if (effect?.id === this.effect.id) return false;
+		},
 		onSwitchOut(pokemon) {
 			if (this.effectState.busted) {
 				this.effectState.busted = false;
@@ -74,5 +77,11 @@ export const Abilities: import('../../../sim/dex-abilities').ModdedAbilityDataTa
 		name: "Disguise",
 		rating: 3.5,
 		num: 209,
+	},
+	iceface: {
+		inherit: true,
+		onFormeChangeAbility(relayVar, pokemon, source, effect) {
+			if (effect?.id === this.effect.id) return false;
+		},
 	},
 };

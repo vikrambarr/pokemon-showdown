@@ -1,4 +1,12 @@
+import { countsAs, type CountsTable } from '../sim/counts-as';
+import { ModdedDex } from '../sim/dex';
 import { Pokemon } from '../sim/pokemon';
+
+declare module '../sim/dex' {
+	interface ModdedDex {
+		countsAs(table: CountsTable, actual: string, wanted: string | string[]): boolean;
+	}
+}
 
 declare module '../sim/pokemon' {
 	interface Pokemon {
@@ -7,12 +15,58 @@ declare module '../sim/pokemon' {
 }
 
 type FusionMoves = { [move: string]: { [key: string]: string[] }[] };
+type StatusHook = (
+	this: Battle, status: Condition, target: Pokemon, source: Pokemon, effect: Effect
+) => Condition | void;
+type PokemonHook = (this: Battle, relayVar: boolean, pokemon: Pokemon) => boolean | void;
+type FormeHook = (
+	this: Battle, relayVar: boolean, pokemon: Pokemon, source: Pokemon | null, effect: Effect | null
+) => boolean | void;
+type DamageHook = (this: Battle, damage: number, pokemon: Pokemon, target: Pokemon, move: ActiveMove) => number | void;
+
+declare module '../sim/dex-abilities' {
+	interface Ability {
+		suppressesAbilities?: (this: Battle, pokemon: Pokemon) => boolean;
+	}
+}
+
+declare module '../sim/dex-moves' {
+	interface MoveData {
+		noDisable?: boolean;
+	}
+	interface MoveEventMethods {
+		onBenchStatus?: (this: Battle, relayVar: boolean, target: Pokemon, source: Pokemon, effect: Effect) => boolean | void;
+	}
+}
+
+declare module '../sim/dex-conditions' {
+	interface EventMethods {
+		onModifySetStatus?: StatusHook;
+		onSourceModifySetStatus?: StatusHook;
+		onGrounded?: PokemonHook;
+		onLevitate?: PokemonHook;
+		onSpreadHit?: (this: Battle, relayVar: boolean, pokemon: Pokemon, target: Pokemon, move: ActiveMove) => boolean | void;
+		onModifyStatusDamage?: DamageHook;
+		onAccuracyMiss?: (this: Battle, pokemon: Pokemon, target: Pokemon, move: ActiveMove) => void;
+		onAccuracyMissPriority?: number;
+		onMegaFormeChange?: PokemonHook;
+		onShowDetails?: FormeHook;
+		onMega?: FormeHook;
+		onFormeChangeAbility?: FormeHook;
+		onIllusionFormeChange?: (this: Battle, pokemon: Pokemon) => void;
+		onSwitchOutPriority?: number;
+		onConvertStatus?: StatusHook;
+		onGroundedImmunity?: PokemonHook;
+		onTryTerrain?: (this: Battle, target: Pokemon | Side | Battle) => boolean | void;
+	}
+}
 
 declare global {
 	interface ModdedBattleScriptsData {
 		fusionMoves?: FusionMoves;
 		mysteryGiftMoves?: FusionMoves;
 		forecastFormes?: { [species: string]: string[] };
+		engineRules?: string[];
 		formeLinks?: {
 			[species: string]: { battleOnly?: string, requiredMove?: string, requiredAbility?: string, requiredItem?: string },
 		};
@@ -553,6 +607,9 @@ export const Rulesets: import('../sim/dex-formats').ModdedFormatDataTable = {
 	mixandmegamod: {
 		effectType: "Rule",
 		name: "Mix and Mega Mod",
+		onMegaFormeChange() {
+			return false;
+		},
 		desc: `Pokemon can hold any Mega Stone. Each Mega Stone gives the same base stat bonuses to any Pokemon.`,
 		ruleset: ['Overflow Stat Mod'],
 		onBegin() {
@@ -798,4 +855,10 @@ Pokemon.prototype.fusionChange = function (
 	this.battle.add('detailschange', this, details);
 
 	return true;
+};
+
+ModdedDex.prototype.countsAs = function (
+	this: ModdedDex, table: CountsTable, actual: string, wanted: string | string[]
+) {
+	return countsAs(this, table, actual, wanted);
 };

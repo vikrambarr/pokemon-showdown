@@ -810,6 +810,7 @@ export class BattleActions {
 				if (!move.ohko && pokemon.hasItem('blunderpolicy') && pokemon.useItem()) {
 					this.battle.boost({ spe: 2 }, pokemon);
 				}
+				this.battle.runEvent('AccuracyMiss', pokemon, target, move);
 				hitResults[i] = false;
 				continue;
 			}
@@ -1788,7 +1789,7 @@ export class BattleActions {
 
 		baseDamage += 2;
 
-		if (move.spreadHit) {
+		if (move.spreadHit && this.battle.runEvent('SpreadHit', pokemon, target, move, true)) {
 			// multi-target modifier (doubles only)
 			const spreadModifier = this.battle.gameType === 'freeforall' ? 0.5 : 0.75;
 			this.battle.debug(`Spread modifier: ${spreadModifier}`);
@@ -1877,6 +1878,7 @@ export class BattleActions {
 				baseDamage = this.battle.modify(baseDamage, 0.5);
 			}
 		}
+		baseDamage = this.battle.runEvent('ModifyStatusDamage', pokemon, target, move, baseDamage);
 
 		// Generation 5, but nothing later, sets damage to 1 before the final damage modifiers
 		if (this.battle.gen === 5 && !baseDamage) baseDamage = 1;
@@ -1958,7 +1960,9 @@ export class BattleActions {
 		const speciesid = pokemon.canMegaEvo || pokemon.canUltraBurst;
 		if (!speciesid) return false;
 
-		pokemon.formeChange(speciesid, pokemon.getItem(), true);
+		if (this.battle.runEvent('MegaFormeChange', pokemon, null, null, true)) {
+			pokemon.formeChange(speciesid, pokemon.getItem(), true);
+		}
 
 		// Limit one mega evolution
 		const wasMega = pokemon.canMegaEvo;

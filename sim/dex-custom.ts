@@ -351,7 +351,10 @@ function canMegaEvo(this: BattleActions, pokemon: Pokemon) {
 		return altForme.name;
 	}
 	if (!item.megaStone) return null;
-	if (item.megaStone[species.name]) return item.megaStone[species.name];
+	if (item.megaStone[species.name]) {
+		const female = this.dex.species.get(item.megaStone[species.name].replace(/-M$/, '-F'));
+		return pokemon.gender === 'F' && female.exists ? female.name : item.megaStone[species.name];
+	}
 	const megaEvolution = typeof species.battleOnly === 'string' && item.megaStone[species.battleOnly];
 	return megaEvolution && megaEvolution !== species.name ? megaEvolution : null;
 }
@@ -411,6 +414,28 @@ function fuseEffects(data: AnyObject, base: typeof Dex, gen: number) {
 					entries[id] = fused;
 					break;
 				}
+			}
+		}
+	}
+}
+
+export function copyEngine(dex: ModdedDex, mod: string, tables: readonly string[]) {
+	const own: AnyObject = dex.mod(mod).data;
+	const base: AnyObject = dex.mod('gen9').data;
+	for (const table of tables) {
+		const data: AnyObject = (dex.data as AnyObject)[table];
+		const parent: AnyObject = (dex.mod(dex.parentMod).data as AnyObject)[table];
+		for (const id in own[table]) {
+			const entry = own[table][id];
+			const original = base[table][id];
+			if (entry === original || data[id] !== parent[id]) continue;
+			if (!original || Object.keys(original).some(key => !(key in entry))) {
+				data[id] = entry;
+				continue;
+			}
+			data[id] = { ...data[id] };
+			for (const key in entry) {
+				if (entry[key] !== original[key]) data[id][key] = entry[key];
 			}
 		}
 	}

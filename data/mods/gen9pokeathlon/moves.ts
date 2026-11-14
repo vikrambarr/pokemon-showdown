@@ -1459,6 +1459,9 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		volatileStatus: 'groundingstomp',
 		condition: {
 			noCopy: true,
+			onGrounded() {
+				return true;
+			},
 			onStart(pokemon) {
 				let applies = false;
 				if (pokemon.hasType('Flying') || pokemon.hasAbility('levitate')) applies = true;
@@ -1981,6 +1984,21 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		onAfterMove(source, target, move) {
 			if (source.species.id === 'tenkibo') {
 				source.formeChange('Tenkibo-Magical-Hero', this.effect, false, '0', '[msg]');
+				const moveIndex = source.baseMoves.indexOf('starlightcalling' as ID);
+				if (moveIndex >= 0) {
+					const blast = this.dex.moves.get('starlightblast');
+					source.baseMoveSlots[moveIndex] = {
+						move: blast.name,
+						id: blast.id,
+						pp: source.baseMoveSlots[moveIndex].pp,
+						maxpp: blast.noPPBoosts ? blast.pp : blast.pp * 8 / 5,
+						target: blast.target,
+						disabled: false,
+						disabledSource: '',
+						used: false,
+					};
+					source.moveSlots = source.baseMoveSlots.slice();
+				}
 			}
 		},
 		secondary: {},
@@ -2163,6 +2181,7 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		pp: 5,
 		priority: 0,
 		flags: { noassist: 1, failcopycat: 1, snatch: 1 },
+		noDisable: true,
 		stallingMove: true,
 		onPrepareHit(pokemon) {
 			if (pokemon.happiness >= 255 && pokemon.species.id === 'kinette') {
@@ -2445,62 +2464,5 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Psychic",
 		contestType: "Tough",
 		shortDesc: "Sets Psychic Terrain on hit.",
-	},
-	corrode: {
-		num: 0,
-		accuracy: 100,
-		basePower: 70,
-		category: "Special",
-		name: "Corrode",
-		desc: "This move's type effectiveness against Steel is changed to be super effective no matter what this move's type is.",
-		shortDesc: "Super effective on Steel.",
-		pp: 10,
-		priority: 0,
-		flags: { protect: 1, mirror: 1, metronome: 1 },
-		ignoreImmunity: { 'Poison': true },
-		onEffectiveness(typeMod, target, type) {
-			if (type === 'Steel') return 1;
-		},
-		target: "normal",
-		type: "Poison",
-		contestType: "Beautiful",
-	},
-	dragonify: {
-		num: 0,
-		accuracy: 100,
-		basePower: 0,
-		category: "Status",
-		name: "Dragonify",
-		desc: "Causes the target to become a Dragon type. Fails if the target is an Arceus, or if the target is already purely Dragon type.",
-		shortDesc: "Changes the target's type to Dragon.",
-		pp: 20,
-		priority: 0,
-		flags: { protect: 1, reflectable: 1, mirror: 1, allyanim: 1, metronome: 1 },
-		onHit(target) {
-			if (target.getTypes().join() === 'Dragon' || !target.setType('Dragon')) return false;
-			this.add('-start', target, 'typechange', 'Dragon');
-		},
-		target: "normal",
-		type: "Dragon",
-		zMove: { boost: { spa: 1 } },
-	},
-	medusaray: {
-		num: 0,
-		accuracy: 100,
-		basePower: 0,
-		category: "Status",
-		name: "Medusa Ray",
-		desc: "Causes the target to become a Rock type. Fails if the target is an Arceus, or if the target is already purely Rock type.",
-		shortDesc: "Changes the target's type to Rock.",
-		pp: 20,
-		priority: 0,
-		flags: { protect: 1, reflectable: 1, mirror: 1, allyanim: 1, metronome: 1 },
-		onHit(target) {
-			if (target.getTypes().join() === 'Rock' || !target.setType('Rock')) return false;
-			this.add('-start', target, 'typechange', 'Rock');
-		},
-		target: "normal",
-		type: "Rock",
-		zMove: { boost: { spa: 1 } },
 	},
 };

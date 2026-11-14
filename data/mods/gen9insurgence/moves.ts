@@ -591,25 +591,6 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		type: "Normal",
 		contestType: "Tough",
 	},
-	corrode: {
-		num: 0,
-		accuracy: 100,
-		basePower: 70,
-		category: "Special",
-		name: "Corrode",
-		desc: "This move's type effectiveness against Steel is changed to be super effective no matter what this move's type is.",
-		shortDesc: "Super effective on Steel.",
-		pp: 10,
-		priority: 0,
-		flags: { protect: 1, mirror: 1, metronome: 1 },
-		ignoreImmunity: { 'Poison': true },
-		onEffectiveness(typeMod, target, type) {
-			if (type === 'Steel') return 1;
-		},
-		target: "normal",
-		type: "Poison",
-		contestType: "Beautiful",
-	},
 	dragonify: {
 		num: 0,
 		accuracy: 100,
@@ -1050,6 +1031,9 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 		pp: 15,
 		priority: 0,
 		flags: { protect: 1, reflectable: 1, mirror: 1, metronome: 1 },
+		onBenchStatus() {
+			return true;
+		},
 		onHit(target, source, move) {
 			if (target.hasType("Grass")) {
 				for (const enemy of target.side.pokemon) {
