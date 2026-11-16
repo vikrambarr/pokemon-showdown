@@ -118,7 +118,7 @@ async function applyEdit(user: User, dexid: string, edit: AnyObject) {
 		if (edit[`reset${kind}`]) loaded = await Dexes.deleteEffect(loaded, table, toList(edit[`reset${kind}`]));
 	}
 	for (const input of edit.type ? toInputs(edit.type) : []) ({ loaded } = await Dexes.putType(loaded, input));
-	if (edit.deletetype) loaded = await Dexes.deleteEffect(loaded, 'TypeChart', [`${edit.deletetype}`]);
+	if (edit.deletetype) loaded = await Dexes.deleteEffect(loaded, 'TypeChart', toList(edit.deletetype));
 	if (edit.sprite) {
 		const { name, kind, image, settings } = edit.sprite;
 		loaded = await Dexes.setSprite(user, loaded, `${name}`, toKind(`${kind}`), image ? `${image}` : null, settings || {});
