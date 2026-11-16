@@ -1313,6 +1313,27 @@ export const commands: Chat.ChatCommands = {
 	},
 	setbothelp: [`/setbot [owner], [bot] - Registers the [bot] account as a bot belonging to [owner]. Requires: ~`],
 
+	popupnotbot: 'notbot',
+	async notbot(target, room, user, connection, cmd) {
+		this.checkCan('lock');
+		const { targetUser, targetUsername, rest } = this.splitUser(target);
+		const error = (msg: string) => this.cmd === 'popupnotbot' ? this.popupReply(msg) : this.errorReply(msg);
+		if (!targetUser) return error(`User '${targetUsername}' not found.`);
+		if (!targetUser.isUserBot) {
+			return error(`That user is not marked as a bot.`);
+		}
+		const [res, err] = await LoginServer.request('setbot', { bot: targetUser.id, remove: true });
+		if (err) {
+			return error(`Error in updating status: ${err.message} (please report to an admin)`);
+		}
+		if (res.actionerror) return error(res.actionerror);
+		targetUser.isUserBot = false;
+		Config.exemptuserbot?.(targetUser);
+		this.globalModlog(`NOTBOT`, targetUser, rest);
+		this.privateGlobalModAction(`${user.name} removed the bot user flag from ${targetUser.name}.`);
+	},
+	notbothelp: [`/notbot [username], [note] - Removes temporary bot status from [username] with a [note]. Requires: % @ ~`],
+
 	remainingbattles() {
 		this.checkCan('lockdown');
 
