@@ -453,7 +453,7 @@ describe('Dexes', () => {
 		await Dexes.setVisibility(loaded, 'public');
 	});
 
-	it('should fork entries with what they need, and keep them up to date until they are edited', async () => {
+	it('should fork entries with what they need, following their originals with their own edits on top', async () => {
 		await fixture({ sprites: true, effects: true });
 		let source = Dexes.getDex('mochadex');
 		let copy = await Dexes.createDex(editor, 'Copy Dex', 'gen9');
@@ -465,21 +465,24 @@ describe('Dexes', () => {
 		const voltlet = copy.entries.get('voltlet');
 		assert.equal(voltlet.trackdex, id('Mocha Dex'));
 		assert.deepEqual([voltlet.origin.dex, voltlet.origin.owner], ['Mocha Dex', 'Dex Owner']);
-		assert.equal(voltlet.sprites.front, source.entries.get('voltlet').sprites.front);
+		assert.equal(Dexes.clientData(copy).sprites.voltlet.front, source.entries.get('voltlet').sprites.front);
 		assert(copy.dex.moves.get('Volt Jab').exists);
 
 		({ loaded: source } = await Dexes.putEntry(source, { name: 'Voltlet', types: ['Electric', 'Fairy'] }));
 		copy = Dexes.getDex('copydex');
 		assert.deepEqual(copy.data.Pokedex.voltlet.types, ['Electric', 'Fairy']);
 		({ loaded: copy } = await Dexes.putEntry(copy, { name: 'Voltlet', types: ['Electric'] }));
-		assert.equal(copy.entries.get('voltlet').trackdex, null);
-		assert.equal(copy.entries.get('voltlet').origin.dex, 'Mocha Dex');
-		await Dexes.putEntry(source, { name: 'Voltlet', types: ['Electric', 'Dragon'] });
-		assert.deepEqual(Dexes.getDex('copydex').data.Pokedex.voltlet.types, ['Electric']);
+		assert.equal(copy.entries.get('voltlet').trackdex, id('Mocha Dex'));
+		assert.deepEqual(copy.entries.get('voltlet').data, { name: 'Voltlet', types: ['Electric'] });
+		await Dexes.putEntry(source, { name: 'Voltlet', types: ['Electric', 'Dragon'], weightkg: 12 });
+		copy = Dexes.getDex('copydex');
+		assert.deepEqual(copy.data.Pokedex.voltlet.types, ['Electric']);
+		assert.equal(copy.data.Pokedex.voltlet.weightkg, 12);
 
-		await assert.rejects(Dexes.forkEntry(Dexes.getDex('copydex'), Dexes.getDex('mochadex'), 'Pokedex', 'Voltlet'), /overwrite/);
-		await assert.rejects(Dexes.forkEntry(Dexes.getDex('mochadex'), Dexes.getDex('copydex'), 'Moves', 'Volt Jab', true),
-			/comes from Mocha Dex already/);
+		result = await Dexes.forkEntry(copy, Dexes.getDex('mochadex'), 'Pokedex', 'Voltlet');
+		assert.deepEqual(result.loaded.data.Pokedex.voltlet.types, ['Electric']);
+		await assert.rejects(Dexes.forkEntry(Dexes.getDex('mochadex'), Dexes.getDex('copydex'), 'Moves', 'Volt Jab'),
+			/already has its own version of the move Volt Jab. Delete it first/);
 
 		const whole = await Dexes.createDex(editor, 'Whole Copy', 'gen9');
 		result = await Dexes.forkEntry(whole, Dexes.getDex('mochadex'), 'Pokedex', 'Voltlet');
@@ -492,17 +495,125 @@ describe('Dexes', () => {
 		assert.equal(Dexes.getDex('wholecopy').dex.items.get('Volt Orb').spritenum, Dex.items.get('Leftovers').spritenum);
 	});
 
+	it('should build a copy from its original as it is now, with only its own edits on top, until it is made static', async () => {
+		await fixture({ effects: true });
+		let source = Dexes.getDex('mochadex');
+		({ loaded: source } = await Dexes.putEntry(source, {
+			name: 'Voltlet', baseStats: { hp: 40, atk: 60, def: 40, spa: 60, spd: 50, spe: 90 }, abilities: { 0: 'Static', H: 'Lightning Rod' },
+		}));
+		let copy = (await Dexes.forkEntry(await Dexes.createDex(editor, 'Copy Dex', 'gen9'), source, 'Pokedex', 'Voltlet')).loaded;
+		const follower = (await Dexes.forkEntry(await Dexes.createDex(editor, 'Follower Dex', 'gen9'), source, 'Pokedex', 'Voltlet')).loaded;
+		assert.equal(follower.entries.get('voltlet').trackdex, id('Mocha Dex'));
+		({ loaded: copy } = await Dexes.putEntry(copy, {
+			name: 'Voltlet', baseStats: { hp: 40, atk: 120, def: 40, spa: 60, spd: 50, spe: 90 }, learnset: { protect: null },
+		}));
+		({ loaded: copy } = await Dexes.putEffect(copy, 'Moves', { name: 'Volt Jab', basePower: 90 }));
+		assert.deepEqual(copy.entries.get('voltlet').data.baseStats, { atk: 120 });
+		({ loaded: source } = await Dexes.putEntry(source, {
+			name: 'Voltlet', baseStats: { hp: 40, atk: 60, def: 40, spa: 60, spd: 50, spe: 130 }, abilities: { 0: 'Static' },
+			learnset: { thunderbolt: ['9M'] },
+		}));
+		({ loaded: source } = await Dexes.putEffect(source, 'Moves', { name: 'Volt Jab', type: 'Steel' }));
+		copy = Dexes.getDex('copydex');
+		const voltlet = copy.dex.species.get('Voltlet');
+		assert.deepEqual([voltlet.baseStats.atk, voltlet.baseStats.spe, voltlet.abilities.H], [120, 130, undefined]);
+		assert(copy.dex.data.Learnsets.voltlet.learnset.thunderbolt);
+		assert(!copy.dex.data.Learnsets.voltlet.learnset.protect);
+		assert.deepEqual([copy.dex.moves.get('Volt Jab').type, copy.dex.moves.get('Volt Jab').basePower], ['Steel', 90]);
+
+		copy = await Dexes.deleteEntry(copy, ['Voltlet']);
+		assert.equal(copy.entries.get('voltlet').trackdex, id('Mocha Dex'));
+		assert.equal(copy.dex.species.get('Voltlet').baseStats.atk, 60);
+		({ loaded: copy } = await Dexes.putEntry(copy, { name: 'Voltlet', weightkg: 50 }));
+		copy = await Dexes.freeze(copy, 'Pokedex', ['Voltlet']);
+		assert(copy.entries.get('voltlet').pinned.species);
+		await Dexes.putEntry(Dexes.getDex('mochadex'), { name: 'Voltlet', types: ['Water'] });
+		const frozen = Dexes.getDex('copydex').dex.species.get('Voltlet');
+		assert.deepEqual([frozen.types, frozen.weightkg, frozen.baseStats.spe], [['Electric', 'Steel'], 50, 130]);
+		assert(Dexes.getDex('copydex').dex.data.Learnsets.voltlet.learnset.thunderbolt);
+		await assert.rejects(Dexes.freeze(Dexes.getDex('copydex'), 'Pokedex', ['Voltlet']), /follows another dex/);
+		copy = await Dexes.deleteEntry(Dexes.getDex('copydex'), ['Voltlet']);
+		assert.deepEqual([copy.entries.get('voltlet').data, copy.dex.species.get('Voltlet').weightkg], [{ name: 'Voltlet' }, 6]);
+
+		let still = await Dexes.createDex(editor, 'Static Copy', 'gen9');
+		still = (await Dexes.forkEntry(still, Dexes.getDex('mochadex'), 'Pokedex', 'Voltlet', true)).loaded;
+		assert(still.entries.get('voltlet').pinned.species);
+		assert.equal(still.entries.get('voltlet').origin.dex, 'Mocha Dex');
+		await Dexes.putEntry(Dexes.getDex('mochadex'), { name: 'Voltlet', types: ['Fire'] });
+		assert.deepEqual(Dexes.getDex('staticcopy').dex.species.get('Voltlet').types, ['Water']);
+
+		await Dexes.deleteEntry(Dexes.getDex('mochadex'), ['Voltlet']);
+		const kept = Dexes.getDex('followerdex');
+		assert(kept.entries.get('voltlet').pinned);
+		assert.deepEqual(kept.dex.species.get('Voltlet').types, ['Fire']);
+		await Dexes.deleteDex(Dexes.getDex('mochadex'));
+		assert.deepEqual(Dexes.getDex('staticcopy').dex.species.get('Voltlet').types, ['Water']);
+	});
+
+	it('should keep only changed stats and ability slots of a Pokemon from its world', async () => {
+		await fixture();
+		let loaded = Dexes.getDex('mochadex');
+		const pikachu = Dex.species.get('Pikachu');
+		({ loaded } = await Dexes.putEntry(loaded, {
+			name: 'Pikachu', baseStats: { ...pikachu.baseStats, atk: 99 }, abilities: { 0: 'Static' },
+		}));
+		assert.deepEqual(loaded.entries.get('pikachu').data.baseStats, { atk: 99 });
+		assert.deepEqual(loaded.entries.get('pikachu').data.abilities, { H: null });
+		const edited = loaded.dex.species.get('Pikachu');
+		assert.deepEqual(edited.baseStats, { ...pikachu.baseStats, atk: 99 });
+		assert.deepEqual(edited.abilities, { 0: 'Static' });
+	});
+
+	it('should add copies from an official dex that follow it, or static ones', async () => {
+		let source = await Dexes.createDex(owner, 'Source Dex', 'gen9');
+		({ loaded: source } = await Dexes.putEntry(source, { name: 'Okmon', inheritsFrom: 'Pikachu' }));
+		({ loaded: source } = await Dexes.putEffect(source, 'Moves', { name: 'Ok Move', type: 'Fire' }));
+		source = await Dexes.setOfficial(source, true);
+		const target = await Dexes.createDex(owner, 'Target Dex', 'gen9');
+		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
+		const edit = input => crqHandlers.dexedit.call({ connection: {} }, `${target.row.dexid}, ${JSON.stringify(input)}`, owner);
+		const added = await edit({ addpokemon: { from: source.row.dexid, names: ['Okmon'], static: true }, addmove: { from: source.row.dexid, names: ['Ok Move'] } });
+		assert.equal(added.error, undefined);
+		assert.deepEqual(added.entries.copies.Pokedex.okmon, { dex: 'Source Dex', follows: false, edited: false });
+		assert.deepEqual(added.entries.copies.Moves.okmove, { dex: 'Source Dex', follows: true, edited: false });
+		const edited = await edit({ move: { name: 'Ok Move', basePower: 40 } });
+		assert.deepEqual(edited.entries.copies.Moves.okmove, { dex: 'Source Dex', follows: true, edited: true });
+		const frozen = await edit({ freezemove: ['Ok Move'] });
+		assert.deepEqual(frozen.entries.copies.Moves.okmove, { dex: 'Source Dex', follows: false, edited: true });
+		assert.equal(Dexes.getDex('targetdex').dex.moves.get('Ok Move').basePower, 40);
+	});
+
+	it('should not let dexes follow each other, or a dex set in them', async () => {
+		let alpha = await Dexes.createDex(owner, 'Alpha Dex', 'gen9');
+		({ loaded: alpha } = await Dexes.putEntry(alpha, { name: 'Alphamon', inheritsFrom: 'Pikachu' }));
+		let beta = await Dexes.createDex(owner, 'Beta Dex', 'gen9');
+		({ loaded: beta } = await Dexes.putEntry(beta, { name: 'Betamon', inheritsFrom: 'Eevee' }));
+		await Dexes.forkEntry(beta, alpha, 'Pokedex', 'Alphamon');
+		await Dexes.putEntry(Dexes.getDex('alphadex'), { name: 'Alphamon', types: ['Ghost'] });
+		assert.deepEqual(Dexes.getDex('betadex').dex.species.get('Alphamon').types, ['Ghost']);
+		await assert.rejects(Dexes.forkEntry(Dexes.getDex('alphadex'), Dexes.getDex('betadex'), 'Pokedex', 'Betamon'), /can't follow that/);
+		alpha = (await Dexes.forkEntry(Dexes.getDex('alphadex'), Dexes.getDex('betadex'), 'Pokedex', 'Betamon', true)).loaded;
+		assert(alpha.dex.species.get('Betamon').exists);
+		await assert.rejects(Dexes.setBase(Dexes.getDex('alphadex'), 'Beta Dex'), /would loop/);
+		let gamma = await Dexes.createDex(owner, 'Gamma Dex', 'Alpha Dex');
+		({ loaded: gamma } = await Dexes.putEntry(gamma, { name: 'Gammamon', inheritsFrom: 'Pikachu' }));
+		await assert.rejects(Dexes.forkEntry(Dexes.getDex('alphadex'), gamma, 'Pokedex', 'Gammamon'), /can't follow that/);
+		const still = await Dexes.forkEntry(Dexes.getDex('alphadex'), Dexes.getDex('gammadex'), 'Pokedex', 'Gammamon', true);
+		assert(still.loaded.entries.get('gammamon').pinned);
+	});
+
 	it('should delete a sprite everywhere it was forked, but only for its uploader', async () => {
 		await fixture({ sprites: true, effects: true, copies: true });
 		const uploadid = Dexes.getDex('mochadex').entries.get('voltlet').sprites.front;
+		const front = dexid => Dexes.clientData(Dexes.getDex(dexid)).sprites.voltlet?.front;
+		assert.equal(front('copydex'), uploadid);
+		await assert.rejects(Dexes.setSprite(editor, Dexes.getDex('copydex'), 'Voltlet', 'front', null), /comes from Mocha Dex/);
 		await assert.rejects(Dexes.deleteSprite(editor, uploadid), /Only Dex Owner/);
 		const { uses } = await Dexes.deleteSprite(owner, uploadid);
-		assert.equal(uses, 3);
-		for (const dexid of ['mochadex', 'copydex', 'wholecopy']) {
-			assert.equal(Dexes.getDex(dexid).entries.get('voltlet').sprites.front, undefined);
-		}
+		assert.equal(uses, 1);
+		for (const dexid of ['mochadex', 'copydex', 'wholecopy']) assert.equal(front(dexid), undefined);
 		const loaded = await Dexes.setSprite(owner, Dexes.getDex('mochadex'), 'Voltlet', 'front', png(96, 96));
-		assert(Dexes.getDex('wholecopy').entries.get('voltlet').sprites.front);
+		assert(front('wholecopy'));
 		assert(loaded.entries.get('voltlet').sprites.front !== uploadid);
 	});
 
@@ -982,7 +1093,7 @@ describe('Dexes', () => {
 			SELECT hash FROM dex_snapshots WHERE hash = ${hash}
 		`);
 		assert.equal(kept.hash, hash);
-		assert.equal(Dexes.getDex('wholecopy').entries.get('voltlet').trackdex, null);
+		assert(Dexes.getDex('wholecopy').entries.get('voltlet').pinned);
 		assert(Dexes.getDex('wholecopy').data.Pokedex.voltlet);
 		await Dexes.deleteDex(Dexes.getDex('wholecopy'));
 		await Dexes.deleteDex(Dexes.getDex('copydex'));
@@ -1041,7 +1152,7 @@ describe('Dexes', () => {
 		const db = Dexes.database();
 		await db.query(SQL`CREATE FUNCTION delay_fork() RETURNS trigger LANGUAGE plpgsql AS $$
 			BEGIN
-				IF NEW.trackdex IS NOT NULL THEN PERFORM pg_sleep(0.2); END IF;
+				IF NEW.trackdex IS NULL AND NEW.speciesid = 'voltlet' THEN PERFORM pg_sleep(0.2); END IF;
 				RETURN NEW;
 			END $$`);
 		await db.query(SQL`CREATE TRIGGER delay_fork BEFORE UPDATE ON dex_species FOR EACH ROW EXECUTE FUNCTION delay_fork()`);

@@ -26,6 +26,7 @@ export interface EffectEntry {
 	origin: Origin | null;
 	trackdex: ID | null;
 	trackid: ID | null;
+	pinned: AnyObject | null;
 }
 
 export const EFFECT_NAMES: { [table in EffectTable]: string } = {
@@ -240,6 +241,15 @@ function checkFields(
 	return result;
 }
 
+export function composeEffect(original: EffectEntry, own: EffectEntry): EffectEntry {
+	const slots: EffectEntry['slots'] = { ...original.slots };
+	for (const path in own.slots) slots[path] = { ...slots[path], ...own.slots[path] };
+	return {
+		...own, inheritsfrom: original.inheritsfrom, data: combine(original.data, own.data), slots,
+		events: { ...original.events, ...own.events }, sprites: { ...original.sprites, ...own.sprites },
+	};
+}
+
 function combine(old: AnyObject, input: AnyObject) {
 	const result = { ...old };
 	for (const key of Object.keys(input)) {
@@ -315,18 +325,19 @@ export function resolveEdits(dex: ModdedDex, entry: EffectEntry, data: AnyObject
 
 export function validateEffect(
 	input: AnyObject, table: EffectTable, dex: ModdedDex, entries: Map<ID, EffectEntry>, data: AnyObject,
-	official = false
+	official = false, original?: EffectEntry
 ) {
 	unlimited = official;
 	try {
-		return checkEffect(input, table, dex, entries, data);
+		return checkEffect(input, table, dex, entries, data, original);
 	} finally {
 		unlimited = false;
 	}
 }
 
 function checkEffect(
-	input: AnyObject, table: EffectTable, dex: ModdedDex, entries: Map<ID, EffectEntry>, data: AnyObject
+	input: AnyObject, table: EffectTable, dex: ModdedDex, entries: Map<ID, EffectEntry>, data: AnyObject,
+	original?: EffectEntry
 ) {
 	const what = EFFECT_NAMES[table];
 	const name = validateName(input.name, what);
@@ -335,8 +346,9 @@ function checkEffect(
 	const official = dex.data[table][effectid];
 	const old = entries.get(effectid);
 
-	let inheritsfrom = old ? old.inheritsfrom : null;
+	let inheritsfrom = original ? original.inheritsfrom : old ? old.inheritsfrom : null;
 	if (input.inheritsFrom !== undefined) {
+		if (original) throw new Chat.ErrorMessage(`${name} follows its original, so make it static before changing what it inherits from.`);
 		if (official) throw new Chat.ErrorMessage(`${name} already exists, so it can't inherit from anything.`);
 		const baseid = input.inheritsFrom === null ? null : toID(input.inheritsFrom);
 		if (baseid !== null && !dex.data[table][baseid]) {
@@ -354,13 +366,14 @@ function checkEffect(
 	}
 	const locked = unlimited ? undefined : Object.keys(fields).find(field => !EDITABLE[table].includes(field));
 	if (locked) throw new Chat.ErrorMessage(`"${locked}" can only be changed in official dexes.`);
-	const keep = old?.inheritsfrom === inheritsfrom;
-	const start = keep ? old!.data : !base ? BLANK[table] : {};
+	const keep = original ? !!old : old?.inheritsfrom === inheritsfrom;
+	const start = keep ? old!.data : !base && !original ? BLANK[table] : {};
 	const entry: EffectEntry = {
-		effecttable: table, effectid, num: old?.num || 0, inheritsfrom,
+		effecttable: table, effectid, num: old?.num || 0, inheritsfrom: original ? null : inheritsfrom,
 		data: { ...combine(start, checkFields(fields, base, FIELDS[table], '', data)), name: official ? official.name : name },
 		slots: keep ? JSON.parse(JSON.stringify(old!.slots)) : {}, events: keep ? { ...old!.events } : {},
-		sprites: old?.sprites || {}, origin: old?.origin || null, trackdex: null, trackid: null,
+		sprites: old?.sprites || {}, origin: old?.origin || null, trackdex: old?.trackdex || null, trackid: old?.trackid || null,
+		pinned: old?.pinned || null,
 	};
 	if (input.spriteFrom !== undefined) {
 		const item = table === 'Items' ? dex.items.get(`${input.spriteFrom}`) : null;
@@ -393,7 +406,7 @@ function checkEffect(
 		}
 	}
 
-	const catalogue = effectSlots(dex, table, effectid, editOf(entry), entry.data.name, data);
+	const catalogue = effectSlots(dex, table, effectid, editOf(original ? composeEffect(original, entry) : entry), entry.data.name, data);
 	const inheritedid = inheritedEffect(dex, table, inheritsfrom).baseid;
 	const own = (found: Slot) => found.kind === 'ref' && [effectid, inheritedid].includes(toID(found.value));
 	const setSlot = (path: string, index: number, value: unknown) => {

@@ -35,6 +35,7 @@ export interface DexLayer {
 	TypeChart?: DexTable<TypeData>;
 	effects?: { [table in EffectTable]?: DexTable<EffectEdit> };
 	lists?: { [table in 'Moves' | 'Abilities' | 'Items']?: { added: string[], removed: string[] } };
+	sprites?: { [table: string]: { [id: string]: { [kind: string]: string } } };
 	format?: FormatData;
 }
 

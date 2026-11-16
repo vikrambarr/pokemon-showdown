@@ -16,6 +16,7 @@ export interface TypeEntry {
 	origin: Origin | null;
 	trackdex: ID | null;
 	trackid: ID | null;
+	pinned: AnyObject | null;
 }
 
 const CODES: { [multiplier: string]: number } = { 1: 0, 2: 1, 0.5: 2, 0: 3 };
@@ -80,8 +81,19 @@ export function validateType(input: AnyObject, dex: ModdedDex, entries: Map<ID, 
 	}
 	return {
 		effecttable: 'TypeChart', effectid: id, num: 0, inheritsfrom: null, data, slots: {}, events: {},
-		sprites: { ...old?.sprites }, origin: old?.origin || null, trackdex: null, trackid: null,
+		sprites: { ...old?.sprites }, origin: old?.origin || null, trackdex: old?.trackdex || null, trackid: old?.trackid || null,
+		pinned: old?.pinned || null,
 	} as TypeEntry;
+}
+
+export function composeType(original: TypeEntry, own: TypeEntry): TypeEntry {
+	const data: AnyObject = {
+		...original.data, ...own.data,
+		damageTaken: { ...original.data.damageTaken, ...own.data.damageTaken },
+		attacks: { ...original.data.attacks, ...own.data.attacks },
+	};
+	if (own.data.removed === undefined && original.data.removed) data.removed = true;
+	return { ...own, data, sprites: { ...original.sprites, ...own.sprites } };
 }
 
 export function resolveTypes(dex: ModdedDex, entries: Iterable<TypeEntry>) {

@@ -13,11 +13,14 @@ import { TeamValidator } from '../../sim/team-validator';
 import type { PokemonSet } from '../../sim/teams';
 import { Tags } from '../../data/tags';
 import * as sprites from './sprites';
-import { resolveEntries, TIER_FIELDS, validateEntry, validateName, type Origin, type SpeciesEntry } from './species';
 import {
-	describeEffect, describeText, EDITABLE, EFFECT_NAMES, lookupTables, resolveEdits, validateEffect, type EffectEntry,
+	resolveEntries, TIER_FIELDS, validateEntry, validateName, type Origin, type Original, type SpeciesEntry,
+} from './species';
+import {
+	composeEffect, describeEffect, describeText, EDITABLE, EFFECT_NAMES, lookupTables, resolveEdits, validateEffect,
+	type EffectEntry,
 } from './effects';
-import { resolveTypes, validateType, type TypeEntry } from './types';
+import { composeType, resolveTypes, validateType, type TypeEntry } from './types';
 
 export type Effects = { [table in EffectTable]: Map<ID, EffectEntry> } & { TypeChart: Map<ID, TypeEntry> };
 export type Table = 'Pokedex' | EffectTable | 'TypeChart';
@@ -113,8 +116,111 @@ const tableName = (table: Table) => (
 );
 const TABLES: Table[] = ['Pokedex', ...EFFECT_TABLES, 'TypeChart'];
 
-export function entriesOf(loaded: LoadedDex, table: Table): Map<ID, Entry> {
+export function entriesOf(loaded: Pick<LoadedDex, 'entries' | 'effects'>, table: Table): Map<ID, Entry> {
 	return table === 'Pokedex' ? loaded.entries : loaded.effects[table];
+}
+
+const MULTIPLIERS = [1, 2, 0.5, 0];
+
+function liveOriginal(table: Table, entry: Entry): AnyObject | null {
+	const layer = entry.trackdex ? currentDexes().get(entry.trackdex)?.data : undefined;
+	const id = entry.trackid!;
+	const sprites = layer?.sprites?.[table]?.[id] || {};
+	if (table === 'Pokedex') {
+		const species = layer?.Pokedex[id];
+		return species ? { species, learnset: layer!.Learnsets[id], tiers: layer!.FormatsData[id] || {}, sprites } : null;
+	}
+	if (table === 'TypeChart') {
+		const type = layer?.TypeChart?.[id];
+		if (!type) return null;
+		const attacks: AnyObject = {};
+		for (const [other, data] of Object.entries(layer!.TypeChart!)) {
+			if (other !== id && data.damageTaken[entry.data.name] !== undefined) attacks[other] = MULTIPLIERS[data.damageTaken[entry.data.name]];
+		}
+		const damageTaken = Object.fromEntries(Object.entries(type.damageTaken).map(([key, code]) => [key, MULTIPLIERS[code]]));
+		return { data: { name: entry.data.name, damageTaken, attacks, ...((type as AnyObject).isNonstandard === 'Past' ? { removed: true } : {}) }, sprites };
+	}
+	const edit = layer?.effects?.[table as EffectTable]?.[id];
+	if (!edit) return null;
+	const slots: EffectEntry['slots'] = {};
+	for (const [path, edits] of Object.entries(edit.slots || {})) {
+		slots[path] = Object.fromEntries(Object.entries(edits).map(([index, [from, to]]) => [index, { from, to, nth: 0 }]));
+	}
+	return { inheritsfrom: edit.inherit || null, data: edit.data, slots, events: edit.events || {}, sprites };
+}
+
+function originalData(table: Table, entry: Entry) {
+	return entry.trackdex ? entry.pinned || liveOriginal(table, entry) : null;
+}
+
+export function originalOf(entry: SpeciesEntry): Original | null {
+	const original = originalData('Pokedex', entry);
+	return original && { species: original.species, learnset: original.learnset, tiers: original.tiers };
+}
+
+function originalEffect(table: Table, entry: Entry): Entry | null {
+	const original = originalData(table, entry);
+	return original && { ...entry, ...original } as Entry;
+}
+
+export function effectiveOf(table: Table, entry: Entry): Entry | null {
+	if (!entry.trackdex) return entry;
+	if (table === 'Pokedex') {
+		const original = originalData(table, entry);
+		return original && { ...entry, sprites: { ...original.sprites, ...entry.sprites } };
+	}
+	const original = originalEffect(table, entry);
+	if (!original) return null;
+	if (table === 'TypeChart') return composeType(original as TypeEntry, entry as TypeEntry);
+	return composeEffect(original as EffectEntry, entry as EffectEntry);
+}
+
+function spritesOf(table: Table, entry: Entry) {
+	return (effectiveOf(table, entry) || entry).sprites;
+}
+
+export function isEdited(table: Table, entry: Entry) {
+	const { name, num, ...data } = entry.data;
+	if (Object.values(data).some(value => !isObject(value) || Object.keys(value).length)) return true;
+	if (Object.keys(entry.sprites).length) return true;
+	if (table === 'Pokedex') return !!Object.keys((entry as SpeciesEntry).learnset).length;
+	return !!Object.keys((entry as EffectEntry).slots).length || !!Object.keys((entry as EffectEntry).events).length;
+}
+
+function cleared(table: Table, entry: Entry): Entry {
+	const data: AnyObject = { name: entry.data.name, ...(entry.data.num !== undefined ? { num: entry.data.num } : {}) };
+	if (table === 'Pokedex') return { ...entry, data, learnset: {}, sprites: {} } as SpeciesEntry;
+	if (table === 'TypeChart') return { ...entry, data: { ...data, damageTaken: {}, attacks: {} }, sprites: {} } as TypeEntry;
+	return { ...entry, data, slots: {}, events: {}, sprites: {} } as EffectEntry;
+}
+
+const followsCache = new WeakMap<object, Set<ID>>();
+
+function followsOf(loaded: Pick<LoadedDex, 'entries' | 'effects'>) {
+	let follows = followsCache.get(loaded);
+	if (follows) return follows;
+	follows = new Set();
+	for (const table of TABLES) {
+		for (const entry of entriesOf(loaded, table).values()) {
+			if (entry.trackdex && !entry.pinned) follows.add(entry.trackdex);
+		}
+	}
+	followsCache.set(loaded, follows);
+	return follows;
+}
+
+function usesOf(loaded: LoadedDex) {
+	return [...loaded.row.parents, ...followsOf(loaded)];
+}
+
+function reaches(from: ID[], to: ID) {
+	const found = new Set(from);
+	for (const dexid of found) {
+		if (dexid === to) return true;
+		const dex = currentDexes().get(dexid);
+		for (const next of dex ? usesOf(dex) : []) found.add(next);
+	}
+	return false;
 }
 
 function newNum(table: Table, taken: Iterable<Entry> = []) {
@@ -225,7 +331,9 @@ export function load() {
 	return (loading ||= (async () => {
 		if (!Config.usepostgres) return;
 		const rows = await database().query<DexRow>(SQL`SELECT * FROM dexes`);
-		for (const row of rows) await refresh(row.dexid);
+		for (const row of rows) {
+			if (!currentDexes().has(row.dexid)) await refresh(row.dexid);
+		}
 		setInterval(() => {
 			if (registeredOn !== Dex) reregister();
 		}, 5 * 1000).unref();
@@ -318,26 +426,58 @@ const noEffects = (): Effects => ({
 	Moves: new Map(), Abilities: new Map(), Items: new Map(), Conditions: new Map(), TypeChart: new Map(),
 });
 
-function compile(row: DexRow, entries: Map<ID, SpeciesEntry>, effects: Effects, stale?: string[]): DexLayer {
+function effectiveEffects(effects: Effects, gone: (entry: Entry) => void = () => {}) {
+	const shown = noEffects();
+	for (const table of TABLES.slice(1) as (EffectTable | 'TypeChart')[]) {
+		for (const [id, entry] of effects[table]) {
+			const effective = effectiveOf(table, entry);
+			if (effective) (shown[table] as Map<ID, Entry>).set(id, effective);
+			else gone(entry);
+		}
+	}
+	return shown;
+}
+
+function compile(
+	row: DexRow, entries: Map<ID, SpeciesEntry>, effects: Effects, stale?: string[], limit = true
+): DexLayer {
 	const base = baseOf(row);
 	const problems = stale || [];
+	const known = currentDexes().get(row.dexid)?.stale || [];
 	const fail = (message: string, drop: () => void) => {
-		if (!stale) throw new Chat.ErrorMessage(message);
+		if (!stale && !known.includes(message)) throw new Chat.ErrorMessage(message);
 		problems.push(message);
 		drop();
 	};
 	const sorted = <T>(map: Map<ID, T>) => [...map].sort(([a], [b]) => a.localeCompare(b));
-	const custom = sorted(entries).map(([id]) => id).filter(id => !base.data.Pokedex[id]);
-	const resolved = resolveEntries(base, sorted(entries).map(([, entry]) => entry));
-	const TypeChart = resolveTypes(base, sorted(effects.TypeChart).map(([, entry]) => entry));
-	const lookup = lookupTables(base, resolved.Pokedex, effects);
+	const listed = new Map(entries);
+	const originals = new Map<ID, Original>();
+	for (const [id, entry] of entries) {
+		if (!entry.trackdex) continue;
+		const original = originalOf(entry);
+		if (original) originals.set(id, original);
+		else fail(`${entry.data.name}'s original can't be found.`, () => listed.delete(id));
+	}
+	const shown = effectiveEffects(effects, entry => fail(`${entry.data.name}'s original can't be found.`, () => {}));
+	const custom = sorted(listed).map(([id]) => id).filter(id => !base.data.Pokedex[id]);
+	const resolved = resolveEntries(base, sorted(listed).map(([, entry]) => entry), originals);
+	for (const id of originals.keys()) {
+		const learnset: AnyObject = resolved.Learnsets[id]?.learnset || {};
+		for (const move of Object.keys(learnset)) {
+			if (base.data.Moves[move] || shown.Moves.has(move as ID)) continue;
+			delete learnset[move];
+			problems.push(`${resolved.Pokedex[id].name} learns ${move}, which isn't in this dex.`);
+		}
+	}
+	const TypeChart = resolveTypes(base, sorted(shown.TypeChart).map(([, entry]) => entry));
+	const lookup = lookupTables(base, resolved.Pokedex, shown);
 	const edits: NonNullable<DexLayer['effects']> = {};
 	for (const table of EFFECT_TABLES) {
-		for (const [id, entry] of sorted(effects[table])) {
+		for (const [id, entry] of sorted(shown[table])) {
 			(edits[table] ||= {})[id] = resolveEdits(base, entry, lookup, problems);
 		}
 	}
-	for (const entry of effects.Items.values()) {
+	for (const entry of shown.Items.values()) {
 		for (const mega of Object.values(entry.data.megaStone || {})) {
 			const species: AnyObject | undefined = resolved.Pokedex[toID(mega)];
 			if (species && !species.requiredItem) species.requiredItem = entry.data.name;
@@ -397,24 +537,26 @@ function compile(row: DexRow, entries: Map<ID, SpeciesEntry>, effects: Effects, 
 		}
 		if (added.size || removed.size) lists[table] = { added: [...added].sort(), removed: [...removed].sort() };
 	}
+	const images: NonNullable<DexLayer['sprites']> = {};
+	for (const table of TABLES) {
+		const from = table === 'Pokedex' ? listed : shown[table];
+		for (const [id, entry] of sorted(from as Map<ID, Entry>)) {
+			const kept = spritesOf(table, entry);
+			if (Object.keys(kept).length) (images[table] ||= {})[id] = kept;
+		}
+	}
 	const content = {
 		mod: row.mod, ...(parents.length ? { parents: parents.map(parent => parent.hash) } : {}), species, ...resolved,
 		...(Object.keys(TypeChart).length ? { TypeChart } : {}),
 		...(Object.keys(edits).length ? { effects: edits } : {}),
 		...(Object.keys(lists).length ? { lists } : {}),
+		...(Object.keys(images).length ? { sprites: images } : {}),
 	};
-	const speciesSprites = sorted(entries).map(([, entry]) => [entry.speciesid, entry.sprites]);
-	const itemSprites = sorted(effects.Items).map(([, entry]) => entry).filter(entry => entry.sprites.item)
-		.map(entry => [entry.effectid, entry.sprites]);
-	const typeSprites = sorted(effects.TypeChart).map(([, entry]) => entry).filter(entry => entry.sprites.type)
-		.map(entry => [entry.effectid, entry.sprites]);
-	const hashed = typeSprites.length ? [content, speciesSprites, itemSprites, typeSprites] :
-		itemSprites.length ? [content, speciesSprites, itemSprites] : [content, speciesSprites];
-	const hash = crypto.createHash('sha256').update(json(hashed)).digest('hex').slice(0, 20);
+	const hash = crypto.createHash('sha256').update(json(content)).digest('hex').slice(0, 20);
 	const data = { hash, ...content };
 	const size = Buffer.byteLength(json(data));
 	const old = currentDexes().get(row.dexid);
-	if (!row.official && mutations.getStore() && (!old || size > dataSize(old))) {
+	if (limit && !row.official && mutations.getStore() && (!old || size > dataSize(old))) {
 		const used = dataUsed(row.ownerid, row.dexid) + size;
 		if (used > MAX_DATA_STORAGE) {
 			throw new Chat.ErrorMessage(`That would use ${megabytes(used)} of ${row.ownername}'s ${megabytes(MAX_DATA_STORAGE)} dex data storage. Remove dexes or edits they don't need first.`);
@@ -468,19 +610,19 @@ export function checkEvolutions(dex: ModdedDex) {
 
 function make(
 	row: DexRow, editors: Map<string, string>, entries: Map<ID, SpeciesEntry>, formats: Map<ID, FormatData>,
-	effects: Effects, uploads: Map<string, sprites.Upload>
+	effects: Effects, uploads: Map<string, sprites.Upload>, limit = true
 ) {
 	const stale: string[] = [];
-	const data = compile(row, entries, effects, stale);
+	const data = compile(row, entries, effects, stale, limit);
 	check(data);
 	return { row, editors, entries, formats, effects, uploads, stale, data, dex: buildDex(data, Dex) };
 }
 
-export function refresh(dexid: ID): Promise<LoadedDex | null> {
+export function refresh(dexid: ID, cascade = false): Promise<LoadedDex | null> {
 	const next = (refreshing.get(dexid) || Promise.resolve(null)).catch(() => null).then(async () => {
-		const loaded = await reload(dexid);
-		for (const child of [...currentDexes().values()].filter(other => other.row.parents.includes(dexid))) {
-			await refresh(child.row.dexid);
+		const loaded = await reload(dexid, cascade);
+		for (const other of [...currentDexes().values()]) {
+			if (other.row.parents.includes(dexid) || followsOf(other).has(dexid)) await refresh(other.row.dexid, true);
 		}
 		return loaded;
 	});
@@ -488,7 +630,7 @@ export function refresh(dexid: ID): Promise<LoadedDex | null> {
 	return next;
 }
 
-async function reload(dexid: ID) {
+async function reload(dexid: ID, cascade = false) {
 	const [[row], editors, entries, formats, effectRows] = await Promise.all([
 		database().query<DexRow>(SQL`SELECT * FROM dexes WHERE dexid = ${dexid}`),
 		database().query<{ accountid: string, name: string }>(SQL`SELECT * FROM dex_editors WHERE dexid = ${dexid}`),
@@ -501,16 +643,18 @@ async function reload(dexid: ID) {
 	}
 	const effects = noEffects();
 	for (const entry of effectRows) effects[entry.effecttable]?.set(entry.effectid, entry);
-	const uploads = await sprites.getUploads(database(), [...new Set(
-		[...entries, ...effectRows].flatMap(entry => Object.values(entry.sprites))
-	)]);
+	const rows = { entries: new Map(entries.map(entry => [entry.speciesid, entry])), effects };
+	for (const source of row ? followsOf(rows) : []) {
+		if (!currentDexes().has(source)) await refresh(source);
+	}
+	const uploads = await sprites.getUploads(database(), [...new Set(TABLES.flatMap(table => (
+		[...entriesOf(rows, table).values()].flatMap(entry => Object.values(spritesOf(table, entry)))
+	)).filter(Boolean))]);
 	if (registeredOn !== Dex) reregister();
 	const loaded = row ? make(
 		{ ...row, created: Number(row.created), updated: Number(row.updated) },
 		new Map(editors.map(editor => [editor.accountid, editor.name])),
-		new Map(entries.map(entry => [entry.speciesid, entry])),
-		new Map(formats.map(format => [format.formatid, format.data])),
-		effects, uploads,
+		rows.entries, new Map(formats.map(format => [format.formatid, format.data])), effects, uploads, !cascade,
 	) : null;
 	const old = currentDexes().get(dexid);
 	if (old) {
@@ -800,7 +944,7 @@ export function clientData(loaded: LoadedDex) {
 	const origins: { [speciesid: string]: string } = {};
 	for (const entry of loaded.entries.values()) {
 		if (entry.origin) origins[entry.speciesid] = entry.origin.dex;
-		for (const [key, uploadid] of Object.entries(usedSprites(loaded, entry.sprites))) {
+		for (const [key, uploadid] of Object.entries(usedSprites(loaded, spritesOf('Pokedex', entry)))) {
 			const [speciesid, kind] = key.includes(':') ? key.split(':') : [entry.speciesid, key];
 			(speciesSprites[speciesid] ||= {})[kind] = uploadid;
 		}
@@ -814,13 +958,13 @@ export function clientData(loaded: LoadedDex) {
 			const effect = JSON.parse(json(loaded.dex.data[table][id]));
 			const edit = loaded.data.effects![table]![id];
 			(effects[table] ||= {})[id] = { ...effect, ...describeText(baseOf(loaded.row), table, edit, id) };
-			const uploadid = usedSprites(loaded, entry.sprites).item;
+			const uploadid = usedSprites(loaded, spritesOf(table, entry)).item;
 			if (uploadid) itemSprites[id] = uploadid;
 		}
 	}
 	const typeSprites: { [typeid: string]: string } = {};
 	for (const [id, entry] of loaded.effects.TypeChart) {
-		const uploadid = usedSprites(loaded, entry.sprites).type;
+		const uploadid = usedSprites(loaded, spritesOf('TypeChart', entry)).type;
 		if (uploadid) typeSprites[id] = uploadid;
 	}
 	return {
@@ -1017,6 +1161,9 @@ async function setBaseImpl(loaded: LoadedDex, on: string, mod?: string) {
 		throw new Chat.ErrorMessage(`${Chat.count(children, 'dexes are', 'dex is')} set in ${loaded.row.name}, so it has to stay Gen ${loaded.dex.gen}.`);
 	}
 	const row = { ...loaded.row, mod: modid, parents: parents.map(parent => parent.row.dexid), species, removed: [], pool };
+	if (reaches(row.parents, row.dexid)) {
+		throw new Chat.ErrorMessage(`That would loop: a dex in that world follows ${loaded.row.name}, or a dex set in it.`);
+	}
 	const stale: string[] = [];
 	check(compile(row, loaded.entries, loaded.effects, stale));
 	await database().query(SQL`UPDATE dexes SET mod = ${modid}, parents = ${json(row.parents)}, species = ${json(species)},
@@ -1062,64 +1209,63 @@ async function deleteDexImpl(loaded: LoadedDex) {
 	if (children.length) {
 		throw new Chat.ErrorMessage(`${Chat.count(children, 'dexes are', 'dex is')} set in ${loaded.row.name}, so it can't be deleted.`);
 	}
+	await pinFollowers(loaded);
 	await database().query(SQL`DELETE FROM dexes WHERE dexid = ${dexid}`);
 	await refresh(dexid);
-	await unfollow(dexid);
 }
 
 async function clearDexImpl(loaded: LoadedDex) {
 	const dexid = loaded.row.dexid;
 	const species = parentsOf(loaded).length ? [] : standardSpecies(Dex.mod(loaded.row.mod), loaded.row.pool);
+	await pinFollowers(loaded);
 	await database().query(SQL`DELETE FROM dex_species WHERE dexid = ${dexid}`);
 	await database().query(SQL`DELETE FROM dex_effects WHERE dexid = ${dexid}`);
 	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = '[]', effectlists = '{}' WHERE dexid = ${dexid}`);
-	const updated = await save(loaded);
-	await unfollow(dexid);
-	return updated;
+	return save(loaded);
 }
 
-async function unfollow(dexid: ID) {
-	const frozen = [
-		...await database().query<{ dexid: ID }>(SQL`UPDATE dex_species SET trackdex = NULL, trackid = NULL
-			WHERE trackdex = ${dexid} RETURNING dexid`),
-		...await database().query<{ dexid: ID }>(SQL`UPDATE dex_effects SET trackdex = NULL, trackid = NULL
-			WHERE trackdex = ${dexid} RETURNING dexid`),
-	];
-	for (const other of new Set(frozen.map(row => row.dexid))) await refresh(other);
+async function pinFollowers(loaded: LoadedDex, table?: Table, ids?: ID[]) {
+	for (const other of currentDexes().values()) {
+		for (const each of table ? [table] : TABLES) {
+			for (const entry of entriesOf(other, each).values()) {
+				if (entry.trackdex !== loaded.row.dexid || entry.pinned || (ids && !ids.includes(entry.trackid!))) continue;
+				const pinned = json(liveOriginal(each, entry));
+				const id = (entry as SpeciesEntry).speciesid || (entry as EffectEntry).effectid;
+				await database().query(each === 'Pokedex' ?
+					SQL`UPDATE dex_species SET pinned = ${pinned} WHERE dexid = ${other.row.dexid} AND speciesid = ${id}` :
+					SQL`UPDATE dex_effects SET pinned = ${pinned} WHERE dexid = ${other.row.dexid} AND effecttable = ${each} AND effectid = ${id}`);
+			}
+		}
+	}
 }
 
 async function writeEntry(dexid: ID, table: Table, entry: Entry) {
 	const now = Date.now();
 	if (table === 'Pokedex') {
 		const {
-			speciesid, num, inheritsfrom, data, learnset, sprites: images, origin, trackdex, trackid,
+			speciesid, num, inheritsfrom, data, learnset, sprites: images, origin, trackdex, trackid, pinned,
 		} = entry as SpeciesEntry;
 		await database().query(SQL`INSERT INTO dex_species
-			(dexid, speciesid, num, inheritsfrom, data, learnset, sprites, origin, trackdex, trackid, updated) VALUES (
+			(dexid, speciesid, num, inheritsfrom, data, learnset, sprites, origin, trackdex, trackid, pinned, updated) VALUES (
 			${dexid}, ${speciesid}, ${num}, ${inheritsfrom}, ${json(data)}, ${json(learnset)}, ${json(images)},
-			${json(origin)}, ${trackdex}, ${trackid}, ${now}
+			${json(origin)}, ${trackdex}, ${trackid}, ${json(pinned || null)}, ${now}
 		) ON CONFLICT (dexid, speciesid) DO UPDATE SET num = EXCLUDED.num, inheritsfrom = EXCLUDED.inheritsfrom,
 			data = EXCLUDED.data, learnset = EXCLUDED.learnset, sprites = EXCLUDED.sprites, origin = EXCLUDED.origin,
-			trackdex = EXCLUDED.trackdex, trackid = EXCLUDED.trackid, updated = EXCLUDED.updated`);
+			trackdex = EXCLUDED.trackdex, trackid = EXCLUDED.trackid, pinned = EXCLUDED.pinned, updated = EXCLUDED.updated`);
 		return;
 	}
 	const {
-		effectid, num, inheritsfrom, data, slots, events, sprites: images, origin, trackdex, trackid,
+		effectid, num, inheritsfrom, data, slots, events, sprites: images, origin, trackdex, trackid, pinned,
 	} = entry as EffectEntry;
 	await database().query(SQL`INSERT INTO dex_effects
 		(dexid, effecttable, effectid, num, inheritsfrom, data, slots, events, sprites, origin, trackdex, trackid,
-		updated) VALUES (
+		pinned, updated) VALUES (
 		${dexid}, ${table}, ${effectid}, ${num}, ${inheritsfrom}, ${json(data)}, ${json(slots)}, ${json(events)},
-		${json(images)}, ${json(origin)}, ${trackdex}, ${trackid}, ${now}
+		${json(images)}, ${json(origin)}, ${trackdex}, ${trackid}, ${json(pinned || null)}, ${now}
 	) ON CONFLICT (dexid, effecttable, effectid) DO UPDATE SET num = EXCLUDED.num, inheritsfrom = EXCLUDED.inheritsfrom,
 		data = EXCLUDED.data, slots = EXCLUDED.slots, events = EXCLUDED.events, sprites = EXCLUDED.sprites,
-		origin = EXCLUDED.origin, trackdex = EXCLUDED.trackdex, trackid = EXCLUDED.trackid, updated = EXCLUDED.updated`);
-}
-
-async function saved(loaded: LoadedDex, table: Table, id: ID) {
-	const updated = await save(loaded);
-	await propagate(loaded.row.dexid, table, id);
-	return updated;
+		origin = EXCLUDED.origin, trackdex = EXCLUDED.trackdex, trackid = EXCLUDED.trackid, pinned = EXCLUDED.pinned,
+		updated = EXCLUDED.updated`);
 }
 
 async function save(loaded: LoadedDex) {
@@ -1176,7 +1322,9 @@ async function putEntriesImpl(loaded: LoadedDex, inputs: unknown[]) {
 	const conditions: EffectEntry[] = [];
 	for (const input of inputs) {
 		if (!isObject(input)) throw new Chat.ErrorMessage(`Each Pokemon needs to be a JSON object, like {"name": "Pikachu"}.`);
-		const entry = named(input, () => validateEntry(input, base, entries, loaded.dex));
+		const old = entries.get(toID(input.name));
+		const original = old?.trackdex ? originalOf(old) || undefined : undefined;
+		const entry = named(input, () => validateEntry(input, base, entries, loaded.dex, original));
 		if (!entry.num && !base.data.Pokedex[entry.speciesid]) {
 			entry.num = newNum('Pokedex', entries.values());
 		}
@@ -1193,7 +1341,6 @@ async function putEntriesImpl(loaded: LoadedDex, inputs: unknown[]) {
 	for (const entry of changed.values()) await writeEntry(loaded.row.dexid, 'Pokedex', entry);
 	for (const condition of conditions) await writeEntry(loaded.row.dexid, 'Conditions', condition);
 	const updated = await save(loaded);
-	for (const id of changed.keys()) await propagate(loaded.row.dexid, 'Pokedex', id);
 	return { loaded: currentDexes().get(updated.row.dexid) || updated, entries: [...changed.values()] };
 }
 
@@ -1209,7 +1356,7 @@ function speciesCondition(loaded: LoadedDex, entry: SpeciesEntry): EffectEntry |
 	return {
 		...copy, effecttable: 'Conditions', effectid: entry.speciesid, num: 0, data: { ...copy.data, name: entry.data.name },
 		inheritsfrom: own?.inheritsfrom || (official ? from : engine ? `${engine}:${from}` : null),
-		origin: null, trackdex: null, trackid: null,
+		origin: null, trackdex: null, trackid: null, pinned: null,
 	};
 }
 
@@ -1227,15 +1374,30 @@ export function getEntry(loaded: LoadedDex, name: string) {
 async function deleteEntryImpl(loaded: LoadedDex, names: string[]) {
 	const ids = names.map(name => getEntry(loaded, name).speciesid);
 	const entries = new Map(loaded.entries);
-	for (const id of ids) entries.delete(id);
-	check(compile(loaded.row, entries, loaded.effects));
+	const reset = resets(loaded, 'Pokedex', ids);
 	for (const id of ids) {
+		if (reset.has(id)) entries.set(id, reset.get(id) as SpeciesEntry);
+		else entries.delete(id);
+	}
+	check(compile(loaded.row, entries, loaded.effects));
+	const deleted = ids.filter(id => !reset.has(id));
+	await pinFollowers(loaded, 'Pokedex', deleted);
+	for (const entry of reset.values()) await writeEntry(loaded.row.dexid, 'Pokedex', entry);
+	for (const id of deleted) {
 		await database().query(SQL`DELETE FROM dex_species
 			WHERE dexid = ${loaded.row.dexid} AND speciesid = ${id}`);
 	}
 	const updated = await save(loaded);
-	for (const id of ids) await propagate(loaded.row.dexid, 'Pokedex', id);
 	return currentDexes().get(updated.row.dexid) || updated;
+}
+
+function resets(loaded: LoadedDex, table: Table, ids: ID[]) {
+	const reset = new Map<ID, Entry>();
+	for (const id of ids) {
+		const entry = entriesOf(loaded, table).get(id)!;
+		if (entry.trackdex) reset.set(id, cleared(table, entry));
+	}
+	return reset;
 }
 
 async function deletePokemonImpl(loaded: LoadedDex, names: string[]) {
@@ -1261,6 +1423,8 @@ async function deletePokemonImpl(loaded: LoadedDex, names: string[]) {
 	check(compile({ ...loaded.row, species, removed }, entries, effects));
 	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = ${json(removed)}
 		WHERE dexid = ${loaded.row.dexid}`);
+	await pinFollowers(loaded, 'Pokedex', deleted);
+	await pinFollowers(loaded, 'Conditions', conditions);
 	for (const id of deleted) {
 		await database().query(SQL`DELETE FROM dex_species WHERE dexid = ${loaded.row.dexid} AND speciesid = ${id}`);
 	}
@@ -1269,7 +1433,6 @@ async function deletePokemonImpl(loaded: LoadedDex, names: string[]) {
 			WHERE dexid = ${loaded.row.dexid} AND effecttable = 'Conditions' AND effectid = ${id}`);
 	}
 	const updated = await save(loaded);
-	for (const id of deleted) await propagate(loaded.row.dexid, 'Pokedex', id);
 	return currentDexes().get(updated.row.dexid) || updated;
 }
 
@@ -1319,18 +1482,20 @@ async function setListed(loaded: LoadedDex, table: ListTable, ids: ID[]) {
 	return save(loaded);
 }
 
-async function forkAll(loaded: LoadedDex, source: LoadedDex, table: Table, names: string[], skipped: string[]) {
+async function forkAll(
+	loaded: LoadedDex, source: LoadedDex, table: Table, names: string[], skipped: string[], frozen: boolean
+) {
 	try {
 		const found = new Map<string, Fork>();
 		for (const name of names) dependencies(source, table, toID(name), loaded, found);
-		return { loaded: (await copyInto(loaded, [...found.values()])).loaded, names };
+		return { loaded: (await copyInto(loaded, [...found.values()], frozen)).loaded, names };
 	} catch (e: any) {
 		if (!(e instanceof Chat.ErrorMessage)) throw e;
 	}
 	const forked: string[] = [];
 	for (const name of names) {
 		try {
-			({ loaded } = await forkEntry(loaded, source, table, name));
+			({ loaded } = await forkEntry(loaded, source, table, name, frozen));
 			forked.push(name);
 		} catch (e: any) {
 			if (!(e instanceof Chat.ErrorMessage)) throw e;
@@ -1340,7 +1505,7 @@ async function forkAll(loaded: LoadedDex, source: LoadedDex, table: Table, names
 	return { loaded, names: forked };
 }
 
-async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string, names: string[]) {
+async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string, names: string[], frozen = false) {
 	const base = baseOf(target.row);
 	const { world, gen, source } = sourceOf(from);
 	const game = gen && gen !== base.gen ? Dex.mod(world) : null;
@@ -1377,7 +1542,7 @@ async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string,
 		listed.push(id);
 	}
 	if (source && forks.length) {
-		const forked = await forkAll(loaded, source, table, forks, skipped);
+		const forked = await forkAll(loaded, source, table, forks, skipped, frozen);
 		loaded = forked.loaded;
 		listed.push(...forked.names.map(toID).filter(id => base.data[table][id]));
 	}
@@ -1419,12 +1584,12 @@ async function deleteEffectsImpl(loaded: LoadedDex, table: EffectTable, names: s
 	}
 	check(compile({ ...loaded.row, effectlists: lists }, loaded.entries, effects));
 	await database().query(SQL`UPDATE dexes SET effectlists = ${json(lists)} WHERE dexid = ${loaded.row.dexid}`);
+	await pinFollowers(loaded, table, deleted);
 	for (const id of deleted) {
 		await database().query(SQL`DELETE FROM dex_effects
 			WHERE dexid = ${loaded.row.dexid} AND effecttable = ${table} AND effectid = ${id}`);
 	}
 	const updated = await save(loaded);
-	for (const id of deleted) await propagate(loaded.row.dexid, table, id);
 	return currentDexes().get(updated.row.dexid) || updated;
 }
 
@@ -1444,7 +1609,7 @@ function vanillaInput(target: LoadedDex, game: ModdedDex, id: ID) {
 	};
 }
 
-async function addPokemonImpl(target: LoadedDex, from: string, names: string[]) {
+async function addPokemonImpl(target: LoadedDex, from: string, names: string[], frozen = false) {
 	const base = baseOf(target.row);
 	const { world, gen, source } = sourceOf(from);
 	const game = gen && gen !== base.gen ? Dex.mod(world) : null;
@@ -1479,7 +1644,7 @@ async function addPokemonImpl(target: LoadedDex, from: string, names: string[]) 
 			skipped.push(`${name} isn't in ${baseName(loaded.row)}`);
 		}
 	}
-	if (source && forks.length) loaded = (await forkAll(loaded, source, 'Pokedex', forks, skipped)).loaded;
+	if (source && forks.length) loaded = (await forkAll(loaded, source, 'Pokedex', forks, skipped, frozen)).loaded;
 	if (inputs.length) ({ loaded } = await putEntries(loaded, inputs));
 	if (plain.size) loaded = await setSpecies(loaded, plain, true);
 	return { loaded, skipped };
@@ -1529,6 +1694,9 @@ async function setSpriteImpl(
 	const entry = slot.table === 'Pokedex' ? getEntry(loaded, slot.name) : getEffect(loaded, slot.table, slot.name);
 	const entrySprites = { ...entry.sprites };
 	if (!decoded) {
+		if (!entrySprites[slot.key] && spritesOf(slot.table, entry)[slot.key]) {
+			throw new Chat.ErrorMessage(`${name}'s ${kind} sprite comes from ${entry.origin?.dex || 'its original'}. Upload your own to replace it.`);
+		}
 		if (!entrySprites[slot.key]) throw new Chat.ErrorMessage(`${name} has no ${kind} sprite.`);
 		delete entrySprites[slot.key];
 	} else {
@@ -1536,9 +1704,8 @@ async function setSpriteImpl(
 			database(), decoded, kind, account, user.name, loaded.row, options
 		);
 	}
-	const detached = { ...entry, sprites: entrySprites, trackdex: null, trackid: null };
-	await writeEntry(loaded.row.dexid, slot.table, detached);
-	return saved(loaded, slot.table, id);
+	await writeEntry(loaded.row.dexid, slot.table, { ...entry, sprites: entrySprites });
+	return save(loaded);
 }
 
 async function deleteSpriteImpl(user: User, uploadid: string) {
@@ -1573,11 +1740,13 @@ async function deleteSpriteImpl(user: User, uploadid: string) {
 
 async function putEffectsImpl(loaded: LoadedDex, table: EffectTable, inputs: AnyObject[]) {
 	const base = baseOf(loaded.row);
-	const lookup = lookupTables(base, loaded.data.Pokedex, loaded.effects);
+	const lookup = lookupTables(base, loaded.data.Pokedex, effectiveEffects(loaded.effects));
 	const effects = { ...loaded.effects, [table]: new Map(entriesOf(loaded, table)) } as Effects;
 	const changed: EffectEntry[] = [];
 	for (const input of inputs) {
-		const entry = named(input, () => validateEffect(input, table, base, effects[table], lookup, loaded.row.official));
+		const old = effects[table].get(toID(input.name));
+		const original = old?.trackdex ? originalEffect(table, old) as EffectEntry || undefined : undefined;
+		const entry = named(input, () => validateEffect(input, table, base, effects[table], lookup, loaded.row.official, original));
 		if (!base.data[table][entry.effectid]) {
 			entry.num ||= newNum(table, effects[table].values());
 			entry.data.num = entry.num;
@@ -1591,7 +1760,6 @@ async function putEffectsImpl(loaded: LoadedDex, table: EffectTable, inputs: Any
 	if (broken.length) throw new Chat.ErrorMessage(`These changes don't work: ${broken.join('; ')}`);
 	for (const entry of changed) await writeEntry(loaded.row.dexid, table, entry);
 	const updated = await save(loaded);
-	for (const entry of changed) await propagate(loaded.row.dexid, table, entry.effectid);
 	return { loaded: currentDexes().get(updated.row.dexid) || updated, entries: changed };
 }
 
@@ -1613,20 +1781,26 @@ async function putTypeImpl(loaded: LoadedDex, input: AnyObject) {
 	const effects = { ...loaded.effects, TypeChart: new Map([...loaded.effects.TypeChart, [entry.effectid, entry]]) };
 	check(compile(loaded.row, loaded.entries, effects));
 	await writeEntry(loaded.row.dexid, 'TypeChart', entry);
-	return { loaded: await saved(loaded, 'TypeChart', entry.effectid), entry };
+	return { loaded: await save(loaded), entry };
 }
 
 async function deleteEffectImpl(loaded: LoadedDex, table: EffectTable | 'TypeChart', names: string[]) {
 	const ids = names.map(name => getEffect(loaded, table, name).effectid);
 	const effects = { ...loaded.effects, [table]: new Map(entriesOf(loaded, table)) } as Effects;
-	for (const id of ids) effects[table].delete(id);
-	check(compile(loaded.row, loaded.entries, effects));
+	const reset = resets(loaded, table, ids);
 	for (const id of ids) {
+		if (reset.has(id)) (effects[table] as Map<ID, Entry>).set(id, reset.get(id)!);
+		else effects[table].delete(id);
+	}
+	check(compile(loaded.row, loaded.entries, effects));
+	const deleted = ids.filter(id => !reset.has(id));
+	await pinFollowers(loaded, table, deleted);
+	for (const entry of reset.values()) await writeEntry(loaded.row.dexid, table, entry);
+	for (const id of deleted) {
 		await database().query(SQL`DELETE FROM dex_effects
 			WHERE dexid = ${loaded.row.dexid} AND effecttable = ${table} AND effectid = ${id}`);
 	}
 	const updated = await save(loaded);
-	for (const id of ids) await propagate(loaded.row.dexid, table, id);
 	return currentDexes().get(updated.row.dexid) || updated;
 }
 
@@ -1680,10 +1854,13 @@ export function dependencies(
 		visit([...serialize(Dex.mod(engine).data[table][id]).matchAll(/(['"`])([^'"`\n]{1,40})\1/g)].map(match => match[2]), ['Conditions', 'TypeChart']);
 		return found;
 	}
-	const entry = entriesOf(owner!, table).get(id)!;
+	const row = entriesOf(owner!, table).get(id)!;
+	const entry = effectiveOf(table, row) || row;
 	visit(entry.data);
 	if (table === 'Pokedex') {
-		const { learnset } = entry as SpeciesEntry;
+		const original = row.trackdex ? originalOf(row as SpeciesEntry) : null;
+		if (original) visit(original.species);
+		const learnset = { ...original?.learnset?.learnset, ...(row as SpeciesEntry).learnset };
 		visit(Object.keys(learnset).filter(move => learnset[move]));
 	} else if (table === 'TypeChart') {
 		visit([...Object.keys(entry.data.damageTaken), ...Object.keys(entry.data.attacks)], ['TypeChart', 'Conditions']);
@@ -1693,58 +1870,54 @@ export function dependencies(
 	return found;
 }
 
-async function copyInto(
-	target: LoadedDex, keys: Fork[],
-	options: { overwrite?: boolean, update?: boolean, seen?: Set<string> } = {}
-) {
+async function copyInto(target: LoadedDex, keys: Fork[], frozen = false) {
 	const base = baseOf(target.row);
 	const entries = new Map(target.entries);
 	const effects = Object.fromEntries(TABLES.slice(1).map(table => [table, new Map(entriesOf(target, table))])) as Effects;
 	const species = new Set(target.row.species);
 	const copied: [Table, Entry][] = [];
+	const followed: ID[] = [];
 	for (const [table, id, source, engine] of keys) {
 		if (target.row.dexid === source.row.dexid) throw new Chat.ErrorMessage(`That's the same dex.`);
 		const sourceBase = baseOf(source.row);
-		const entry: Entry = engine ? {
-			effecttable: table as EffectTable, effectid: id, num: 0, inheritsfrom: `${engine}:${id}` as ID,
-			data: { name: (Dex.mod(engine).data[table as EffectTable][id] as AnyObject).name }, slots: {}, events: {}, sprites: {},
-			origin: null, trackdex: null, trackid: null,
-		} as EffectEntry : entriesOf(source, table).get(id)!;
+		const row = engine ? null : entriesOf(source, table).get(id)!;
+		const name: string = row ? row.data.name : (Dex.mod(engine!).data[table as EffectTable][id] as AnyObject).name;
 		const into: Map<ID, Entry> = table === 'Pokedex' ? entries : effects[table];
 		const existing = into.get(id);
-		const what = `the ${tableName(table)} ${entry.data.name}`;
+		const what = `the ${tableName(table)} ${name}`;
 		if (engine && existing?.inheritsfrom === `${engine}:${id}`) continue;
-		if (existing && !(existing.trackdex === source.row.dexid && existing.trackid === id)) {
-			if (options.update) continue;
-			if (!options.overwrite) {
-				throw new Chat.ErrorMessage(`${target.row.name} already has its own version of ${what}. Add "overwrite" to replace it.`);
-			}
+		if (existing?.trackdex === source.row.dexid && existing.trackid === id) continue;
+		if (existing) {
+			throw new Chat.ErrorMessage(`${target.row.name} already has its own version of ${what}. Delete it first to add ${source.row.name}'s.`);
 		}
 		const official = isBase(base, table, id);
-		if (!engine && official !== isBase(sourceBase, table, id)) {
-			throw new Chat.ErrorMessage(official ?
-				`${what} is custom in ${source.row.name}, but ${baseName(target.row)} already has one.` :
-				`${what} is an edit of something ${baseName(target.row)} doesn't have.`);
-		}
-		if (entry.inheritsfrom && !entry.inheritsfrom.includes(':') && !isBase(base, table, entry.inheritsfrom)) {
-			throw new Chat.ErrorMessage(`${what} copies ${entry.inheritsfrom}, which ${baseName(target.row)} doesn't have.`);
-		}
-		let link: Entry | undefined = entry;
-		for (let i = 0; link?.trackdex && i < 100; i++) {
-			if (link.trackdex === target.row.dexid && link.trackid === id) {
-				throw new Chat.ErrorMessage(`${what} in ${source.row.name} comes from ${target.row.name} already.`);
+		const effective = row && effectiveOf(table, { ...row, trackdex: source.row.dexid, trackid: id, pinned: null });
+		if (table !== 'Pokedex' && effective) {
+			if (official !== isBase(sourceBase, table, id)) {
+				throw new Chat.ErrorMessage(official ?
+					`${what} is custom in ${source.row.name}, but ${baseName(target.row)} already has one.` :
+					`${what} is an edit of something ${baseName(target.row)} doesn't have.`);
 			}
-			const next = currentDexes().get(link.trackdex);
-			link = next && entriesOf(next, table).get(link.trackid!);
+			if (effective.inheritsfrom && !effective.inheritsfrom.includes(':') && !isBase(base, table, effective.inheritsfrom)) {
+				throw new Chat.ErrorMessage(`${what} copies ${effective.inheritsfrom}, which ${baseName(target.row)} doesn't have.`);
+			}
 		}
+		const num = official ? 0 : newNum(table, into.values());
+		const data: AnyObject = { name, ...(table !== 'Pokedex' && table !== 'TypeChart' && !official ? { num } : {}) };
 		const copy = {
-			...JSON.parse(json(entry)), origin: originOf(source, entry), trackdex: engine ? null : source.row.dexid, trackid: engine ? null : id,
-		};
-		copy.num = official ? existing?.num || 0 : existing?.num || newNum(table, into.values());
-		if (table !== 'Pokedex' && table !== 'TypeChart' && !official) copy.data.num = copy.num;
+			...(table === 'Pokedex' ? { speciesid: id, learnset: {} } : { effecttable: table, effectid: id, slots: {}, events: {} }),
+			num, inheritsfrom: engine ? `${engine}:${id}` : null, data: table === 'TypeChart' ? { ...data, damageTaken: {}, attacks: {} } : data,
+			sprites: {}, origin: row ? originOf(source, row) : null, trackdex: row ? source.row.dexid : null, trackid: row ? id : null,
+			pinned: null,
+		} as Entry;
+		if (row && frozen) copy.pinned = liveOriginal(table, copy);
+		if (row && !frozen) followed.push(source.row.dexid);
 		into.set(id, copy);
 		if (table === 'Pokedex' && official) species.add(id);
 		copied.push([table, copy]);
+	}
+	if (reaches(followed, target.row.dexid)) {
+		throw new Chat.ErrorMessage(`${target.row.name} can't follow that: it comes from a dex set in ${target.row.name}, or that follows it.`);
 	}
 	const stale: string[] = [];
 	check(compile({ ...target.row, species: [...species] }, entries, effects, stale));
@@ -1754,52 +1927,29 @@ async function copyInto(
 		await database().query(SQL`UPDATE dexes SET species = ${json([...species])} WHERE dexid = ${target.row.dexid}`);
 	}
 	const loaded = await save(target);
-	for (const [table, entry] of copied) {
-		const id = (entry as SpeciesEntry).speciesid || (entry as EffectEntry).effectid;
-		await propagate(loaded.row.dexid, table, id, options.seen);
-	}
 	return {
 		loaded: currentDexes().get(loaded.row.dexid) || loaded, warnings,
 		copied: copied.map(([table, entry]) => `${tableName(table)} ${entry.data.name}`),
 	};
 }
 
-async function propagate(dexid: ID, table: Table, id: ID, seen = new Set<string>()) {
-	if (seen.has(`${dexid}:${table}:${id}`)) return;
-	seen.add(`${dexid}:${table}:${id}`);
-	const rows = table === 'Pokedex' ?
-		await database().query<{ dexid: ID }>(SQL`SELECT dexid FROM dex_species
-			WHERE trackdex = ${dexid} AND trackid = ${id}`) :
-		await database().query<{ dexid: ID }>(SQL`SELECT dexid FROM dex_effects
-			WHERE trackdex = ${dexid} AND effecttable = ${table} AND trackid = ${id}`);
-	const source = currentDexes().get(dexid);
-	for (const row of rows) {
-		const target = currentDexes().get(row.dexid);
-		if (!target) continue;
-		try {
-			if (!source || !entriesOf(source, table).has(id)) throw new Error(`The original is gone.`);
-			await copyInto(target, [...dependencies(source, table, id, target).values()], { update: true, seen });
-		} catch {
-			await detach(currentDexes().get(row.dexid) || target, table, id);
-		}
-	}
-}
-
-async function detach(loaded: LoadedDex, table: Table, id: ID) {
-	if (table === 'Pokedex') {
-		await database().query(SQL`UPDATE dex_species SET trackdex = NULL, trackid = NULL
-			WHERE dexid = ${loaded.row.dexid} AND speciesid = ${id}`);
-	} else {
-		await database().query(SQL`UPDATE dex_effects SET trackdex = NULL, trackid = NULL
-			WHERE dexid = ${loaded.row.dexid} AND effecttable = ${table} AND effectid = ${id}`);
-	}
-	return (await refresh(loaded.row.dexid))!;
-}
-
-async function forkEntryImpl(target: LoadedDex, source: LoadedDex, table: Table, name: string, overwrite = false) {
+async function forkEntryImpl(target: LoadedDex, source: LoadedDex, table: Table, name: string, frozen = false) {
 	const missing: string[] = [];
 	const found = dependencies(source, table, toID(name), target, undefined, missing);
-	return { ...await copyInto(target, [...found.values()], { overwrite }), missing };
+	return { ...await copyInto(target, [...found.values()], frozen), missing };
+}
+
+async function freezeImpl(loaded: LoadedDex, table: Table, names: string[]) {
+	const into = entriesOf(loaded, table);
+	const changed: Entry[] = [];
+	for (const name of names) {
+		const entry = into.get(toID(name));
+		const pinned = entry?.trackdex && !entry.pinned ? liveOriginal(table, entry) : null;
+		if (!pinned) throw new Chat.ErrorMessage(`${loaded.row.name} has no ${tableName(table)} called "${name}" that follows another dex.`);
+		changed.push({ ...entry!, pinned });
+	}
+	for (const entry of changed) await writeEntry(loaded.row.dexid, table, entry);
+	return save(loaded);
 }
 
 export function evoLine(loaded: LoadedDex, name: string) {
@@ -1836,7 +1986,7 @@ export function evoLine(loaded: LoadedDex, name: string) {
 	return [...ancestors, ...descend(start).filter(species => !ancestors.some(other => other.id === species.id))];
 }
 
-async function forkLineImpl(target: LoadedDex, source: LoadedDex, name: string, overwrite = false) {
+async function forkLineImpl(target: LoadedDex, source: LoadedDex, name: string, frozen = false) {
 	const line = evoLine(source, name);
 	const custom = (id: ID) => ancestorsOf(source).some(layer => layer.entries.has(id));
 	const found = new Map<string, Fork>();
@@ -1845,7 +1995,7 @@ async function forkLineImpl(target: LoadedDex, source: LoadedDex, name: string, 
 		if (custom(species.id)) dependencies(source, 'Pokedex', species.id, target, found, missing);
 	}
 	const result = found.size ?
-		await copyInto(target, [...found.values()], { overwrite }) :
+		await copyInto(target, [...found.values()], frozen) :
 		{ loaded: target, copied: [] as string[], warnings: [] as string[] };
 	const base = baseOf(result.loaded.row);
 	const added: string[] = [];
@@ -1867,12 +2017,13 @@ export function effectEditor(loaded: LoadedDex, table: EffectTable, name: string
 	if (!loaded.effects[table].has(id) && !base.data[table][id]) {
 		throw new Chat.ErrorMessage(`There's no ${EFFECT_NAMES[table]} called "${name}" in ${loaded.row.name}.`);
 	}
-	const lookup = lookupTables(base, loaded.data.Pokedex, loaded.effects);
+	const shown = effectiveEffects(loaded.effects);
+	const lookup = lookupTables(base, loaded.data.Pokedex, shown);
 	const effect = JSON.parse(json(loaded.dex.data[table][id]));
 	const edit = loaded.data.effects?.[table]?.[id] || { data: {} };
 	const { base: original } = baseEffect(base, table, id, edit);
 	return {
-		...describeEffect(base, table, id, loaded.effects[table].get(id), lookup),
+		...describeEffect(base, table, id, shown[table].get(id), lookup),
 		edited: loaded.effects[table].has(id), editable: loaded.row.official ? null : EDITABLE[table],
 		data: { ...effect, ...describeText(base, table, edit, id) },
 		original: original ? {
@@ -2125,6 +2276,7 @@ export const putType = mutation(putTypeImpl);
 export const deleteEffect = mutation(deleteEffectImpl);
 export const forkEntry = mutation(forkEntryImpl);
 export const forkLine = mutation(forkLineImpl);
+export const freeze = mutation(freezeImpl);
 export const setTiers = mutation(setTiersImpl);
 export const putFormat = mutation(putFormatImpl);
 export const deleteFormat = mutation(deleteFormatImpl);

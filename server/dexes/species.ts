@@ -1,4 +1,5 @@
 import type { ModdedDex } from '../../sim/dex';
+import { isObject } from '../../sim/dex-custom';
 import type { LearnsetData, SpeciesData, SpeciesFormatsData } from '../../sim/dex-species';
 
 export interface Origin {
@@ -18,6 +19,13 @@ export interface SpeciesEntry {
 	origin: Origin | null;
 	trackdex: ID | null;
 	trackid: ID | null;
+	pinned: AnyObject | null;
+}
+
+export interface Original {
+	species: AnyObject;
+	learnset?: AnyObject;
+	tiers: AnyObject;
 }
 
 const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
@@ -39,6 +47,7 @@ export const TIER_FIELDS = new Map([
 const MOVE_SOURCE_REGEX = /^[1-9][MTLREDSVC][a-zA-Z0-9]*$/;
 const LEARNSET_FIELDS = ['eventOnly', 'eventData'];
 const REQUIRED_FIELDS = ['types', 'abilities', 'baseStats', 'eggGroups', 'weightkg'];
+const MERGED_FIELDS = ['baseStats', 'abilities'];
 const NOT_INHERITED = [
 	'name', 'num', 'isNonstandard', 'baseSpecies', 'forme', 'formeOrder', 'otherFormes', 'cosmeticFormes',
 	'isCosmeticForme', 'changesFrom', 'battleOnly', 'requiredItem', 'requiredItems', 'requiredAbility', 'requiredMove',
@@ -190,7 +199,9 @@ function learnset(input: unknown, dex: ModdedDex, old: AnyObject) {
 	return result;
 }
 
-export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built = dex) {
+export function validateEntry(
+	input: AnyObject, dex: ModdedDex, entries: Map<ID, SpeciesEntry>, built = dex, original?: Original
+) {
 	const name = validateName(input.name, 'Pokemon');
 	const speciesid = toID(name);
 	const official: AnyObject | undefined = dex.data.Pokedex[speciesid];
@@ -201,6 +212,7 @@ export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID,
 
 	let inheritsfrom = old ? old.inheritsfrom : null;
 	if (input.inheritsFrom !== undefined) {
+		if (original) throw new Chat.ErrorMessage(`${name} follows its original, so make it static before changing what it inherits from.`);
 		if (official) throw new Chat.ErrorMessage(`${official.name} already exists, so it can't inherit from anything.`);
 		const base = input.inheritsFrom === null ? null : dex.species.get(input.inheritsFrom);
 		if (base && (!base.exists || !dex.data.Pokedex[base.id]?.baseStats)) {
@@ -216,7 +228,7 @@ export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID,
 		if (!check) {
 			throw new Chat.ErrorMessage(`"${field}" isn't something you can set. You can set: ${[...FIELDS.keys()].join(', ')}.`);
 		}
-		if (input[field] === null && (official?.[field] ?? officialTiers?.[field]) !== undefined &&
+		if (input[field] === null && !original && (official?.[field] ?? officialTiers?.[field]) !== undefined &&
 			!REQUIRED_FIELDS.includes(field)) {
 			data[field] = null;
 		} else if (input[field] === null) {
@@ -236,13 +248,24 @@ export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID,
 			throw new Chat.ErrorMessage(`A forme's name is its base species, a dash, then the forme, like "${prefix}Delta", unless you set "forme".`);
 		}
 	}
+	const base: AnyObject | undefined = original?.species || official || (inheritsfrom ? dex.data.Pokedex[inheritsfrom] : undefined);
+	for (const field of MERGED_FIELDS) {
+		if (!isObject(input[field]) || !isObject(base?.[field])) continue;
+		const changed: AnyObject = {};
+		for (const key of new Set([...Object.keys(base[field]), ...Object.keys(data[field])])) {
+			if (data[field][key] !== base[field][key]) changed[key] = data[field][key] ?? null;
+		}
+		if (Object.keys(changed).length) data[field] = changed;
+		else delete data[field];
+	}
 
 	const entry: SpeciesEntry = {
 		speciesid, num: old?.num || 0, inheritsfrom, data,
 		learnset: learnset(input.learnset, built, old?.learnset || {}), sprites: old?.sprites || {},
-		origin: old?.origin || null, trackdex: null, trackid: null,
+		origin: old?.origin || null, trackdex: old?.trackdex || null, trackid: old?.trackid || null,
+		pinned: old?.pinned || null,
 	};
-	const species = resolveSpecies(dex, entry);
+	const species = resolveSpecies(dex, entry, original);
 	for (const field of REQUIRED_FIELDS) {
 		if (species[field] === undefined) {
 			throw new Chat.ErrorMessage(`"${field}" is required, unless you set "inheritsFrom" to copy another Pokemon.`);
@@ -251,39 +274,47 @@ export function validateEntry(input: AnyObject, dex: ModdedDex, entries: Map<ID,
 	return entry;
 }
 
-export function resolveSpecies(dex: ModdedDex, entry: SpeciesEntry): AnyObject {
+export function resolveSpecies(dex: ModdedDex, entry: SpeciesEntry, original?: Original): AnyObject {
 	const data = { ...entry.data };
 	for (const field of [...TIER_FIELDS.keys(), ...LEARNSET_FIELDS, 'sameNumberAs']) delete data[field];
 	const official = dex.data.Pokedex[entry.speciesid];
-	if (official) return { ...official, ...data };
-	const base: AnyObject = entry.inheritsfrom ? { ...dex.data.Pokedex[entry.inheritsfrom] } : {};
-	for (const field of NOT_INHERITED) delete base[field];
+	const base: AnyObject = { ...original?.species || official || (entry.inheritsfrom ? dex.data.Pokedex[entry.inheritsfrom] : {}) };
+	if (!original && !official) {
+		for (const field of NOT_INHERITED) delete base[field];
+	}
+	for (const field of MERGED_FIELDS) {
+		if (!isObject(data[field]) || !isObject(base[field])) continue;
+		data[field] = Object.fromEntries(Object.entries({ ...base[field], ...data[field] }).filter(([, value]) => value !== null));
+	}
+	if (official) return { ...base, ...data };
 	return { ...base, ...data, num: entry.num, gen: dex.gen };
 }
 
-export function resolveEntries(dex: ModdedDex, entries: Iterable<SpeciesEntry>) {
+export function resolveEntries(dex: ModdedDex, entries: Iterable<SpeciesEntry>, originals = new Map<ID, Original>()) {
 	const Pokedex: { [id: string]: SpeciesData } = {};
 	const Learnsets: { [id: string]: LearnsetData } = {};
 	const FormatsData: { [id: string]: SpeciesFormatsData } = {};
 	const all = [...entries];
 	for (const entry of all) {
 		const id = entry.speciesid;
-		Pokedex[id] = resolveSpecies(dex, entry) as SpeciesData;
-		const base = dex.data.Learnsets[dex.data.Pokedex[id] ? id : entry.inheritsfrom || '']?.learnset || {};
+		const original = originals.get(id);
+		Pokedex[id] = resolveSpecies(dex, entry, original) as SpeciesData;
+		const base = (original ? original.learnset : dex.data.Learnsets[dex.data.Pokedex[id] ? id : entry.inheritsfrom || ''])?.learnset || {};
 		const { sketch, ...moves }: AnyObject = { ...base, ...entry.learnset };
 		for (const move of Object.keys(moves)) {
 			if (!moves[move]) delete moves[move];
 		}
 		if (sketch) moves.sketch = sketch;
 		if (Object.keys(moves).length || !Pokedex[id].baseSpecies) {
-			Learnsets[id] = { ...(dex.data.Pokedex[id] ? dex.data.Learnsets[id] : {}), learnset: moves };
+			Learnsets[id] = { ...(original ? original.learnset : dex.data.Pokedex[id] ? dex.data.Learnsets[id] : {}), learnset: moves };
 		}
 		for (const field of LEARNSET_FIELDS) {
 			if (entry.data[field] !== undefined) {
 				Learnsets[id] = { ...(Learnsets[id] || dex.data.Learnsets[id]), [field]: entry.data[field] };
 			}
 		}
-		const tiers: AnyObject = dex.data.Pokedex[id] ? { ...dex.data.FormatsData[id] } : { tier: 'OU' };
+		const tiers: AnyObject = original ? { ...original.tiers } :
+			dex.data.Pokedex[id] ? { ...dex.data.FormatsData[id] } : { tier: 'OU' };
 		for (const field of TIER_FIELDS.keys()) {
 			if (entry.data[field]) tiers[field] = entry.data[field];
 		}

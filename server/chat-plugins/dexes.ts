@@ -93,10 +93,13 @@ async function applyEdit(user: User, dexid: string, edit: AnyObject) {
 	if (edit.base !== undefined) ({ loaded, stale } = await Dexes.setBase(loaded, `${edit.base}`));
 	const skipped: string[] = [];
 	if (edit.addpokemon) {
-		const added = await Dexes.addPokemon(loaded, `${edit.addpokemon.from || ''}`, toList(edit.addpokemon.names));
+		const added = await Dexes.addPokemon(
+			loaded, `${edit.addpokemon.from || ''}`, toList(edit.addpokemon.names), !!edit.addpokemon.static
+		);
 		loaded = added.loaded;
 		skipped.push(...added.skipped);
 	}
+	if (edit.freezepokemon) loaded = await Dexes.freeze(loaded, 'Pokedex', toList(edit.freezepokemon));
 	if (edit.pokemon) ({ loaded } = await Dexes.putEntries(loaded, toInputs(edit.pokemon)));
 	for (const op of edit.tiers ? toInputs(edit.tiers) : []) loaded = await Dexes.setTiers(loaded, op);
 	if (edit.deletepokemon) loaded = await Dexes.deletePokemon(loaded, toList(edit.deletepokemon));
@@ -110,15 +113,19 @@ async function applyEdit(user: User, dexid: string, edit: AnyObject) {
 		const add = edit[`add${kind}`];
 		if (add) {
 			if (!Dexes.LIST_TABLES.includes(table as Dexes.ListTable)) throw new Chat.ErrorMessage(`Conditions come with what needs them.`);
-			const added = await Dexes.addEffects(loaded, table as Dexes.ListTable, `${add.from || ''}`, toList(add.names));
+			const added = await Dexes.addEffects(
+				loaded, table as Dexes.ListTable, `${add.from || ''}`, toList(add.names), !!add.static
+			);
 			loaded = added.loaded;
 			skipped.push(...added.skipped);
 		}
+		if (edit[`freeze${kind}`]) loaded = await Dexes.freeze(loaded, table, toList(edit[`freeze${kind}`]));
 		if (edit[`delete${kind}`]) loaded = await Dexes.deleteEffects(loaded, table, toList(edit[`delete${kind}`]));
 		if (edit[`reset${kind}`]) loaded = await Dexes.deleteEffect(loaded, table, toList(edit[`reset${kind}`]));
 	}
 	for (const input of edit.type ? toInputs(edit.type) : []) ({ loaded } = await Dexes.putType(loaded, input));
 	if (edit.deletetype) loaded = await Dexes.deleteEffect(loaded, 'TypeChart', toList(edit.deletetype));
+	if (edit.freezetype) loaded = await Dexes.freeze(loaded, 'TypeChart', toList(edit.freezetype));
 	if (edit.sprite) {
 		const { name, kind, image, settings } = edit.sprite;
 		loaded = await Dexes.setSprite(user, loaded, `${name}`, toKind(`${kind}`), image ? `${image}` : null, settings || {});
@@ -259,9 +266,11 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 	const base = Dexes.baseOf(loaded.row).data;
 	entries.originals = {};
 	for (const entry of loaded.entries.values()) {
+		const original = entry.trackdex ? Dexes.originalOf(entry) : null;
 		const id = base.Pokedex[entry.speciesid] ? entry.speciesid : entry.inheritsfrom;
-		entries.originals[entry.speciesid] = id && base.Pokedex[id] ?
-			{ ...base.Pokedex[id], learnset: Object.keys(base.Learnsets[id]?.learnset || {}) } : null;
+		entries.originals[entry.speciesid] = original ?
+			{ ...original.species, learnset: Object.keys(original.learnset?.learnset || {}) } : id && base.Pokedex[id] ?
+				{ ...base.Pokedex[id], learnset: Object.keys(base.Learnsets[id]?.learnset || {}) } : null;
 	}
 	entries.world = Dexes.worldSpecies(loaded);
 	entries.needed = neededConditions(loaded, entries);
@@ -269,6 +278,9 @@ function dexEntries(loaded: Dexes.LoadedDex) {
 	entries.own = Object.fromEntries((['Moves', 'Abilities', 'Items', 'Conditions'] as const).map(table => [table,
 		Object.fromEntries([...loaded.effects[table].keys()].map(id => [id, base[table][id] ? 'edited' : 'custom'])),
 	]));
+	entries.copies = Object.fromEntries((['Pokedex', 'Moves', 'Abilities', 'Items', 'Conditions', 'TypeChart'] as const)
+		.map(table => [table, Object.fromEntries([...Dexes.entriesOf(loaded, table)].filter(([, entry]) => entry.origin)
+			.map(([id, entry]) => [id, { dex: entry.origin!.dex, follows: !!entry.trackdex && !entry.pinned, edited: !!entry.trackdex && Dexes.isEdited(table, entry) }]))]));
 	entriesCache.set(loaded, entries);
 	return entries;
 }
@@ -377,18 +389,19 @@ async function uploadURL(user: User, target: string) {
 
 async function forkHTML(user: User, target: string) {
 	checkEnabled(user);
-	const usage = `/crq dexfork [your dex], [from dex], [pokemon|move|ability|item|condition|type], [name], [overwrite]`;
+	const usage = `/crq dexfork [your dex], [from dex], [pokemon|move|ability|item|condition|type], [name], [static]`;
 	const [dexName, sourceName, kind, rest] = args(target, 4, usage);
 	const [name, flag] = rest.split(',').map(part => part.trim());
+	const frozen = toID(flag) === 'static';
 	const source = sourceDex(sourceName);
 	const table = toAnyTable(kind);
 	if (source.row.official && (table === 'Pokedex' || Dexes.LIST_TABLES.includes(table as Dexes.ListTable))) {
-		return addHTML(await Dexes.editable(user, dexName), source, table as 'Pokedex' | Dexes.ListTable, [name]);
+		return addHTML(await Dexes.editable(user, dexName), source, table as 'Pokedex' | Dexes.ListTable, [name], frozen);
 	}
 	const { loaded, copied, warnings, missing } = await Dexes.forkEntry(
-		await Dexes.editable(user, dexName), source, table, name, toID(flag) === 'overwrite'
+		await Dexes.editable(user, dexName), source, table, name, frozen
 	);
-	let buf = Utils.html`Forked into ${loaded.row.name}: ${copied.join(', ')}. They follow changes to the originals until you edit them.`;
+	let buf = Utils.html`Forked into ${loaded.row.name}: ${copied.join(', ')}. ${copiesText(frozen)}.`;
 	if (warnings.length) buf += Utils.html`<br />Some changes don't carry over: ${warnings.join('; ')}`;
 	if (missing.length) buf += missingHTML(source, missing);
 	return buf;
@@ -396,18 +409,19 @@ async function forkHTML(user: User, target: string) {
 
 async function forkLineHTML(user: User, target: string) {
 	checkEnabled(user);
-	const [dexName, sourceName, rest] = args(target, 3, `/crq dexforkline [your dex], [from dex], [pokemon], [overwrite]`);
+	const [dexName, sourceName, rest] = args(target, 3, `/crq dexforkline [your dex], [from dex], [pokemon], [static]`);
 	const [name, flag] = rest.split(',').map(part => part.trim());
+	const frozen = toID(flag) === 'static';
 	const source = sourceDex(sourceName);
 	if (source.row.official) {
 		const line = Dexes.evoLine(source, name).map(species => species.name);
-		return addHTML(await Dexes.editable(user, dexName), source, 'Pokedex', line);
+		return addHTML(await Dexes.editable(user, dexName), source, 'Pokedex', line, frozen);
 	}
 	const { loaded, copied, added, warnings, missing } = await Dexes.forkLine(
-		await Dexes.editable(user, dexName), source, name, toID(flag) === 'overwrite'
+		await Dexes.editable(user, dexName), source, name, frozen
 	);
 	let buf = Utils.html`Forked the evolution line of ${name} into ${loaded.row.name}`;
-	if (copied.length) buf += Utils.html`: ${copied.join(', ')}. They follow changes to the originals until you edit them`;
+	if (copied.length) buf += Utils.html`: ${copied.join(', ')}. ${copiesText(frozen)}`;
 	buf += added.length ? Utils.html`. Added ${added.join(', ')}.` : `.`;
 	if (warnings.length) buf += Utils.html`<br />Some changes don't carry over: ${warnings.join('; ')}`;
 	if (missing.length) buf += missingHTML(source, missing);
@@ -420,12 +434,17 @@ function sourceDex(name: string) {
 	return source;
 }
 
+function copiesText(frozen: boolean) {
+	return frozen ? `They're static copies, which won't change` :
+		`They follow changes to the originals, with your own edits on top`;
+}
+
 async function addHTML(
-	target: Dexes.LoadedDex, source: Dexes.LoadedDex, table: 'Pokedex' | Dexes.ListTable, names: string[]
+	target: Dexes.LoadedDex, source: Dexes.LoadedDex, table: 'Pokedex' | Dexes.ListTable, names: string[], frozen: boolean
 ) {
 	const from = source.row.dexid;
 	const { loaded, skipped } = table === 'Pokedex' ?
-		await Dexes.addPokemon(target, from, names) : await Dexes.addEffects(target, table, from, names);
+		await Dexes.addPokemon(target, from, names, frozen) : await Dexes.addEffects(target, table, from, names, frozen);
 	const added = names.filter(name => !skipped.some(reason => reason.startsWith(name)));
 	let buf = added.length ? Utils.html`Added ${added.join(', ')} to ${loaded.row.name}.` : '';
 	if (skipped.length) buf += (buf ? `<br />` : '') + Utils.html`Skipped ${skipped.join('; ')}`;
