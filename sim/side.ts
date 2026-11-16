@@ -768,7 +768,7 @@ export class Side {
 		}
 
 		// Mega evolution
-		const mixandmega = this.battle.format.mod === 'mixandmega';
+		const mixandmega = this.battle.format.mod.startsWith('mixandmega');
 		const mega = (event === 'mega');
 		const megax = (event === 'megax');
 		const megay = (event === 'megay');

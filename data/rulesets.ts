@@ -1664,7 +1664,7 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 				const speciesTypes: string[] = [];
 				const moveTypes: string[] = [];
 				// BDSP can't import Pokemon from Home, so it shouldn't grant moves from archaic species types
-				const minObtainableSpeciesGen = this.dex.currentMod === 'gen8bdsp' ||
+				const minObtainableSpeciesGen = this.dex.currentMod.startsWith('gen8bdsp') ||
 					(this.dex.gen === 9 && !this.ruleTable.has('natdexmod')) ?
 					this.dex.gen : species.gen;
 				for (let i = this.dex.gen; i >= minObtainableSpeciesGen && i >= move.gen; i--) {

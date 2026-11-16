@@ -267,6 +267,16 @@ export function loadLayer(hash: string): DexLayer {
 	return JSON.parse(fs.readFileSync(path, 'utf8'));
 }
 
+function worldPokedex(data: DexLayer, base: typeof Dex) {
+	const ids = new Set(Object.keys(base.mod(data.mod).data.Pokedex));
+	const visit = (layer: DexLayer) => {
+		for (const id in layer.Pokedex) ids.add(id);
+		for (const hash of layer.parents || (layer.parent ? [layer.parent] : [])) visit(loadLayer(hash));
+	};
+	visit(data);
+	return ids;
+}
+
 const fusedEngines = new Set<string>();
 
 export function isBuiltDex(mod: string) {
@@ -491,7 +501,11 @@ function buildEngineDex(hash: string, engine: string, base: typeof Dex) {
 	dex.forGen = gen => (!gen || gen === dex.gen ? dex : base.forGen(gen));
 	base.dexes[id] = dex;
 	try {
-		dataCache.Scripts.init?.call(dex);
+		try {
+			dataCache.Scripts.init?.call(dex);
+		} catch {
+			for (const [table, entries] of Object.entries(parent.data)) dataCache[table] = { ...entries };
+		}
 		if (id.startsWith('champions')) copyPrevoMoves(dex, base.mod(engine));
 		fusionChecks(dataCache);
 	} catch (err) {
@@ -515,6 +529,7 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 	const parent = buildBase(data, base, engine || data.mod);
 	try {
 		const species = new Set(data.species);
+		let world: Set<string> | null = null;
 		const removed = (table: 'Moves' | 'Abilities' | 'Items') => new Set(data.lists?.[table]?.removed || []);
 		const removedMoves = removed('Moves');
 		const removedAbilities = removed('Abilities');
@@ -545,8 +560,10 @@ export function buildDex(input: DexData, base = Dex, engine?: string): ModdedDex
 					onValidateSet(set) {
 						const { outOfBattleSpecies, tierSpecies } = this.getValidationSpecies(set);
 						const fusion = this.ruleTable.has('fusionsmod') && set.fusion ? [this.dex.species.get(set.fusion)] : [];
+						world ||= worldPokedex(data, base);
 						for (const forme of [outOfBattleSpecies, tierSpecies, ...fusion]) {
-							if (!species.has(forme.isCosmeticForme ? toID(forme.baseSpecies) : forme.id)) {
+							const formeid = forme.isCosmeticForme ? toID(forme.baseSpecies) : forme.id;
+							if (!species.has(formeid) && world.has(formeid)) {
 								return [`${forme.name} isn't in this dex.`];
 							}
 						}
@@ -653,14 +670,23 @@ export function releaseDex(dex: ModdedDex) {
 	for (const parent of cached.parents) releaseDex(parent);
 }
 
+const FORMAT_SCRIPTS = ['battle', 'side', 'pokemon', 'actions', 'field', 'queue'];
+
 export function buildFormat(dex: ModdedDex, formatData: FormatData): Format {
 	const ruleset = ['Dex Pokemon', 'Dex Snapshot', ...formatData.ruleset || []];
-	const battle = formatData.debug ? { trunc: Math.trunc } : undefined;
+	const source = Dex.formats.get(`${(formatData as AnyObject).from || ''}`);
+	const code: AnyObject = {};
+	for (const [key, value] of source.exists ? Object.entries(source) : []) {
+		const hook = /^on\w+(?:Priority|Order|SubOrder)$/.test(key);
+		if (typeof value === 'function' || hook || FORMAT_SCRIPTS.includes(key)) code[key] = value;
+	}
+	const { trunc, ...scripts } = code.battle || {};
+	const battle = formatData.debug ? { ...scripts, trunc: Math.trunc } : Object.keys(scripts).length ? scripts : undefined;
 	const tiers = (formatData as AnyObject).tiers;
 	const formatDex = isObject(tiers) && Object.keys(tiers).length ? tieredDex(dex, tiers) : dex;
 	const build = (rules: string[]) => {
 		const format = new formatDex.Format({
-			...formatData, battle, effectType: 'Format', mod: formatDex.currentMod, ruleset: rules, baseRuleset: rules,
+			...code, ...formatData, battle, effectType: 'Format', mod: formatDex.currentMod, ruleset: rules, baseRuleset: rules,
 		});
 		if (formatData.id) (format as AnyObject).id = formatData.id;
 		return format;

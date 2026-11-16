@@ -12,11 +12,13 @@ CREATE TABLE IF NOT EXISTS dexes (
 	description TEXT NOT NULL DEFAULT '',
 	effectlists JSONB NOT NULL DEFAULT '{}',
 	created BIGINT NOT NULL,
-	updated BIGINT NOT NULL
+	updated BIGINT NOT NULL,
+	pool TEXT NOT NULL DEFAULT ''
 );
 
 ALTER TABLE dexes ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
 ALTER TABLE dexes ADD COLUMN IF NOT EXISTS effectlists JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE dexes ADD COLUMN IF NOT EXISTS pool TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS dexes_ownerid ON dexes (ownerid);
 
@@ -130,3 +132,7 @@ CREATE TABLE IF NOT EXISTS dex_credits (
 
 CREATE INDEX IF NOT EXISTS dex_credits_accountid ON dex_credits (accountid);
 CREATE INDEX IF NOT EXISTS dex_credits_addedby ON dex_credits (addedby);
+
+UPDATE dex_formats SET data = (dex_formats.data - 'engine') ||
+	jsonb_build_object('mod', 'champions' || substring(dexes.mod FROM 5))
+	FROM dexes WHERE dex_formats.dexid = dexes.dexid AND dex_formats.data ? 'engine';

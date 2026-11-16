@@ -322,7 +322,7 @@ export class RuleTable extends Map<string, string> {
 		}
 		if (this.valueRules.get('evlimit') === 'Auto') {
 			this.evLimit = dex.gen > 2 ? 510 : null;
-			if (format.mod === 'gen7letsgo') {
+			if (format.mod.startsWith('gen7letsgo')) {
 				this.evLimit = this.has('lgpenormalrules') ? 0 : null;
 			}
 			if (format.mod.startsWith('champions')) {

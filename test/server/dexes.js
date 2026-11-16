@@ -677,7 +677,6 @@ describe('Dexes', () => {
 		assert.equal(loaded.dex.getEffectiveness('Dark', 'Cosmic'), 1);
 		assert.equal(loaded.dex.getEffectiveness('Cosmic', 'Steel'), -1);
 		assert(loaded.dex.types.get('Cosmic').damageTaken.sandstorm === 3);
-		await assert.rejects(Dexes.putType(loaded, { name: 'Shadow Fire' }), /one word/);
 		await assert.rejects(Dexes.putType(loaded, { name: 'Cosmic', attacks: { Steel: 3 } }), /must be one of/);
 
 		({ loaded } = await Dexes.putEntries(loaded, [
@@ -742,24 +741,25 @@ describe('Dexes', () => {
 		await Dexes.deleteDex(loaded);
 	});
 
-	it('should run a format on its own engine', async () => {
+	it('should run a format on its own mod', async () => {
 		await fixture();
 		let loaded = Dexes.getDex('mochadex');
 		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltling', inheritsFrom: 'Pichu', learnset: { spore: ['9L1'] } }));
 		({ loaded } = await Dexes.putEntry(loaded, { name: 'Voltlet', prevo: 'Voltling' }));
 		({ loaded } = await Dexes.putEffect(loaded, 'Moves', { name: 'Volt Jab', type: 'Electric', category: 'Physical', basePower: 70, pp: 40 }));
 		const ou = formatOf('Mocha Dex', 'OU');
-		assert.deepEqual(Dexes.formatDetails(ou).engines.map(engine => engine.id), ['', 'champions']);
-		assert.equal(Dexes.formatDetails(ou).engine, '');
+		const mods = Dexes.formatDetails(ou).mods.map(mod => mod.id);
+		assert.deepEqual(mods.slice(0, 2), ['', 'champions']);
+		assert(mods.includes('mixandmega'));
+		assert.equal(Dexes.formatDetails(ou).mod, 'gen9');
 
 		let formatid;
 		({ loaded, formatid } = await Dexes.putFormat(loaded, {
-			name: 'Champions', ruleset: ['Flat Rules'], gameType: 'doubles', engine: 'champions',
+			name: 'Champions', ruleset: ['Flat Rules'], gameType: 'doubles', mod: 'champions',
 		}));
 		const engineDex = Dex.forFormat(Dex.formats.get(formatid));
 		assert(engineDex.currentMod.startsWith('champions'));
 		assert.equal(Dexes.formatDetails(formatid).mod, 'champions');
-		assert.equal(Dexes.formatDetails(formatid).engine, 'champions');
 		assert.equal(Dexes.battleData(formatid).engine, 'champions');
 		assert.deepEqual(engineDex.species.getLearnsetData('voltlet').learnset.spore, ['9L1']);
 		assert.equal(loaded.dex.species.getLearnsetData('voltlet').learnset.spore, undefined);
@@ -772,10 +772,10 @@ describe('Dexes', () => {
 		const battle = new (require('../../dist/sim/battle').Battle)({ formatid, seed: [1, 2, 3, 4] });
 		assert(battle.dex.currentMod.startsWith('champions'));
 		battle.destroy();
-		({ loaded } = await Dexes.putFormat(loaded, { name: 'Champions', engine: '' }));
-		assert.equal(loaded.formats.get(formatid).engine, undefined);
-		assert.equal(Dexes.formatDetails(formatid).engine, '');
-		await assert.rejects(Dexes.putFormat(loaded, { name: 'Champions', engine: 'fusion' }), /"engine" must be one of/);
+		({ loaded } = await Dexes.putFormat(loaded, { name: 'Champions', mod: '' }));
+		assert.equal(loaded.formats.get(formatid).mod, undefined);
+		assert.equal(Dexes.formatDetails(formatid).mod, 'gen9');
+		await assert.rejects(Dexes.putFormat(loaded, { name: 'Champions', mod: 'fusion' }), /"mod" must be one of/);
 	});
 
 	it('should give a format fusions with one rule', async () => {

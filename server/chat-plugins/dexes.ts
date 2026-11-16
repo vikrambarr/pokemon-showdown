@@ -328,6 +328,7 @@ function summary(loaded: Dexes.LoadedDex) {
 		name: loaded.row.name,
 		hash: loaded.data.hash,
 		mod: loaded.row.mod,
+		...(loaded.row.pool ? { pool: loaded.row.pool } : {}),
 		base: Dexes.baseName(loaded.row),
 		parents: loaded.row.parents,
 		official: loaded.row.official,
@@ -341,7 +342,7 @@ function summary(loaded: Dexes.LoadedDex) {
 		entries: loaded.entries.size,
 		counts: countsOf(loaded),
 		formats: [...loaded.formats].map(([formatid, data]) => ({
-			id: formatid, name: Dex.formats.get(formatid).name, ...(Dexes.formatEngine(data) ? { engine: Dexes.formatEngine(data) } : {}),
+			id: formatid, name: Dex.formats.get(formatid).name, ...(Dexes.formatMod(data) ? { mod: Dexes.formatMod(data) } : {}),
 		})),
 	};
 }
@@ -379,9 +380,13 @@ async function forkHTML(user: User, target: string) {
 	const usage = `/crq dexfork [your dex], [from dex], [pokemon|move|ability|item|condition|type], [name], [overwrite]`;
 	const [dexName, sourceName, kind, rest] = args(target, 4, usage);
 	const [name, flag] = rest.split(',').map(part => part.trim());
-	const source = Dexes.getDex(sourceName);
+	const source = sourceDex(sourceName);
+	const table = toAnyTable(kind);
+	if (source.row.official && (table === 'Pokedex' || Dexes.LIST_TABLES.includes(table as Dexes.ListTable))) {
+		return addHTML(await Dexes.editable(user, dexName), source, table as 'Pokedex' | Dexes.ListTable, [name]);
+	}
 	const { loaded, copied, warnings, missing } = await Dexes.forkEntry(
-		await Dexes.editable(user, dexName), source, toAnyTable(kind), name, toID(flag) === 'overwrite'
+		await Dexes.editable(user, dexName), source, table, name, toID(flag) === 'overwrite'
 	);
 	let buf = Utils.html`Forked into ${loaded.row.name}: ${copied.join(', ')}. They follow changes to the originals until you edit them.`;
 	if (warnings.length) buf += Utils.html`<br />Some changes don't carry over: ${warnings.join('; ')}`;
@@ -393,7 +398,11 @@ async function forkLineHTML(user: User, target: string) {
 	checkEnabled(user);
 	const [dexName, sourceName, rest] = args(target, 3, `/crq dexforkline [your dex], [from dex], [pokemon], [overwrite]`);
 	const [name, flag] = rest.split(',').map(part => part.trim());
-	const source = Dexes.getDex(sourceName);
+	const source = sourceDex(sourceName);
+	if (source.row.official) {
+		const line = Dexes.evoLine(source, name).map(species => species.name);
+		return addHTML(await Dexes.editable(user, dexName), source, 'Pokedex', line);
+	}
 	const { loaded, copied, added, warnings, missing } = await Dexes.forkLine(
 		await Dexes.editable(user, dexName), source, name, toID(flag) === 'overwrite'
 	);
@@ -402,6 +411,24 @@ async function forkLineHTML(user: User, target: string) {
 	buf += added.length ? Utils.html`. Added ${added.join(', ')}.` : `.`;
 	if (warnings.length) buf += Utils.html`<br />Some changes don't carry over: ${warnings.join('; ')}`;
 	if (missing.length) buf += missingHTML(source, missing);
+	return buf;
+}
+
+function sourceDex(name: string) {
+	const source = Dexes.viewDex(name);
+	if (!source) throw new Chat.ErrorMessage(`There's no dex called "${name}".`);
+	return source;
+}
+
+async function addHTML(
+	target: Dexes.LoadedDex, source: Dexes.LoadedDex, table: 'Pokedex' | Dexes.ListTable, names: string[]
+) {
+	const from = source.row.dexid;
+	const { loaded, skipped } = table === 'Pokedex' ?
+		await Dexes.addPokemon(target, from, names) : await Dexes.addEffects(target, table, from, names);
+	const added = names.filter(name => !skipped.some(reason => reason.startsWith(name)));
+	let buf = added.length ? Utils.html`Added ${added.join(', ')} to ${loaded.row.name}.` : '';
+	if (skipped.length) buf += (buf ? `<br />` : '') + Utils.html`Skipped ${skipped.join('; ')}`;
 	return buf;
 }
 
@@ -509,12 +536,12 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 		};
 	},
 	dex(target) {
-		const loaded = Dexes.findDex(target);
+		const loaded = Dexes.viewDex(target);
 		if (!loaded) return null;
 		return { ...summary(loaded), ...Dexes.clientData(loaded), parentids: loaded.row.parents };
 	},
 	dexentries(target) {
-		const loaded = Dexes.findDex(target);
+		const loaded = Dexes.viewDex(target);
 		if (!loaded) return null;
 		return dexEntries(loaded);
 	},
@@ -586,7 +613,7 @@ export const crqHandlers: { [k: string]: Chat.CRQHandler } = {
 	},
 	dexeffect(target) {
 		const [dexid, kind, name] = Utils.splitFirst(target, ',', 2).map(part => part.trim());
-		const loaded = Dexes.findDex(dexid);
+		const loaded = Dexes.viewDex(dexid);
 		const table = EFFECT_TABLES[toID(kind)];
 		if (!loaded || !table) return null;
 		if (table === 'Conditions') return { dexid: loaded.row.dexid, ...conditionEditor(loaded, toID(name)) };

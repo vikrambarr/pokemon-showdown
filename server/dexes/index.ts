@@ -39,6 +39,7 @@ export interface DexRow {
 	effectlists: { [table in ListTable]?: { added?: ID[], removed?: ID[] } };
 	created: number;
 	updated: number;
+	pool: string;
 }
 
 export type ListTable = 'Moves' | 'Abilities' | 'Items';
@@ -68,7 +69,6 @@ export const VISIBILITIES = ['public', 'private'];
 const GAME_TYPES = ['singles', 'doubles', 'triples', 'multi', 'freeforall'];
 const FORMAT_LISTS = ['ruleset', 'banlist', 'unbanlist', 'restricted'];
 const FORMAT_FLAGS = ['bestOfDefault', 'teraPreviewDefault', 'itemClauseDefault', 'debug'];
-const ENGINES: { [engine: string]: string } = { '': 'Standard', champions: 'Champions' };
 
 export const dexes = new Map<ID, LoadedDex>();
 const formatDexes = new Map<ID, ID>();
@@ -252,28 +252,40 @@ function formatData(loaded: LoadedDex, data: FormatData, formatid: ID): FormatDa
 	};
 }
 
-export function formatEngine(data: FormatData) {
-	return (data as AnyObject).engine || '';
+export function formatMod(data: FormatData) {
+	return data.mod || '';
 }
 
-function engineMod(loaded: LoadedDex, engine?: string) {
-	if (engine !== 'champions') return null;
+const formatModsCache = new Map<string, string[]>();
+
+function formatMods(loaded: LoadedDex) {
 	const own = Dex.mod(loaded.row.mod).currentMod;
-	return Object.keys(Dex.dexes).find(id => {
-		if (!id.startsWith('champions') || isBuiltDex(id) || id.includes('tiers')) return false;
-		const parent = Dex.mod(id).includeData().parentMod;
-		return !!parent && Dex.mod(parent).currentMod === own;
-	}) || null;
+	if (!formatModsCache.has(own)) {
+		const used = new Set(Dex.formats.all().filter(format => format.effectType === 'Format' && !format.team)
+			.map(format => format.mod));
+		const builtOn = (id: string) => {
+			if (!Dex.dexes[id] || isBuiltDex(id) || id.includes('tiers')) return false;
+			if (Dex.mod(id).gen !== Dex.mod(loaded.row.mod).gen) return false;
+			for (let parent = Dex.mod(id).includeData().parentMod; parent; parent = Dex.mod(parent).includeData().parentMod) {
+				if (Dex.mod(parent).currentMod === own) return true;
+			}
+			return false;
+		};
+		const champions = Object.keys(Dex.dexes).filter(id => id.startsWith('champions') && builtOn(id) &&
+			Dex.mod(Dex.mod(id).includeData().parentMod!).currentMod === own);
+		formatModsCache.set(own, ['', ...new Set([...champions, ...[...used].filter(builtOn)])]);
+	}
+	return formatModsCache.get(own)!;
 }
 
-function enginesOf(loaded: LoadedDex) {
-	return Object.keys(ENGINES).filter(engine => engine !== 'champions' || engineMod(loaded, engine));
+function modOf(loaded: LoadedDex, mod?: string) {
+	return mod && formatMods(loaded).includes(mod) ? mod : null;
 }
 
 const engineDexes = new WeakMap<LoadedDex, Map<string, ModdedDex>>();
 
 function formatDex(loaded: LoadedDex, data: FormatData) {
-	const mod = engineMod(loaded, (data as AnyObject).engine);
+	const mod = modOf(loaded, data.mod);
 	if (!mod) return loaded.dex;
 	const built = engineDexes.get(loaded) || new Map<string, ModdedDex>();
 	engineDexes.set(loaded, built);
@@ -525,6 +537,52 @@ export function findDex(name: string) {
 	return currentDexes().get(id) || [...currentDexes().values()].find(loaded => toID(loaded.row.name) === id);
 }
 
+const genDexes = new Map<ID, LoadedDex>();
+
+function natdexFormat(format: Format) {
+	try {
+		return Dex.formats.getRuleTable(format).has('natdexmod');
+	} catch {
+		return false;
+	}
+}
+
+function viewedFormat(id: ID, format: Format) {
+	if (format.effectType !== 'Format') return false;
+	if (/^gen[1-9]$/.test(id)) return format.id.startsWith(id);
+	const world = parseWorld(id)!;
+	if (world.pool === 'natdex') return format.id.startsWith(world.mod) && natdexFormat(format);
+	if (world.pool) return format.id.startsWith(world.mod);
+	return format.mod === id;
+}
+
+export function viewDex(name: string) {
+	const id = toID(name);
+	const world = parseWorld(id);
+	if (!world) return findDex(id);
+	if (!genDexes.has(id)) {
+		const row: DexRow = {
+			dexid: id, ownerid: '', ownername: '', name: world.name, mod: world.mod,
+			species: standardSpecies(Dex.mod(world.mod), world.pool), removed: [], parents: [], official: true,
+			visibility: 'public', description: '', effectlists: {}, created: 0, updated: 0, pool: world.pool,
+		};
+		const formats = new Map(Dex.formats.all().filter(format => viewedFormat(id, format)).map(format => [format.id, {
+			name: format.name.replace(/^\[[^\]]*\] /, ''), gameType: format.gameType,
+			ruleset: format.ruleset, banlist: format.banlist,
+			unbanlist: format.unbanlist, restricted: format.restricted,
+		} as FormatData]));
+		genDexes.set(id, make(row, new Map(), new Map(), formats, noEffects(), new Map()));
+	}
+	return genDexes.get(id);
+}
+
+function formatOwner(formatid: ID) {
+	const dexid = formatDexes.get(formatid);
+	if (dexid) return currentDexes().get(dexid);
+	const format = Dex.formats.get(formatid);
+	return format.exists && /^gen[1-9]/.test(format.id) ? viewDex(format.id.slice(0, 4)) : undefined;
+}
+
 export function getDex(name: string) {
 	const loaded = findDex(name);
 	if (!loaded) throw new Chat.ErrorMessage(`There's no dex called "${name}".`);
@@ -541,7 +599,7 @@ function unbuildableForme(species: Species) {
 
 export function formatDetails(formatid: string, draft?: AnyObject) {
 	const id = toID(formatid);
-	const loaded = currentDexes().get(formatDexes.get(id)!);
+	const loaded = formatOwner(id);
 	const saved = loaded?.formats.get(id);
 	if (!loaded || !saved) return null;
 	const data = draft ? validateFormat(loaded, { name: saved.name, ...draft }, saved) : saved;
@@ -551,10 +609,14 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 	const { dex, ruleTable } = validator;
 	const overrides = (data.ruleset || []).filter(spec => /^\s*!/.test(spec) &&
 		dex.formats.get(spec.replace(/^[\s!]+/, '').split('=')[0]).hasValue);
-	const defaults = overrides.length ? Dex.formats.getRuleTable(buildFormat(formatDex(loaded, data), formatData(loaded, {
-		...data, ruleset: data.ruleset!.filter(spec => !overrides.includes(spec)),
-	}, '' as ID))).valueRules : null;
+	let defaults = null;
+	try {
+		defaults = overrides.length ? Dex.formats.getRuleTable(buildFormat(formatDex(loaded, data), formatData(loaded, {
+			...data, ruleset: data.ruleset!.filter(spec => !overrides.includes(spec)),
+		}, '' as ID))).valueRules : null;
+	} catch {}
 	const inDex = new Set(loaded.data.species);
+	const world = baseOf(loaded.row);
 	const legal: { [kind: string]: ID[] } = { pokemon: [], move: [], ability: [], item: [] };
 	const banned: { [kind: string]: ID[] } = { pokemon: [], move: [], ability: [], item: [] };
 	const outright: ID[] = [];
@@ -574,7 +636,7 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 	} as unknown as PokemonSet;
 	for (const species of dex.species.all()) {
 		if (!species.exists || species.isCosmeticForme || unbuildableForme(species)) continue;
-		if (!inDex.has(species.id)) continue;
+		if (!genDexes.has(loaded.row.dexid) && !inDex.has(species.id) && world.data.Pokedex[species.id]) continue;
 		set.name = set.species = species.name;
 		if (!validator.checkSpecies(set, species, species, {})) {
 			legal.pokemon.push(species.id);
@@ -623,8 +685,9 @@ export function formatDetails(formatid: string, draft?: AnyObject) {
 		}
 	}
 	const details = {
-		id, name: data.name, dex: loaded.row.name, dexid: loaded.row.dexid, mod: engineMod(loaded, (data as AnyObject).engine) || loaded.row.mod,
-		engine: formatEngine(data), engines: enginesOf(loaded).map(engine => ({ id: engine, name: ENGINES[engine] })),
+		id, name: data.name, dex: loaded.row.name, dexid: loaded.row.dexid,
+		mod: modOf(loaded, data.mod) || (genDexes.has(loaded.row.dexid) ? validator.format.mod : loaded.row.mod),
+		mods: formatMods(loaded).map(mod => ({ id: mod, name: mod || loaded.row.mod })),
 		gameType: data.gameType || 'singles', ruleset: data.ruleset || [],
 		banlist: data.banlist || [], unbanlist: data.unbanlist || [], restricted: data.restricted || [],
 		tiers: (data as AnyObject).tiers || {},
@@ -648,7 +711,7 @@ const VALUE_OPTIONS: { [ruleid: string]: (dex: ModdedDex) => string[] } = {
 
 export function formatRules(name: string) {
 	const formatid = toID(name);
-	const loaded = currentDexes().get(formatDexes.get(formatid)!);
+	const loaded = formatOwner(formatid);
 	if (!loaded?.formats.has(formatid)) return null;
 	const key = `${loaded.data.hash}:${formatid}`;
 	if (formatRulesCache.get(formatid)?.key === key) return formatRulesCache.get(formatid)!.rules;
@@ -689,8 +752,8 @@ export function battleData(formatid: string) {
 	const data = loaded?.formats.get(toID(formatid));
 	if (!loaded || !data) return undefined;
 	for (const layer of ancestorsOf(loaded)) saveLayer(layer);
-	const engine = engineMod(loaded, (data as AnyObject).engine);
-	return { hash: loaded.data.hash, format: formatData(loaded, data, toID(formatid)), ...(engine ? { engine } : {}) };
+	const mod = modOf(loaded, data.mod);
+	return { hash: loaded.data.hash, format: formatData(loaded, data, toID(formatid)), ...(mod ? { engine: mod } : {}) };
 }
 
 function saveLayer(loaded: LoadedDex) {
@@ -862,13 +925,15 @@ function checkName(input: string, loaded?: LoadedDex) {
 	return name;
 }
 
-function resolveBase(on: string, engine?: string, height = 0) {
+function resolveBase(on: string, mod?: string, height = 0) {
 	const parts = on.split('+').map(part => part.trim());
 	const parents = parts.length > 1 || findDex(on) ? parts.map(getDex) : [];
-	const modid = toID(engine) || (parents.length ? parents[0].row.mod : toID(on));
+	const world = parents.length || mod ? null : parseWorld(toID(on));
+	const pool = world?.pool || '';
+	const modid = toID(mod) || (parents.length ? parents[0].row.mod : world?.mod || toID(on));
 	const base = Dex.dexes[modid];
 	if (!base || isBuiltDex(modid)) {
-		throw new Chat.ErrorMessage(engine ? `"${engine}" isn't a mod a dex can run on.` :
+		throw new Chat.ErrorMessage(mod ? `"${mod}" isn't a mod a dex can run on.` :
 			`"${on}" isn't a world. Try gen9, another mod's id, a dex's name, or dex names joined with +.`);
 	}
 	const otherGen = parents.find(parent => parent.dex.gen !== base.includeData().gen);
@@ -878,30 +943,52 @@ function resolveBase(on: string, engine?: string, height = 0) {
 	if (parents.some(parent => depthOf(parent) + 1 + height >= MAX_DEPTH)) {
 		throw new Chat.ErrorMessage(`Dexes can only be each other's worlds ${MAX_DEPTH} deep.`);
 	}
-	const species = parents.length ? [] : standardSpecies(base);
-	return { parents, modid, base, species };
+	const species = parents.length ? [] : standardSpecies(base, pool);
+	return { parents, modid, base, species, pool };
 }
 
-function standardSpecies(base: ModdedDex) {
-	return base.includeData().species.all().filter(entry => entry.exists && !entry.isNonstandard).map(entry => entry.id);
+const POOLS: { [pool: string]: string } = { natdex: ' National Dex', all: ' (all Pok\u00e9mon)' };
+const WORLD_MODS: { [mod: string]: string } = { gen8bdsp: 'BDSP', gen7letsgo: "Let's Go", champions: 'Champions' };
+
+function parseWorld(id: string) {
+	const pool = Object.keys(POOLS).find(each => id.endsWith(each) && /^gen[1-9]$/.test(id.slice(0, -each.length))) || '';
+	const mod = pool ? id.slice(0, -pool.length) : id;
+	if (!/^gen[1-9]$/.test(mod) && !WORLD_MODS[mod]) return null;
+	return { mod, pool, name: (WORLD_MODS[mod] || `Gen ${mod.slice(3)}`) + (POOLS[pool] || '') };
+}
+
+function isWorld(id: string) {
+	return !!parseWorld(id);
+}
+
+function standardSpecies(base: ModdedDex, pool = '') {
+	const allowed = (species: Species) => !species.isNonstandard || pool === 'all' ||
+		pool === 'natdex' && ['Past', 'Unobtainable'].includes(species.isNonstandard);
+	return base.includeData().species.all().filter(entry => entry.exists && allowed(entry)).map(entry => entry.id);
+}
+
+function standardEffect(effect: AnyObject, pool = '') {
+	return !effect.isNonstandard || pool === 'all' ||
+		pool === 'natdex' && ['Past', 'Unobtainable'].includes(effect.isNonstandard);
 }
 
 export function worldSpecies(loaded: LoadedDex) {
 	const parents = parentsOf(loaded);
-	return parents.length ? [...new Set(parents.flatMap(parent => parent.data.species))] : standardSpecies(Dex.mod(loaded.row.mod));
+	if (parents.length) return [...new Set(parents.flatMap(parent => parent.data.species))];
+	return standardSpecies(Dex.mod(loaded.row.mod), loaded.row.pool);
 }
 
-async function createDexImpl(user: User, name: string, on: string, engine?: string) {
+async function createDexImpl(user: User, name: string, on: string, mod?: string) {
 	name = checkName(name);
-	const { parents, modid, species } = resolveBase(on, engine);
+	const { parents, modid, species, pool } = resolveBase(on, mod);
 	const account = await accountOf(user);
 	const dexid = newID('d', id => !!findDex(id) || !!Dex.dexes[id]);
 	const now = Date.now();
 	await database().query(SQL`INSERT INTO dexes
-		(dexid, ownerid, ownername, name, mod, species, removed, parents, official, visibility, created, updated)
+		(dexid, ownerid, ownername, name, mod, species, removed, parents, official, visibility, created, updated, pool)
 		VALUES (
 		${dexid}, ${account}, ${user.name}, ${name}, ${modid}, ${json(species)},
-		'[]', ${json(parents.map(parent => parent.row.dexid))}, 'false', 'public', ${now}, ${now}
+		'[]', ${json(parents.map(parent => parent.row.dexid))}, 'false', 'public', ${now}, ${now}, ${pool}
 	)`);
 	let loaded = (await refresh(dexid))!;
 	if (parents.length === 1) {
@@ -920,8 +1007,8 @@ async function setNameImpl(loaded: LoadedDex, name: string) {
 	return save(loaded);
 }
 
-async function setBaseImpl(loaded: LoadedDex, on: string, engine?: string) {
-	const { parents, modid, base, species } = resolveBase(on, engine, heightOf(loaded));
+async function setBaseImpl(loaded: LoadedDex, on: string, mod?: string) {
+	const { parents, modid, base, species, pool } = resolveBase(on, mod, heightOf(loaded));
 	if (parents.some(parent => ancestorsOf(parent).includes(loaded))) {
 		throw new Chat.ErrorMessage(`A dex can't be in its own world, or in the world of a dex in its world.`);
 	}
@@ -929,11 +1016,11 @@ async function setBaseImpl(loaded: LoadedDex, on: string, engine?: string) {
 	if (children.length && base.includeData().gen !== loaded.dex.gen) {
 		throw new Chat.ErrorMessage(`${Chat.count(children, 'dexes are', 'dex is')} set in ${loaded.row.name}, so it has to stay Gen ${loaded.dex.gen}.`);
 	}
-	const row = { ...loaded.row, mod: modid, parents: parents.map(parent => parent.row.dexid), species, removed: [] };
+	const row = { ...loaded.row, mod: modid, parents: parents.map(parent => parent.row.dexid), species, removed: [], pool };
 	const stale: string[] = [];
 	check(compile(row, loaded.entries, loaded.effects, stale));
 	await database().query(SQL`UPDATE dexes SET mod = ${modid}, parents = ${json(row.parents)}, species = ${json(species)},
-		removed = '[]' WHERE dexid = ${loaded.row.dexid}`);
+		removed = '[]', pool = ${pool} WHERE dexid = ${loaded.row.dexid}`);
 	return { loaded: await save(loaded), stale };
 }
 
@@ -982,7 +1069,7 @@ async function deleteDexImpl(loaded: LoadedDex) {
 
 async function clearDexImpl(loaded: LoadedDex) {
 	const dexid = loaded.row.dexid;
-	const species = parentsOf(loaded).length ? [] : standardSpecies(Dex.mod(loaded.row.mod));
+	const species = parentsOf(loaded).length ? [] : standardSpecies(Dex.mod(loaded.row.mod), loaded.row.pool);
 	await database().query(SQL`DELETE FROM dex_species WHERE dexid = ${dexid}`);
 	await database().query(SQL`DELETE FROM dex_effects WHERE dexid = ${dexid}`);
 	await database().query(SQL`UPDATE dexes SET species = ${json(species)}, removed = '[]', effectlists = '{}' WHERE dexid = ${dexid}`);
@@ -1187,16 +1274,17 @@ async function deletePokemonImpl(loaded: LoadedDex, names: string[]) {
 }
 
 function sourceOf(from: string) {
-	const gen = /^gen([1-9])$/.exec(toID(from));
-	const source = toID(from) && !gen ? getDex(from) : null;
+	const world = isWorld(toID(from)) ? toID(from) : '';
+	const source = toID(from) && !world ? getDex(from) : null;
 	if (source && !source.row.official) throw new Chat.ErrorMessage(`Things can only be added from the main games and official dexes.`);
-	return { gen: gen ? Number(gen[1]) : 0, source };
+	const parsed = world ? parseWorld(world)! : null;
+	return { world: parsed?.mod || '', pool: parsed?.pool || '', gen: parsed ? Dex.mod(parsed.mod).gen : 0, source };
 }
 
 export function sourceSpecies(loaded: LoadedDex, from: string) {
-	const { gen, source } = sourceOf(from);
+	const { world, pool, source } = sourceOf(from);
 	if (source) return source.data.species as ID[];
-	return gen ? standardSpecies(Dex.mod(`gen${gen}`)) : worldSpecies(loaded);
+	return world ? standardSpecies(Dex.mod(world), pool) : worldSpecies(loaded);
 }
 
 const LIST_GETTERS = { Moves: 'moves', Abilities: 'abilities', Items: 'items' } as const;
@@ -1209,12 +1297,12 @@ export function effectListed(loaded: LoadedDex, table: ListTable, id: ID) {
 
 export function sourceIds(loaded: LoadedDex, table: 'Pokedex' | ListTable, from: string) {
 	if (table === 'Pokedex') return sourceSpecies(loaded, from);
-	const { gen, source } = sourceOf(from);
+	const { world, pool, source } = sourceOf(from);
 	const playable = (effect: AnyObject) => !effect.isZ && !effect.isMax;
 	if (source) return Object.keys(source.dex.data[table]).filter(id => effectListed(source, table, id as ID)) as ID[];
-	if (gen) {
-		return ([...Dex.mod(`gen${gen}`)[LIST_GETTERS[table]].all()] as AnyObject[])
-			.filter(effect => effect.exists && !effect.isNonstandard && playable(effect)).map(effect => effect.id as ID);
+	if (world) {
+		return ([...Dex.mod(world)[LIST_GETTERS[table]].all()] as AnyObject[])
+			.filter(effect => effect.exists && playable(effect) && standardEffect(effect, pool)).map(effect => effect.id as ID);
 	}
 	const base = baseOf(loaded.row);
 	return Object.keys(base.data[table]).filter(id => playable(base.data[table][id] as AnyObject)) as ID[];
@@ -1254,8 +1342,8 @@ async function forkAll(loaded: LoadedDex, source: LoadedDex, table: Table, names
 
 async function addEffectsImpl(target: LoadedDex, table: ListTable, from: string, names: string[]) {
 	const base = baseOf(target.row);
-	const { gen, source } = sourceOf(from);
-	const game = gen && gen !== base.gen ? Dex.mod(`gen${gen}`) : null;
+	const { world, gen, source } = sourceOf(from);
+	const game = gen && gen !== base.gen ? Dex.mod(world) : null;
 	const skipped: string[] = [];
 	const listed: ID[] = [];
 	const inputs: AnyObject[] = [];
@@ -1358,8 +1446,8 @@ function vanillaInput(target: LoadedDex, game: ModdedDex, id: ID) {
 
 async function addPokemonImpl(target: LoadedDex, from: string, names: string[]) {
 	const base = baseOf(target.row);
-	const { gen, source } = sourceOf(from);
-	const game = gen && gen !== base.gen ? Dex.mod(`gen${gen}`) : null;
+	const { world, gen, source } = sourceOf(from);
+	const game = gen && gen !== base.gen ? Dex.mod(world) : null;
 	const skipped: string[] = [];
 	const plain = new Set<ID>();
 	const inputs: AnyObject[] = [];
@@ -1875,6 +1963,9 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 		if (old && (old.gameType || 'singles') !== (data.gameType || 'singles')) {
 			throw new Chat.ErrorMessage(`A format's game type can't change; make a new format instead.`);
 		}
+		data.from = from.id;
+		if (modOf(loaded, from.mod)) data.mod = from.mod;
+		else delete data.mod;
 	}
 	for (const field in input) {
 		const value = input[field];
@@ -1890,7 +1981,7 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 			}
 		} else if (FORMAT_FLAGS.includes(field)) {
 			if (typeof value !== 'boolean') throw new Chat.ErrorMessage(`"${field}" must be true or false.`);
-		} else if (field === 'engine') {
+		} else if (field === 'mod') {
 			continue;
 		} else if (field === 'tiers') {
 			const tiers = validateTiers(loaded, value);
@@ -1898,17 +1989,17 @@ function validateFormat(loaded: LoadedDex, input: AnyObject, old?: FormatData): 
 			else delete data.tiers;
 			continue;
 		} else {
-			throw new Chat.ErrorMessage(`"${field}" isn't something you can set. You can set: name, from, gameType, engine, tiers, ${[...FORMAT_LISTS, ...FORMAT_FLAGS].join(', ')}.`);
+			throw new Chat.ErrorMessage(`"${field}" isn't something you can set. You can set: name, from, gameType, mod, tiers, ${[...FORMAT_LISTS, ...FORMAT_FLAGS].join(', ')}.`);
 		}
 		data[field] = value;
 	}
 	if (!data.ruleset) data.ruleset = ['Standard'];
-	if (input.engine !== undefined) {
-		if (!enginesOf(loaded).includes(input.engine)) {
-			throw new Chat.ErrorMessage(`"engine" must be one of: ${enginesOf(loaded).map(engine => engine || '""').join(', ')}.`);
+	if (input.mod !== undefined) {
+		if (!formatMods(loaded).includes(input.mod)) {
+			throw new Chat.ErrorMessage(`"mod" must be one of: ${formatMods(loaded).map(mod => mod || '""').join(', ')}.`);
 		}
-		if (input.engine) data.engine = input.engine;
-		else delete data.engine;
+		if (input.mod) data.mod = input.mod;
+		else delete data.mod;
 	}
 	try {
 		Dex.formats.getRuleTable(buildFormat(formatDex(loaded, data as FormatData), formatData(loaded, data as FormatData, '' as ID)));

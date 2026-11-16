@@ -1833,7 +1833,7 @@ export class Battle {
 					pokemon.fainted ||
 					// true if transforming into this pokemon would lead to an endless battle
 					// Transform will fail (depleting PP) if used against Ditto in Stadium 1
-					(this.dex.currentMod !== 'gen1stadium' || pokemon.species.id !== 'ditto') &&
+					(!this.dex.currentMod.startsWith('gen1stadium') || pokemon.species.id !== 'ditto') &&
 					// there are some subtleties such as a Mew with only Transform and auto-fail moves,
 					// but it's unlikely to come up in a real game so there's no need to handle it
 					pokemon.moves.every(moveid => moveid === 'transform')
@@ -2149,7 +2149,7 @@ export class Battle {
 			if (targetDamage !== 0) targetDamage = this.clampIntRange(targetDamage, 1);
 
 			if (this.gen <= 1) {
-				if (this.dex.currentMod === 'gen1stadium' ||
+				if (this.dex.currentMod.startsWith('gen1stadium') ||
 					!['recoil', 'drain', 'leechseed'].includes(effect.id) && effect.effectType !== 'Status') {
 					this.lastDamage = targetDamage;
 				}
@@ -2238,7 +2238,7 @@ export class Battle {
 		if (typeof effect === 'string' || !effect) effect = this.dex.conditions.getByID((effect || '') as ID);
 
 		// In Gen 1 BUT NOT STADIUM, Substitute also takes confusion and HJK recoil damage
-		if (this.gen <= 1 && this.dex.currentMod !== 'gen1stadium' &&
+		if (this.gen <= 1 && !this.dex.currentMod.startsWith('gen1stadium') &&
 			['confusion', 'jumpkick', 'highjumpkick'].includes(effect.id)) {
 			// Confusion and recoil damage can be countered
 			this.lastDamage = damage;

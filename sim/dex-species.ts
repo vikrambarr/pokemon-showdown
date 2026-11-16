@@ -566,7 +566,7 @@ export class DexSpecies {
 				species.natDexTier = 'Illegal';
 				species.isNonstandard = 'Future';
 			}
-			if (this.dex.currentMod === 'gen7letsgo' && !species.isNonstandard) {
+			if (this.dex.currentMod.startsWith('gen7letsgo') && !species.isNonstandard) {
 				const isLetsGo = (
 					species.gen <= 7 && (species.num <= 151 || ['Meltan', 'Melmetal'].includes(species.name)) &&
 					(!species.forme || species.isMega || (['Alola', 'Starter'].includes(species.forme) &&
@@ -574,7 +574,7 @@ export class DexSpecies {
 				);
 				if (!isLetsGo) species.isNonstandard = 'Past';
 			}
-			if (this.dex.currentMod === 'gen8bdsp' &&
+			if (this.dex.currentMod.startsWith('gen8bdsp') &&
 				(!species.isNonstandard || species.isNonstandard === 'CAP')) {
 				if (species.gen > 4 || (species.num < 1 && species.isNonstandard !== 'CAP') ||
 					species.id === 'pichuspikyeared') {

@@ -1180,7 +1180,7 @@ export const Formats: import('../sim/dex-formats').FormatList = [
 			for (const ally of pokemon.side.pokemon) {
 				if (pokemon.battle.ruleTable.isRestricted(`ability:${ally.baseAbility}`)) continue;
 				if (ally.previouslySwitchedIn > 0) {
-					if (pokemon.battle.dex.currentMod !== 'sharedpower' && ['trace', 'mirrorarmor'].includes(ally.baseAbility)) {
+					if (!pokemon.battle.dex.currentMod.startsWith('sharedpower') && ['trace', 'mirrorarmor'].includes(ally.baseAbility)) {
 						sharedPower.add('noability');
 						continue;
 					}
