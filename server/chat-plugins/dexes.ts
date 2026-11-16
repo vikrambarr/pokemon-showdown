@@ -140,8 +140,12 @@ async function applyEdit(user: User, dexid: string, edit: AnyObject) {
 
 function shownIds(loaded: Dexes.LoadedDex, table: keyof typeof GETTERS, layers = Dexes.ancestorsOf(loaded)) {
 	const removed = new Set(loaded.data.lists?.[table as Dexes.ListTable]?.removed || []);
-	return Object.keys(loaded.dex.data[table]).filter(id => !removed.has(id) &&
-		(!(loaded.dex[GETTERS[table]].get(id) as AnyObject).isNonstandard || layers.some(layer => Dexes.entriesOf(layer, table).has(id as ID))));
+	return Object.keys(loaded.dex.data[table]).filter(id => {
+		if (removed.has(id)) return false;
+		const effect = loaded.dex[GETTERS[table]].get(id) as AnyObject;
+		const shown = Dexes.LIST_TABLES.includes(table as Dexes.ListTable) ? effect.gen <= loaded.dex.gen : !effect.isNonstandard;
+		return shown || layers.some(layer => Dexes.entriesOf(layer, table).has(id as ID));
+	});
 }
 
 const ALWAYS_NEEDED = ['brn', 'par', 'slp', 'frz', 'psn', 'tox', 'confusion', 'flinch', 'trapped', 'partiallytrapped'];
@@ -340,7 +344,6 @@ function summary(loaded: Dexes.LoadedDex) {
 		name: loaded.row.name,
 		hash: loaded.data.hash,
 		mod: loaded.row.mod,
-		...(loaded.row.pool ? { pool: loaded.row.pool } : {}),
 		base: Dexes.baseName(loaded.row),
 		parents: loaded.row.parents,
 		official: loaded.row.official,

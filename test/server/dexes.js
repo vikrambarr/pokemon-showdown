@@ -186,8 +186,8 @@ describe('Dexes', () => {
 		const { crqHandlers } = require('../../dist/server/chat-plugins/dexes');
 		const mocha = id('Mocha Dex');
 		const entries = await crqHandlers.dexentries.call(null, mocha, owner);
-		assert(entries.world.includes('rotomwash') && !entries.world.includes('charizardmegax'));
-		assert(entries.needed.includes('par') && entries.needed.includes('raindance') && entries.needed.length < entries.Conditions.length);
+		assert(entries.world.includes('rotomwash') && entries.world.includes('charizardmegax') && entries.world.includes('syclant'));
+		assert(entries.needed.includes('par') && entries.needed.includes('raindance'));
 		const edit = input => crqHandlers.dexedit.call({ connection: {} }, `${mocha}, ${JSON.stringify(input)}`, owner);
 		assert.equal((await edit({ deletepokemon: ['Rotom', 'Charizard', 'Pikachu-Alola'] })).error, undefined);
 		const removed = Dexes.getDex('mochadex').data.species;
@@ -211,16 +211,16 @@ describe('Dexes', () => {
 		assert(!listed.Moves.includes('thunderbolt') && listed.Moves.includes('thundershock'));
 		assert.match((await edit({ deletecondition: 'par' })).error, /comes with/);
 		assert.deepEqual((await edit({ addmove: { names: ['Thunderbolt', 'Hidden Power', 'Tackle'] }, additem: { names: ['Leftovers'] } })).skipped,
-			['Tackle is already in Mocha Dex']);
-		assert.deepEqual(Dexes.getDex('mochadex').data.lists, { Moves: { added: ['hiddenpower'], removed: [] } });
-		assert.equal(Dexes.getDex('mochadex').dex.moves.get('Hidden Power').isNonstandard, null);
+			['Hidden Power is already in Mocha Dex', 'Tackle is already in Mocha Dex']);
+		assert.equal(Dexes.getDex('mochadex').data.lists, undefined);
+		assert.equal(Dexes.getDex('mochadex').dex.moves.get('Hidden Power').isNonstandard, 'Past');
 		assert.deepEqual((await edit({ addmove: { from: 'gen1', names: ['Bite'] } })).skipped, ['Bite is already in Mocha Dex']);
 		assert.equal((await edit({ deletemove: 'Bite' })).error, undefined);
 		assert.equal((await edit({ addmove: { from: 'gen1', names: ['Bite'] } })).error, undefined);
 		assert.equal(Dexes.getDex('mochadex').dex.moves.get('Bite').type, 'Normal');
-		assert.equal((await edit({ resetmove: 'Bite', deletemove: 'Hidden Power' })).error, undefined);
+		assert.equal((await edit({ resetmove: 'Bite' })).error, undefined);
 		assert.equal(Dexes.getDex('mochadex').data.lists, undefined);
-		assert.deepEqual((await crqHandlers.dexsource.call(null, `${mocha}, gen1, move`, owner)).species.length, 165);
+		assert.deepEqual((await crqHandlers.dexsource.call(null, `${mocha}, gen1, move`, owner)).species.length, 168);
 		const uranium = await Dexes.createDex(editor, 'Uranium Test', 'gen9uranium');
 		const geiger = await Dexes.forkEntry(Dexes.getDex('mochadex'), uranium, 'Abilities', 'Geiger Sense');
 		assert.deepEqual(geiger.copied, ['ability Geiger Sense']);
@@ -235,7 +235,7 @@ describe('Dexes', () => {
 		await Dexes.deleteEffects(Dexes.getDex('mochadex'), 'Conditions', ['Fallout']);
 		await Dexes.deleteDex(Dexes.getDex('uraniumtest'));
 		assert.match((await edit({ pokemon: { name: 'Pichu', prevo: 'Raichu' } })).error, /evolve into each other in a loop/);
-		assert.deepEqual((await crqHandlers.dexsource.call(null, `${mocha}, gen1`, owner)).species.length, 151);
+		assert.deepEqual((await crqHandlers.dexsource.call(null, `${mocha}, gen1`, owner)).species.length, 152);
 		assert.match((await crqHandlers.dexedit.call({ connection: {} }, `${mocha}, ${JSON.stringify({ addpokemon: { names: ['Charizard'] } })}`, editor)).error, /edit/);
 	});
 
@@ -819,6 +819,13 @@ describe('Dexes', () => {
 		({ loaded, formatid } = await Dexes.putFormat(loaded, { name: 'OU', from: 'gen9ou' }));
 		assert.deepEqual(loaded.formats.get(formatid).ruleset, Dex.formats.get('gen9ou').ruleset);
 		assert.deepEqual(loaded.formats.get(formatid).banlist, Dex.formats.get('gen9ou').banlist);
+		assert.deepEqual(Dexes.formatDetails(formatid).tiercolumns, ['singles']);
+		assert.equal(Dexes.formatDetails(formatid).tierview, '');
+		({ loaded } = await Dexes.putFormat(loaded, { name: 'OU', tierview: 'dexorder' }));
+		assert.equal(Dexes.formatDetails(formatid).tierview, 'dexorder');
+		await assert.rejects(Dexes.putFormat(loaded, { name: 'OU', tierview: 'ubers' }), /"tierview" must be one of/);
+		({ loaded } = await Dexes.putFormat(loaded, { name: 'OU', tierview: null }));
+		assert.equal(loaded.formats.get(formatid).tierview, undefined);
 		await assert.rejects(Dexes.putFormat(loaded, { name: 'Random', from: 'gen9randombattle' }), /isn't a random battle/);
 		const delta = { species: 'Venusaur-Delta', ability: 'Overgrow', moves: ['moonblast'], evs: { hp: 4 }, nature: 'Modest' };
 		const validator = TeamValidatorAsync.get(formatid);
