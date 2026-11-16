@@ -21,12 +21,12 @@ export interface TypeEntry {
 const CODES: { [multiplier: string]: number } = { 1: 0, 2: 1, 0.5: 2, 0: 3 };
 
 function conditions(dex: ModdedDex) {
-	const names = new Set(Object.keys(dex.data.TypeChart).map(typeName));
+	const names = new Set(Object.keys(dex.data.TypeChart).map(id => typeName(id, dex.data)));
 	return [...new Set(Object.values(dex.data.TypeChart).flatMap(type => Object.keys(type.damageTaken)))]
 		.filter(key => !names.has(key));
 }
 
-function matchups(input: unknown, field: string, types: Set<string>, dex: ModdedDex, attacking: boolean) {
+function matchups(input: unknown, field: string, types: Map<string, string>, dex: ModdedDex, attacking: boolean) {
 	if (!isObject(input)) {
 		throw new Chat.ErrorMessage(`"${field}" must map types to multipliers, like {"Fire": 0.5}.`);
 	}
@@ -34,11 +34,11 @@ function matchups(input: unknown, field: string, types: Set<string>, dex: Modded
 	const result: AnyObject = {};
 	for (const key of Object.keys(input)) {
 		const value = input[key];
-		const name = types.has(typeName(toID(key))) ? typeName(toID(key)) : extra.find(other => toID(other) === toID(key));
+		const name = types.get(toID(key)) || extra.find(other => toID(other) === toID(key));
 		if (!name) {
 			throw new Chat.ErrorMessage(`"${key}" (${field}) isn't a type${extra.length ? ` or one of: ${extra.join(', ')}` : ''}.`);
 		}
-		const allowed = types.has(name) ? [0, 0.5, 1, 2] : [0, 1];
+		const allowed = types.get(toID(name)) === name ? [0, 0.5, 1, 2] : [0, 1];
 		if (value !== null && !allowed.includes(value)) {
 			throw new Chat.ErrorMessage(`"${field}.${name}" must be one of: ${allowed.join(', ')}, or null to undo it.`);
 		}
@@ -48,18 +48,17 @@ function matchups(input: unknown, field: string, types: Set<string>, dex: Modded
 }
 
 export function validateType(input: AnyObject, dex: ModdedDex, entries: Map<ID, TypeEntry>, built = dex) {
-	const name = validateName(input.name, 'type');
-	const id = toID(name);
-	if (name !== typeName(id)) {
-		throw new Chat.ErrorMessage(`Type names are one word starting with a capital letter, like "${typeName(id)}".`);
-	}
+	const typed = validateName(input.name, 'type');
+	const id = toID(typed);
+	const name = built.data.TypeChart[id] ? typeName(id, built.data) : typed;
 	for (const key in input) {
 		if (!['name', 'damageTaken', 'attacks', 'removed'].includes(key)) {
 			throw new Chat.ErrorMessage(`"${key}" isn't something you can set. You can set: name, damageTaken, attacks, removed.`);
 		}
 	}
 	const old = entries.get(id);
-	const types = new Set([...Object.keys(built.data.TypeChart).map(typeName), name]);
+	const types = new Map(Object.keys(built.data.TypeChart).map(key => [key, typeName(key, built.data)]));
+	types.set(id, name);
 	const data: AnyObject = { name, damageTaken: { ...old?.data.damageTaken }, attacks: { ...old?.data.attacks } };
 	for (const field of ['damageTaken', 'attacks']) {
 		if (input[field] === undefined) continue;
@@ -91,7 +90,10 @@ export function resolveTypes(dex: ModdedDex, entries: Iterable<TypeEntry>) {
 		{ ...dex.data.TypeChart[id], damageTaken: { ...dex.data.TypeChart[id].damageTaken } } :
 		{ damageTaken: {} } as TypeData);
 	const list = [...entries];
-	for (const entry of list) get(entry.effectid);
+	for (const entry of list) {
+		const type = get(entry.effectid) as AnyObject;
+		if (!dex.data.TypeChart[entry.effectid]) type.name = entry.data.name;
+	}
 	for (const entry of list) {
 		for (const [target, multiplier] of Object.entries(entry.data.attacks as AnyObject)) {
 			if (dex.data.TypeChart[toID(target)] || TypeChart[toID(target)]) {

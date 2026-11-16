@@ -57,7 +57,7 @@ const conditionUses = new WeakMap<AnyObject, { [id: string]: Set<string> }>();
 const PROTOCOL = ['add', 'addMove', 'addSplit', 'attrLastMove', 'debug', 'hint', 'retargetLastMove'];
 const parsed = new WeakMap<AnyObject, WeakMap<Function, Handler | null>>();
 
-export const typeName = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+export const typeName = (id: string, data?: AnyObject) => data?.TypeChart[id]?.name || id.charAt(0).toUpperCase() + id.slice(1);
 
 function walk(node: AnyObject, stack: AnyObject[], visit: (node: AnyObject, stack: AnyObject[]) => boolean | void) {
 	if (visit(node, stack) === false) return;
@@ -215,7 +215,7 @@ export function classify(value: string, comparedTo: string, data: AnyObject): Pa
 		return { kind: 'category' };
 	}
 	const id = toID(value);
-	if (id && data.TypeChart[id] && value === typeName(id)) return { kind: 'type' };
+	if (id && data.TypeChart[id] && value === typeName(id, data)) return { kind: 'type' };
 	const tables = REF_TABLES.filter(table => {
 		const entry = data[table][id];
 		return entry && (value === id || value === entry.name);
@@ -360,7 +360,7 @@ export function checkSlot(slot: Slot, value: unknown, data: AnyObject): string |
 	if (typeof value !== 'string' || !id) throw new Error(`${JSON.stringify(value)} isn't a name.`);
 	if (slot.kind === 'type') {
 		if (!data.TypeChart[id]) throw new Error(`"${value}" isn't a type.`);
-		return typeName(id);
+		return typeName(id, data);
 	}
 	if (slot.kind === 'category') {
 		const category = CATEGORIES.find(entry => toID(entry) === id);
